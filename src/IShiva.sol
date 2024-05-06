@@ -23,6 +23,7 @@ interface IShiva {
         IOverlayV1Market market,
         address owner,
         bytes calldata signature,
+        uint256 deadline,
         uint256 collateral,
         uint256 leverage,
         bool isLong,
@@ -40,6 +41,7 @@ interface IShiva {
         IOverlayV1Market market,
         address owner,
         bytes calldata signature,
+        uint256 deadline,
         uint256 positionId,
         uint256 fraction,
         uint256 priceLimit

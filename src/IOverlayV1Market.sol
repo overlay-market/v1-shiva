@@ -15,7 +15,7 @@ interface IOverlayV1Market {
         uint256 priceLimit
     ) external;
 
-     function positions(bytes32 key)
+    function positions(bytes32 key)
         external
         view
         returns (
