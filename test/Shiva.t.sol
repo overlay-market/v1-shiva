@@ -66,6 +66,8 @@ contract ShivaTest is Test {
         uint256 leverage = 1e18;
         uint256 priceLimit = isLong ? type(uint256).max : 0;
 
+        // TODO: use EIP712 and add random nonces that can be nullified by the owner
+
         bytes32 msgHash = keccak256(abi.encodePacked(
             market,
             block.chainid,
@@ -122,4 +124,38 @@ contract ShivaTest is Test {
         (,,,,,,,uint16 fractionRemaining) = market.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 0);
     }
+
+    function test_unwindOnBehalfOf_notOwner(bool isLong) public {
+        // Alice builds a position through Shiva
+        vm.prank(alice);
+        uint256 posId = shiva.build(
+            market, 10e18, 1e18, isLong, isLong ? type(uint256).max : 0
+        );
+
+        // TODO: use EIP712 and add random nonces that can be nullified by the owner
+
+        // Bob makes a signature to try to unwind Alice's position through Shiva
+        uint256 deadline = block.timestamp;
+        uint256 fraction = 1e18;
+        uint256 priceLimit = isLong ? 0 : type(uint256).max;
+        bytes32 msgHash = keccak256(abi.encodePacked(
+            market,
+            block.chainid,
+            deadline,
+            posId,
+            fraction,
+            priceLimit
+        )).toEthSignedMessageHash();
+        bytes memory signature;
+        {   // avoid stack too deep error
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(bobPk, msgHash);
+            signature = abi.encodePacked(r, s, v);
+        }
+
+        vm.prank(bob);
+        vm.expectRevert(IShiva.NotPositionOwner.selector);
+        shiva.unwindOnBehalfOf(market, bob, signature, deadline, posId, fraction, priceLimit);
+    }
+
+    // TODO: add tests to assert tokens are transferred correctly
 }
