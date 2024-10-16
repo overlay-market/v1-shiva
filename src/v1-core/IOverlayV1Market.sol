@@ -28,4 +28,7 @@ interface IOverlayV1Market {
             uint240 oiShares,
             uint16 fractionRemaining
         );
+
+    // risk params
+    function params(uint256 idx) external view returns (uint256);
 }
