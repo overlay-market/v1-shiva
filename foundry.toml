@@ -1,4 +1,5 @@
 [profile.default]
+version = "0.8.25"
 src = "src"
 out = "out"
 libs = ["lib"]
