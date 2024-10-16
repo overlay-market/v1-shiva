@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {IOverlayV1Market} from "./IOverlayV1Market.sol";
+import {IOverlayV1Market} from "./v1-core/IOverlayV1Market.sol";
 
 interface IShiva {
     error NotPositionOwner();
