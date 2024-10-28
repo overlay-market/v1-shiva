@@ -4,6 +4,15 @@ pragma solidity 0.8.25;
 import {IOverlayV1Market} from "./v1-core/IOverlayV1Market.sol";
 
 interface IShiva {
+    event BuildSingle(
+        address indexed owner,
+        address market,
+        uint256 previousPositionId,
+        uint256 newPositionId,
+        uint256 collateral,
+        uint256 totalCollateral
+    );
+
     error NotPositionOwner();
 
     function ownerOf(
