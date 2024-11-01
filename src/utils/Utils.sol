@@ -52,7 +52,6 @@ library Utils {
      * @param owner Address of the position owner.
      * @param fraction Fraction of the position to unwind (1e18 represents 100%).
      * @param slippage Acceptable slippage, expressed in percentage (0 - 100).
-     * @param isLong Boolean indicating if the position is long or short.
      * @return Unwind price after applying slippage.
      */
     function getUnwindPrice(
@@ -61,24 +60,23 @@ library Utils {
         uint256 positionId,
         address owner,
         uint256 fraction,
-        uint8 slippage,
-        bool isLong
-    ) external view returns (uint256) {
+        uint8 slippage
+    ) external view returns (uint256, bool) {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>100");
 
         // Fetch open interest shares for the position
-        (,,,,,,uint240 oiShares,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        (,,,,bool isLong,,uint240 oiShares,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
         uint256 oiSharesFraction = oiShares * fraction / 1e18;
         uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, oiSharesFraction);
 
         // Calculate adjusted unwind price based on slippage
         if (isLong) {
             unchecked {
-                return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage) / SLIPPAGE_SCALE;
+                return (ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage) / SLIPPAGE_SCALE, isLong);
             }
         } else {
             unchecked {
-                return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage) / SLIPPAGE_SCALE;
+                return (ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage) / SLIPPAGE_SCALE, isLong);
             }
         }
     }

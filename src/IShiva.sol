@@ -15,11 +15,6 @@ interface IShiva {
 
     error NotPositionOwner();
 
-    function ownerOf(
-        IOverlayV1Market market,
-        uint256 positionId
-    ) external view returns (address);
-
     function build(
         IOverlayV1Market market,
         uint256 collateral,

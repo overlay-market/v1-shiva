@@ -14,6 +14,8 @@ import {Utils} from "src/utils/Utils.sol";
 contract ShivaTest is Test {
     using MessageHashUtils for bytes32;
 
+    uint256 constant ONE = 1e18;
+
     Shiva shiva;
     IOverlayV1Market ovMarket;
     IOverlayV1State ovState;
@@ -62,8 +64,8 @@ contract ShivaTest is Test {
     }
 
     // Utility function to unwind a position
-    function unwindPosition(uint256 posId, uint256 fraction, uint8 slippage, bool isLong) public {
-        uint256 priceLimit = Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage, isLong);
+    function unwindPosition(uint256 posId, uint256 fraction, uint8 slippage) public {
+        (uint256 priceLimit,) = Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
         shiva.unwind(ovMarket, posId, fraction, priceLimit);
     }
 
@@ -72,7 +74,7 @@ contract ShivaTest is Test {
     // Alice builds a position through Shiva
     function test_build() public {
         vm.startPrank(alice);
-        uint256 posId = buildPosition(1e18, 1e18, 1, true);
+        uint256 posId = buildPosition(ONE, ONE, 1, true);
         
         // the position is not associated with Alice in the ovMarket
         (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId)));
@@ -83,34 +85,48 @@ contract ShivaTest is Test {
         assertGt(fractionRemaining, 0);
 
         // the position is associated with Alice in Shiva
-        assertEq(shiva.ownerOf(ovMarket, posId), alice);
+        assertEq(shiva.positionOwners(ovMarket, posId), alice);
+    }
+
+    // Alice and Bob build positions, after each build, Shiva should not have OVL tokens
+    function test_build_noOVL() public {
+        uint256 numberWithDecimals = 1234567890123456789;
+        vm.startPrank(alice);
+        buildPosition(numberWithDecimals, numberWithDecimals, 1, true);
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        buildPosition(numberWithDecimals, numberWithDecimals, 1, true);
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+        vm.stopPrank();
     }
 
     // Build leverage less than minimum
     function test_build_leverageLessThanMinimum() public {
         vm.startPrank(alice);
-        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, 1e18, 1e18, 1, true);
+        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.build(ovMarket, 1e18, 1e18 - 1, true, priceLimit);
+        shiva.build(ovMarket, ONE, ONE - 1, true, priceLimit);
     }
 
     // Build fail not enough allowance
     function test_build_notEnoughAllowance() public {
         deal(address(ovToken), charlie, 1000e18);
         vm.startPrank(charlie);
-        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, 1e18, 1e18, 1, true);
+        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.build(ovMarket, 1e18, 1e18, true, priceLimit);
+        shiva.build(ovMarket, ONE, ONE, true, priceLimit);
     }
 
     // Build fail enough allowance but not enough balance considering the trading fee
     function test_build_notEnoughBalance() public {
-        deal(address(ovToken), charlie, 1e18);
+        deal(address(ovToken), charlie, ONE);
         vm.startPrank(charlie);
         ovToken.approve(address(shiva), type(uint256).max);
-        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, 1e18, 1e18, 1, true);
+        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.build(ovMarket, 1e18, 1e18, true, priceLimit);
+        shiva.build(ovMarket, ONE, ONE, true, priceLimit);
     }
 
     // Unwind method tests
@@ -118,10 +134,10 @@ contract ShivaTest is Test {
     // Alice builds a position and then unwinds it through Shiva
     function test_unwind() public {
         vm.startPrank(alice);
-        uint256 posId = buildPosition(1e18, 1e18, 1, true);
+        uint256 posId = buildPosition(ONE, ONE, 1, true);
 
         // Alice unwinds her position through Shiva
-        unwindPosition(posId, 1e18, 1, true);
+        unwindPosition(posId, ONE, 1);
 
         // the position is successfully unwound
         (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
@@ -130,29 +146,29 @@ contract ShivaTest is Test {
 
     function test_partial_unwind() public {
         vm.startPrank(alice);
-        uint256 posId = buildPosition(1e18, 1e18, 1, true);
+        uint256 posId = buildPosition(ONE, ONE, 1, true);
 
         // Alice unwinds 50% of her position through Shiva
-        unwindPosition(posId, 5e17, 1, true);
+        unwindPosition(posId, 5e17, 1);
 
         // the position is successfully unwound
         (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 5000);
 
         // The position is still associated with Alice in Shiva
-        assertEq(shiva.ownerOf(ovMarket, posId), alice);
+        assertEq(shiva.positionOwners(ovMarket, posId), alice);
     }
 
     function test_unwind_notOwner(bool isLong) public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
-        uint256 posId = buildPosition(1e18, 1e18, 1, isLong);
+        uint256 posId = buildPosition(ONE, ONE, 1, isLong);
         vm.stopPrank();
         // Bob tries to unwind Alice's position through Shiva
-        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, 1e18, 1e18, 1, !isLong);
+        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, !isLong);
         vm.startPrank(bob);
         vm.expectRevert();
-        shiva.unwind(ovMarket, posId, 1e18, priceLimit);
+        shiva.unwind(ovMarket, posId, ONE, priceLimit);
     }
 
     // BuildSingle method tests
@@ -160,52 +176,86 @@ contract ShivaTest is Test {
     // Alice builds a position through Shiva and then builds another one
     function test_buildSingle() public {
         vm.startPrank(alice);
-        uint256 posId1 = buildPosition(1e18, 1e18, 1, true);
+        uint256 posId1 = buildPosition(ONE, ONE, 1, true);
 
         // Alice builds a second position after a while
         vm.warp(block.timestamp + 1000);
 
-        uint256 posId2 = shiva.buildSingle(ovMarket, 1e18, 1e18, true, 1, posId1);
+        uint256 posId2 = shiva.buildSingle(
+            Shiva.BuildSingleParams(ONE, ONE, posId1, ovMarket, 1)
+        );
 
         // the first position is successfully unwound
         (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
         assertEq(fractionRemaining, 0);
 
         // the second position is associated with Alice in Shiva
-        assertEq(shiva.ownerOf(ovMarket, posId2), alice);
+        assertEq(shiva.positionOwners(ovMarket, posId2), alice);
 
         // the second position is not associated with Alice in the ovMarket
         (,,,,,,,fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
         assertEq(fractionRemaining, 0);
     }
 
+    // Alice and Bob build positions, after each build, Shiva should not have OVL tokens
+    function test_buildSingle_noOVL() public {
+        uint256 numberWithDecimals = 1234567890123456789;
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(numberWithDecimals, numberWithDecimals, 1, true);
+
+        // Alice builds a second position after a while
+        vm.warp(block.timestamp + 1000);
+
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(numberWithDecimals, numberWithDecimals, posId1, ovMarket, 1)
+        );
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+
+        vm.startPrank(bob);
+        uint256 posId3 = buildPosition(numberWithDecimals, numberWithDecimals, 1, true);
+
+        // Bob builds a second position after a while
+        vm.warp(block.timestamp + 1000);
+
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(numberWithDecimals, numberWithDecimals, posId3, ovMarket, 1)
+        );
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+    }
+
     // BuildSingle fail previous position not owned by the caller
     function test_buildSingle_noPreviousPosition() public {
         vm.startPrank(alice);
         vm.expectRevert();
-        shiva.buildSingle(ovMarket, 1e18, 1e18, true, 1, 1);
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(ONE, ONE, 0, ovMarket, 1)
+        );
     }
 
     // BuildSingle fail leverage less than minimum
     function test_buildSingle_leverageLessThanMinimum() public {
         vm.startPrank(alice);
-        uint256 posId = buildPosition(1e18, 1e18, 1, true);
+        uint256 posId = buildPosition(ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.buildSingle(ovMarket, 1e18, 1e18 - 1, true, 1, posId);
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(ONE, ONE - 1, posId, ovMarket, 1)
+        );
     }
 
     // BuildSingle fail slippage greater than 100
     function test_buildSingle_slippageGreaterThan100() public {
         vm.startPrank(alice);
-        uint256 posId = buildPosition(1e18, 1e18, 1, true);
+        uint256 posId = buildPosition(ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.buildSingle(ovMarket, 1e18, 1e18, true, 101, posId);
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(ONE, ONE, posId, ovMarket, 101)
+        );
     }
 
     // function test_buildOnBehalfOf_ownership(bool isLong) public {
     //     uint256 deadline = block.timestamp;
     //     uint256 collateral = 10e18;
-    //     uint256 leverage = 1e18;
+    //     uint256 leverage = ONE;
     //     uint256 priceLimit = isLong ? type(uint256).max : 0;
 
     //     // TODO: use EIP712 and add random nonces that can be nullified by the owner
@@ -235,21 +285,21 @@ contract ShivaTest is Test {
     //     assertGt(fractionRemaining, 0);
 
     //     // the position is associated with Alice in Shiva
-    //     assertEq(shiva.ownerOf(ovMarket, posId), alice);
+    //     assertEq(shiva.positionOwners(ovMarket, posId), alice);
     // }
 
     // function test_unwindOnBehalfOf_notOwner(bool isLong) public {
     //     // Alice builds a position through Shiva
     //     vm.prank(alice);
     //     uint256 posId = shiva.build(
-    //         ovMarket, 10e18, 1e18, isLong, isLong ? type(uint256).max : 0
+    //         ovMarket, 10e18, ONE, isLong, isLong ? type(uint256).max : 0
     //     );
 
     //     // TODO: use EIP712 and add random nonces that can be nullified by the owner
 
     //     // Bob makes a signature to try to unwind Alice's position through Shiva
     //     uint256 deadline = block.timestamp;
-    //     uint256 fraction = 1e18;
+    //     uint256 fraction = ONE;
     //     uint256 priceLimit = isLong ? 0 : type(uint256).max;
     //     bytes32 msgHash = keccak256(abi.encodePacked(
     //         ovMarket,
