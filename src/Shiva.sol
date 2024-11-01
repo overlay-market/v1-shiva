@@ -52,10 +52,10 @@ contract Shiva is IShiva {
             marketAllowance[ovMarket] = true;
         }
 
-        positionId = _onBuildPosition(msg.sender, ovMarket, collateral, leverage, isLong, priceLimit);
+        positionId =
+            _onBuildPosition(msg.sender, ovMarket, collateral, leverage, isLong, priceLimit);
 
         // TODO - Emit event? because market contract will emit event
-
     }
 
     // Function to unwind a position for the user
@@ -83,9 +83,11 @@ contract Shiva is IShiva {
     // Function to build and keep a single position in the ovMarket for a user.
     // If the user already has a position in the ovMarket, it will be unwound before building a new one
     // and previous collateral and new collateral will be used to build the new position.
-    function buildSingle(
-        BuildSingleParams memory params
-    ) external onlyPositionOwner(params.ovMarket, params.previousPositionId) returns (uint256 positionId) {
+    function buildSingle(BuildSingleParams memory params)
+        external
+        onlyPositionOwner(params.ovMarket, params.previousPositionId)
+        returns (uint256 positionId)
+    {
         require(params.leverage >= ONE, "Shiva:lev<min");
 
         (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
@@ -119,7 +121,9 @@ contract Shiva is IShiva {
             isLong
         );
 
-        positionId = _onBuildPosition(msg.sender, params.ovMarket, totalCollateral, params.leverage, isLong, buildPriceLimit);
+        positionId = _onBuildPosition(
+            msg.sender, params.ovMarket, totalCollateral, params.leverage, isLong, buildPriceLimit
+        );
 
         emit BuildSingle(
             msg.sender,
@@ -142,7 +146,7 @@ contract Shiva is IShiva {
         bool isLong,
         uint256 priceLimit
     ) external returns (uint256 positionId) {
-      // TODO: Implement this function
+        // TODO: Implement this function
     }
 
     // Function to unwind a position on behalf of a user (with signature verification)
@@ -158,18 +162,34 @@ contract Shiva is IShiva {
         // TODO: Implement this function
     }
 
-    function _onBuildPosition(address _owner, IOverlayV1Market _market, uint256 _collateral, uint256 _leverage, bool _isLong, uint256 _priceLimit) internal returns (uint256 positionId) {
+    function _onBuildPosition(
+        address _owner,
+        IOverlayV1Market _market,
+        uint256 _collateral,
+        uint256 _leverage,
+        bool _isLong,
+        uint256 _priceLimit
+    ) internal returns (uint256 positionId) {
         positionId = _market.build(_collateral, _leverage, _isLong, _priceLimit);
 
         // Store position ownership
         positionOwners[_market][positionId] = _owner;
     }
 
-    function _onUnwindPosition(IOverlayV1Market _market, uint256 _positionId, uint256 _fraction, uint256 _priceLimit) internal {
+    function _onUnwindPosition(
+        IOverlayV1Market _market,
+        uint256 _positionId,
+        uint256 _fraction,
+        uint256 _priceLimit
+    ) internal {
         _market.unwind(_positionId, _fraction, _priceLimit);
     }
 
-    function _getTradingFee(IOverlayV1Market ovMarket, uint256 collateral, uint256 leverage) internal view returns (uint256) {
+    function _getTradingFee(
+        IOverlayV1Market ovMarket,
+        uint256 collateral,
+        uint256 leverage
+    ) internal view returns (uint256) {
         uint256 notional = collateral.mulUp(leverage);
         return notional.mulUp(ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
     }
