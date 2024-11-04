@@ -35,11 +35,13 @@ library Utils {
         // Calculate adjusted price based on slippage
         if (isLong) {
             unchecked {
-                return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage) / SLIPPAGE_SCALE;
+                return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
+                    / SLIPPAGE_SCALE;
             }
         } else {
             unchecked {
-                return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage) / SLIPPAGE_SCALE;
+                return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
+                    / SLIPPAGE_SCALE;
             }
         }
     }
@@ -65,18 +67,27 @@ library Utils {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>100");
 
         // Fetch open interest shares for the position
-        (,,,,bool isLong,,uint240 oiShares,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        (,,,, bool isLong,, uint240 oiShares,) =
+            ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
         uint256 oiSharesFraction = oiShares * fraction / 1e18;
         uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, oiSharesFraction);
 
         // Calculate adjusted unwind price based on slippage
         if (isLong) {
             unchecked {
-                return (ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage) / SLIPPAGE_SCALE, isLong);
+                return (
+                    ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
+                        / SLIPPAGE_SCALE,
+                    isLong
+                );
             }
         } else {
             unchecked {
-                return (ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage) / SLIPPAGE_SCALE, isLong);
+                return (
+                    ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
+                        / SLIPPAGE_SCALE,
+                    isLong
+                );
             }
         }
     }
