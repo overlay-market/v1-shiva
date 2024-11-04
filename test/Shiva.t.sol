@@ -11,6 +11,7 @@ import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
 import {OverlayV1Token} from "v1-core/contracts/OverlayV1Token.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 
 contract ShivaTest is Test {
     using ECDSA for bytes32;
@@ -31,7 +32,7 @@ contract ShivaTest is Test {
     address automator = makeAddr("automator");
 
     function setUp() public {
-        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()));
+        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), 92984086);
 
         ovToken = IERC20(Constants.getOVTokenAddress());
         ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
@@ -59,17 +60,21 @@ contract ShivaTest is Test {
     }
 
     // Utility function to get price limit and build a position
-    function buildPosition(uint256 collateral, uint256 leverage, uint8 slippage, bool isLong)
-        public
-        returns (uint256)
-    {
-        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
+    function buildPosition(
+        uint256 collateral,
+        uint256 leverage,
+        uint8 slippage,
+        bool isLong
+    ) public returns (uint256) {
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
         return shiva.build(ovMarket, collateral, leverage, isLong, priceLimit);
     }
 
     // Utility function to unwind a position
     function unwindPosition(uint256 posId, uint256 fraction, uint8 slippage) public {
-        (uint256 priceLimit,) = Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
         shiva.unwind(ovMarket, posId, fraction, priceLimit);
     }
 
@@ -81,11 +86,13 @@ contract ShivaTest is Test {
         uint256 posId = buildPosition(ONE, ONE, 1, true);
 
         // the position is not associated with Alice in the ovMarket
-        (,,,,,,, uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId)));
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(alice, posId)));
         assertEq(fractionRemaining, 0);
 
         // the position is associated with Shiva in the ovMarket
-        (,,,,,,, fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        (,,,,,,, fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertGt(fractionRemaining, 0);
 
         // the position is associated with Alice in Shiva
@@ -144,7 +151,8 @@ contract ShivaTest is Test {
         unwindPosition(posId, ONE, 1);
 
         // the position is successfully unwound
-        (,,,,,,, uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 0);
     }
 
@@ -156,7 +164,8 @@ contract ShivaTest is Test {
         unwindPosition(posId, 5e17, 1);
 
         // the position is successfully unwound
-        (,,,,,,, uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 5000);
 
         // The position is still associated with Alice in Shiva
@@ -182,13 +191,16 @@ contract ShivaTest is Test {
         vm.startPrank(alice);
         uint256 posId1 = buildPosition(ONE, ONE, 1, true);
 
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+
         // Alice builds a second position after a while
         vm.warp(block.timestamp + 1000);
 
         uint256 posId2 = shiva.buildSingle(Shiva.BuildSingleParams(ONE, ONE, posId1, ovMarket, 1));
 
         // the first position is successfully unwound
-        (,,,,,,, uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
         assertEq(fractionRemaining, 0);
 
         // the second position is associated with Alice in Shiva
@@ -197,6 +209,42 @@ contract ShivaTest is Test {
         // the second position is not associated with Alice in the ovMarket
         (,,,,,,, fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
         assertEq(fractionRemaining, 0);
+
+        // shiva has no tokens after the transaction
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+    }
+
+    // Alice builds a position through Shiva and then builds another one
+    function testFuzz_buildSingle(uint256 collateral, uint256 leverage) public {
+        collateral =
+            bound(collateral, ovMarket.params(uint256(Risk.Parameters.MinCollateral)), 500e18);
+        leverage = bound(leverage, 1e18, ovMarket.params(uint256(Risk.Parameters.CapLeverage)));
+
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(1e18, 1e18, 1, true);
+
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+
+        // Alice builds a second position after a while
+        vm.warp(block.timestamp + 1000);
+
+        uint256 posId2 =
+            shiva.buildSingle(Shiva.BuildSingleParams(collateral, leverage, posId1, ovMarket, 1));
+
+        // the first position is successfully unwound
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
+        assertEq(fractionRemaining, 0);
+
+        // the second position is associated with Alice in Shiva
+        assertEq(shiva.positionOwners(ovMarket, posId2), alice);
+
+        // the second position is not associated with Alice in the ovMarket
+        (,,,,,,, fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
+        assertEq(fractionRemaining, 0);
+
+        // shiva has no tokens after the transaction
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
     }
 
     // Alice and Bob build positions, after each build, Shiva should not have OVL tokens
