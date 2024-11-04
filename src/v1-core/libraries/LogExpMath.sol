@@ -21,7 +21,7 @@
 // XXX for changes
 
 // XXX: 0.8.25; unchecked functions
-pragma solidity 0.8.25;
+pragma solidity 0.8.10;
 
 /* solhint-disable */
 
@@ -131,8 +131,7 @@ library LogExpMath {
                 // bring y_int256 to 36 decimal places, as it might overflow. Instead, we perform two 18 decimal
                 // multiplications and add the results: one with the first 18 decimals of ln_36_x, and one with the
                 // (downscaled) last 18 decimals.
-                logx_times_y =
-                    ((ln_36_x / ONE_18) * y_int256 + ((ln_36_x % ONE_18) * y_int256) / ONE_18);
+                logx_times_y = ((ln_36_x / ONE_18) * y_int256 + ((ln_36_x % ONE_18) * y_int256) / ONE_18);
             } else {
                 logx_times_y = _ln(x_int256) * y_int256;
             }
@@ -140,8 +139,7 @@ library LogExpMath {
 
             // Finally, we compute exp(y * ln(x)) to arrive at x^y
             require(
-                MIN_NATURAL_EXPONENT <= logx_times_y && logx_times_y <= MAX_NATURAL_EXPONENT,
-                "product out of bounds"
+                MIN_NATURAL_EXPONENT <= logx_times_y && logx_times_y <= MAX_NATURAL_EXPONENT, "product out of bounds"
             );
 
             return uint256(exp(logx_times_y));

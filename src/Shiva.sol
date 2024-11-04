@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity <=0.8.25;
+pragma solidity 0.8.10;
 
 import {IOverlayV1Market} from "./v1-core/IOverlayV1Market.sol";
 import {IOverlayV1State} from "./v1-core/IOverlayV1State.sol";
@@ -33,13 +33,10 @@ contract Shiva is IShiva {
     }
 
     // Function to build a position in the ovMarket for a user
-    function build(
-        IOverlayV1Market ovMarket,
-        uint256 collateral,
-        uint256 leverage,
-        bool isLong,
-        uint256 priceLimit
-    ) public returns (uint256 positionId) {
+    function build(IOverlayV1Market ovMarket, uint256 collateral, uint256 leverage, bool isLong, uint256 priceLimit)
+        public
+        returns (uint256 positionId)
+    {
         require(leverage >= ONE, "Shiva:lev<min");
         uint256 tradingFee = _getTradingFee(ovMarket, collateral, leverage);
 
@@ -64,12 +61,10 @@ contract Shiva is IShiva {
     }
 
     // Function to unwind a position for the user
-    function unwind(
-        IOverlayV1Market ovMarket,
-        uint256 positionId,
-        uint256 fraction,
-        uint256 priceLimit
-    ) public onlyPositionOwner(ovMarket, positionId) {
+    function unwind(IOverlayV1Market ovMarket, uint256 positionId, uint256 fraction, uint256 priceLimit)
+        public
+        onlyPositionOwner(ovMarket, positionId)
+    {
         ovMarket.unwind(positionId, fraction, priceLimit);
 
         ovToken.transfer(msg.sender, ovToken.balanceOf(address(this)));
@@ -88,20 +83,17 @@ contract Shiva is IShiva {
     // Function to build and keep a single position in the ovMarket for a user.
     // If the user already has a position in the ovMarket, it will be unwound before building a new one
     // and previous collateral and new collateral will be used to build the new position.
-    function buildSingle(
-        BuildSingleParams memory params
-    ) external onlyPositionOwner(params.ovMarket, params.previousPositionId) returns (uint256 positionId) {
+    function buildSingle(BuildSingleParams memory params)
+        external
+        onlyPositionOwner(params.ovMarket, params.previousPositionId)
+        returns (uint256 positionId)
+    {
         require(params.leverage >= ONE, "Shiva:lev<min");
 
         (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
-            ovState,
-            params.ovMarket,
-            params.previousPositionId,
-            address(this),
-            ONE,
-            params.slippage
+            ovState, params.ovMarket, params.previousPositionId, address(this), ONE, params.slippage
         );
-        params.ovMarket.unwind(params.previousPositionId, ONE, unwindPriceLimit);        
+        params.ovMarket.unwind(params.previousPositionId, ONE, unwindPriceLimit);
 
         uint256 totalCollateral = params.collateral + ovToken.balanceOf(address(this));
         uint256 tradingFee = _getTradingFee(params.ovMarket, totalCollateral, params.leverage);
@@ -115,14 +107,8 @@ contract Shiva is IShiva {
         }
 
         // Build new position
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovState,
-            params.ovMarket,
-            totalCollateral,
-            params.leverage,
-            params.slippage,
-            isLong
-        );
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovState, params.ovMarket, totalCollateral, params.leverage, params.slippage, isLong);
         positionId = params.ovMarket.build(totalCollateral, params.leverage, isLong, buildPriceLimit);
 
         // Store position ownership
@@ -151,7 +137,7 @@ contract Shiva is IShiva {
         bool isLong,
         uint256 priceLimit
     ) external returns (uint256 positionId) {
-      // TODO: Implement this function
+        // TODO: Implement this function
     }
 
     // Function to unwind a position on behalf of a user (with signature verification)
@@ -167,7 +153,11 @@ contract Shiva is IShiva {
         // TODO: Implement this function
     }
 
-    function _getTradingFee(IOverlayV1Market ovMarket, uint256 collateral, uint256 leverage) internal view returns (uint256) {
+    function _getTradingFee(IOverlayV1Market ovMarket, uint256 collateral, uint256 leverage)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 notional = collateral.mulUp(leverage);
         return notional.mulUp(ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
     }

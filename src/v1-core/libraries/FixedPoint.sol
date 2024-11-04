@@ -17,7 +17,7 @@
 // XXX for changes
 
 // XXX: 0.8.25; removed requires for overflow checks
-pragma solidity 0.8.25;
+pragma solidity 0.8.10;
 
 import "./LogExpMath.sol";
 

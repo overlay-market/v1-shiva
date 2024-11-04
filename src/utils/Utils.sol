@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.10;
 
 import {IOverlayV1State} from "../../src/v1-core/IOverlayV1State.sol";
 import {IOverlayV1Market} from "../../src/v1-core/IOverlayV1Market.sol";
@@ -65,7 +65,7 @@ library Utils {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>100");
 
         // Fetch open interest shares for the position
-        (,,,,bool isLong,,uint240 oiShares,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        (,,,, bool isLong,, uint240 oiShares,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
         uint256 oiSharesFraction = oiShares * fraction / 1e18;
         uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, oiSharesFraction);
 
