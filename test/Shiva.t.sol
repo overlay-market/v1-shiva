@@ -3,17 +3,18 @@ pragma solidity <=0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
-import {IOverlayV1Market} from "src/v1-core/IOverlayV1Market.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1State} from "src/v1-core/IOverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
-import {Risk} from "../src/v1-core/Risk.sol";
+import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
+import {OverlayV1Token} from "v1-core/contracts/OverlayV1Token.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 
 contract ShivaTest is Test {
-    using MessageHashUtils for bytes32;
+    using ECDSA for bytes32;
 
     uint256 constant ONE = 1e18;
 
@@ -171,7 +172,9 @@ contract ShivaTest is Test {
         assertEq(shiva.positionOwners(ovMarket, posId), alice);
     }
 
-    function test_unwind_notOwner(bool isLong) public {
+    function test_unwind_notOwner(
+        bool isLong
+    ) public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, 1, isLong);
@@ -359,7 +362,8 @@ contract ShivaTest is Test {
     //     }
 
     //     vm.prank(bob);
-    //     vm.expectRevert(Shiva.NotPositionOwner.selector);
+    //     // TODO implement Shiva.NotPositionOwner.selector
+    //     // vm.expectRevert(Shiva.NotPositionOwner.selector);
     //     shiva.unwindOnBehalfOf(ovMarket, bob, signature, deadline, posId, fraction, priceLimit);
     // }
 }

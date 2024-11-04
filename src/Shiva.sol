@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity <=0.8.25;
+pragma solidity 0.8.10;
 
-import {IOverlayV1Market} from "./v1-core/IOverlayV1Market.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1State} from "./v1-core/IOverlayV1State.sol";
-import {Risk} from "./v1-core/Risk.sol";
-import {FixedPoint} from "./v1-core/libraries/FixedPoint.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IShiva} from "./IShiva.sol";
 import {Utils} from "./utils/Utils.sol";
@@ -83,7 +83,9 @@ contract Shiva is IShiva {
     // Function to build and keep a single position in the ovMarket for a user.
     // If the user already has a position in the ovMarket, it will be unwound before building a new one
     // and previous collateral and new collateral will be used to build the new position.
-    function buildSingle(BuildSingleParams memory params)
+    function buildSingle(
+        BuildSingleParams memory params
+    )
         external
         onlyPositionOwner(params.ovMarket, params.previousPositionId)
         returns (uint256 positionId)
@@ -91,12 +93,7 @@ contract Shiva is IShiva {
         require(params.leverage >= ONE, "Shiva:lev<min");
 
         (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
-            ovState,
-            params.ovMarket,
-            params.previousPositionId,
-            address(this),
-            ONE,
-            params.slippage
+            ovState, params.ovMarket, params.previousPositionId, address(this), ONE, params.slippage
         );
         _onUnwindPosition(params.ovMarket, params.previousPositionId, ONE, unwindPriceLimit);
 
@@ -113,12 +110,7 @@ contract Shiva is IShiva {
 
         // Build new position
         uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovState,
-            params.ovMarket,
-            totalCollateral,
-            params.leverage,
-            params.slippage,
-            isLong
+            ovState, params.ovMarket, totalCollateral, params.leverage, params.slippage, isLong
         );
 
         positionId = _onBuildPosition(
