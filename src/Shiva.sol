@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
-import {IOverlayV1Market} from "./v1-core/IOverlayV1Market.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1State} from "./v1-core/IOverlayV1State.sol";
-import {Risk} from "./v1-core/Risk.sol";
-import {FixedPoint} from "./v1-core/libraries/FixedPoint.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IShiva} from "./IShiva.sol";
 import {Utils} from "./utils/Utils.sol";
