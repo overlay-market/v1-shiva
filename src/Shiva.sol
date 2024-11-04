@@ -33,10 +33,13 @@ contract Shiva is IShiva {
     }
 
     // Function to build a position in the ovMarket for a user
-    function build(IOverlayV1Market ovMarket, uint256 collateral, uint256 leverage, bool isLong, uint256 priceLimit)
-        public
-        returns (uint256 positionId)
-    {
+    function build(
+        IOverlayV1Market ovMarket,
+        uint256 collateral,
+        uint256 leverage,
+        bool isLong,
+        uint256 priceLimit
+    ) public returns (uint256 positionId) {
         require(leverage >= ONE, "Shiva:lev<min");
         uint256 tradingFee = _getTradingFee(ovMarket, collateral, leverage);
 
@@ -80,7 +83,9 @@ contract Shiva is IShiva {
     // Function to build and keep a single position in the ovMarket for a user.
     // If the user already has a position in the ovMarket, it will be unwound before building a new one
     // and previous collateral and new collateral will be used to build the new position.
-    function buildSingle(BuildSingleParams memory params)
+    function buildSingle(
+        BuildSingleParams memory params
+    )
         external
         onlyPositionOwner(params.ovMarket, params.previousPositionId)
         returns (uint256 positionId)
@@ -105,12 +110,7 @@ contract Shiva is IShiva {
 
         // Build new position
         uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovState,
-            params.ovMarket,
-            totalCollateral,
-            params.leverage,
-            params.slippage,
-            isLong
+            ovState, params.ovMarket, totalCollateral, params.leverage, params.slippage, isLong
         );
 
         positionId = _onBuildPosition(

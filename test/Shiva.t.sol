@@ -172,7 +172,9 @@ contract ShivaTest is Test {
         assertEq(shiva.positionOwners(ovMarket, posId), alice);
     }
 
-    function test_unwind_notOwner(bool isLong) public {
+    function test_unwind_notOwner(
+        bool isLong
+    ) public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, 1, isLong);
@@ -256,7 +258,9 @@ contract ShivaTest is Test {
         // Alice builds a second position after a while
         vm.warp(block.timestamp + 1000);
 
-        shiva.buildSingle(Shiva.BuildSingleParams(numberWithDecimals, numberWithDecimals, posId1, ovMarket, 1));
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(numberWithDecimals, numberWithDecimals, posId1, ovMarket, 1)
+        );
         assertEq(ovToken.balanceOf(address(shiva)), 0);
 
         vm.startPrank(bob);
@@ -265,7 +269,9 @@ contract ShivaTest is Test {
         // Bob builds a second position after a while
         vm.warp(block.timestamp + 1000);
 
-        shiva.buildSingle(Shiva.BuildSingleParams(numberWithDecimals, numberWithDecimals, posId3, ovMarket, 1));
+        shiva.buildSingle(
+            Shiva.BuildSingleParams(numberWithDecimals, numberWithDecimals, posId3, ovMarket, 1)
+        );
         assertEq(ovToken.balanceOf(address(shiva)), 0);
     }
 

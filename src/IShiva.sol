@@ -15,9 +15,13 @@ interface IShiva {
 
     error NotPositionOwner();
 
-    function build(IOverlayV1Market market, uint256 collateral, uint256 leverage, bool isLong, uint256 priceLimit)
-        external
-        returns (uint256 positionId);
+    function build(
+        IOverlayV1Market market,
+        uint256 collateral,
+        uint256 leverage,
+        bool isLong,
+        uint256 priceLimit
+    ) external returns (uint256 positionId);
 
     function buildOnBehalfOf(
         IOverlayV1Market market,
@@ -30,7 +34,12 @@ interface IShiva {
         uint256 priceLimit
     ) external returns (uint256 positionId);
 
-    function unwind(IOverlayV1Market market, uint256 positionId, uint256 fraction, uint256 priceLimit) external;
+    function unwind(
+        IOverlayV1Market market,
+        uint256 positionId,
+        uint256 fraction,
+        uint256 priceLimit
+    ) external;
 
     function unwindOnBehalfOf(
         IOverlayV1Market market,
