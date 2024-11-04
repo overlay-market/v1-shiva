@@ -10,6 +10,7 @@ import {IOverlayV1Market} from "src/v1-core/IOverlayV1Market.sol";
 import {IOverlayV1State} from "src/v1-core/IOverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
+import {Risk} from "../src/v1-core/Risk.sol";
 
 contract ShivaTest is Test {
     using MessageHashUtils for bytes32;
@@ -30,7 +31,7 @@ contract ShivaTest is Test {
     address automator = makeAddr("automator");
     
     function setUp() public {
-        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()));
+        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), 92984086);
 
         ovToken = IERC20(Constants.getOVTokenAddress());
         ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
@@ -178,6 +179,8 @@ contract ShivaTest is Test {
         vm.startPrank(alice);
         uint256 posId1 = buildPosition(ONE, ONE, 1, true);
 
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+
         // Alice builds a second position after a while
         vm.warp(block.timestamp + 1000);
 
@@ -195,6 +198,39 @@ contract ShivaTest is Test {
         // the second position is not associated with Alice in the ovMarket
         (,,,,,,,fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
         assertEq(fractionRemaining, 0);
+
+        // shiva has no tokens after the transaction
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+    }
+
+    // Alice builds a position through Shiva and then builds another one
+    function testFuzz_buildSingle(uint256 collateral, uint256 leverage) public {
+        collateral = bound(collateral, ovMarket.params(uint256(Risk.Parameters.MinCollateral)), 500e18);
+        leverage = bound(leverage, 1e18, ovMarket.params(uint256(Risk.Parameters.CapLeverage)));
+        
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(1e18, 1e18, 1, true);
+
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+
+        // Alice builds a second position after a while
+        vm.warp(block.timestamp + 1000);
+
+        uint256 posId2 = shiva.buildSingle(Shiva.BuildSingleParams(collateral, leverage, posId1, ovMarket, 1));
+
+        // the first position is successfully unwound
+        (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
+        assertEq(fractionRemaining, 0);
+
+        // the second position is associated with Alice in Shiva
+        assertEq(shiva.positionOwners(ovMarket, posId2), alice);
+
+        // the second position is not associated with Alice in the ovMarket
+        (,,,,,,,fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
+        assertEq(fractionRemaining, 0);
+
+        // shiva has no tokens after the transaction
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
     }
 
     // Alice and Bob build positions, after each build, Shiva should not have OVL tokens

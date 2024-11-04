@@ -52,15 +52,10 @@ contract Shiva is IShiva {
             marketAllowance[ovMarket] = true;
         }
 
-        // Build position in the ovMarket
-        positionId = ovMarket.build(collateral, leverage, isLong, priceLimit);
-
-        // Store position ownership
-        positionOwners[ovMarket][positionId] = msg.sender;
+        positionId = _onBuildPosition(msg.sender, ovMarket, collateral, leverage, isLong, priceLimit);
 
         // TODO - Emit event? because market contract will emit event
 
-        return positionId;
     }
 
     // Function to unwind a position for the user
@@ -70,7 +65,7 @@ contract Shiva is IShiva {
         uint256 fraction,
         uint256 priceLimit
     ) public onlyPositionOwner(ovMarket, positionId) {
-        ovMarket.unwind(positionId, fraction, priceLimit);
+        _onUnwindPosition(ovMarket, positionId, fraction, priceLimit);
 
         ovToken.transfer(msg.sender, ovToken.balanceOf(address(this)));
 
@@ -101,7 +96,7 @@ contract Shiva is IShiva {
             ONE,
             params.slippage
         );
-        params.ovMarket.unwind(params.previousPositionId, ONE, unwindPriceLimit);        
+        _onUnwindPosition(params.ovMarket, params.previousPositionId, ONE, unwindPriceLimit);
 
         uint256 totalCollateral = params.collateral + ovToken.balanceOf(address(this));
         uint256 tradingFee = _getTradingFee(params.ovMarket, totalCollateral, params.leverage);
@@ -123,10 +118,8 @@ contract Shiva is IShiva {
             params.slippage,
             isLong
         );
-        positionId = params.ovMarket.build(totalCollateral, params.leverage, isLong, buildPriceLimit);
 
-        // Store position ownership
-        positionOwners[params.ovMarket][positionId] = msg.sender;
+        positionId = _onBuildPosition(msg.sender, params.ovMarket, totalCollateral, params.leverage, isLong, buildPriceLimit);
 
         emit BuildSingle(
             msg.sender,
@@ -136,8 +129,6 @@ contract Shiva is IShiva {
             params.collateral,
             totalCollateral
         );
-
-        return positionId;
     }
 
     // Function to build a position on behalf of a user (with signature verification)
@@ -165,6 +156,17 @@ contract Shiva is IShiva {
         uint256 priceLimit
     ) external {
         // TODO: Implement this function
+    }
+
+    function _onBuildPosition(address _owner, IOverlayV1Market _market, uint256 _collateral, uint256 _leverage, bool _isLong, uint256 _priceLimit) internal returns (uint256 positionId) {
+        positionId = _market.build(_collateral, _leverage, _isLong, _priceLimit);
+
+        // Store position ownership
+        positionOwners[_market][positionId] = _owner;
+    }
+
+    function _onUnwindPosition(IOverlayV1Market _market, uint256 _positionId, uint256 _fraction, uint256 _priceLimit) internal {
+        _market.unwind(_positionId, _fraction, _priceLimit);
     }
 
     function _getTradingFee(IOverlayV1Market ovMarket, uint256 collateral, uint256 leverage) internal view returns (uint256) {
