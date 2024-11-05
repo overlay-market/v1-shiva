@@ -12,9 +12,13 @@ import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
 import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
+import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
+import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
+import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
 
 contract ShivaTest is Test {
     using ECDSA for bytes32;
+    using FixedPoint for uint256;
 
     uint256 constant ONE = 1e18;
 
@@ -22,6 +26,7 @@ contract ShivaTest is Test {
     IOverlayV1Market ovMarket;
     IOverlayV1State ovState;
     IERC20 ovToken;
+    IBerachainRewardsVault public rewardVault;
 
     uint256 alicePk = 0x123;
     address alice = vm.addr(alicePk);
@@ -32,13 +37,17 @@ contract ShivaTest is Test {
     address automator = makeAddr("automator");
 
     function setUp() public {
-        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), 92984086);
+        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
 
         ovToken = IERC20(Constants.getOVTokenAddress());
         ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
         ovState = IOverlayV1State(Constants.getOVStateAddress());
 
-        shiva = new Shiva(address(ovToken), address(ovState));
+        IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
+            0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
+        );
+        shiva = new Shiva(address(ovToken), address(ovState), address(vaultFactory));
+        rewardVault = shiva.rewardVault();
 
         // Deal tokens to alice and bob (on the forked network)
         deal(address(ovToken), alice, 1000e18);
@@ -140,6 +149,17 @@ contract ShivaTest is Test {
         shiva.build(ovMarket, ONE, ONE, true, priceLimit);
     }
 
+    function test_build_pol_stake() public {
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        buildPosition(collateral, leverage, 1, true);
+
+        // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
+        uint256 notional = collateral.mulUp(leverage);
+        assertEq(rewardVault.balanceOf(alice), notional);
+    }
+
     // Unwind method tests
 
     // Alice builds a position and then unwinds it through Shiva
@@ -184,6 +204,142 @@ contract ShivaTest is Test {
         vm.startPrank(bob);
         vm.expectRevert();
         shiva.unwind(ovMarket, posId, ONE, priceLimit);
+    }
+
+    function test_unwind_pol_unstake() public {
+        vm.startPrank(alice);
+        uint256 collateral = 2e18;
+        uint256 leverage = 3e18;
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
+
+        // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
+        uint256 notional = collateral.mulUp(leverage);
+        assertEq(rewardVault.balanceOf(alice), notional);
+
+        // Alice unwinds her position through Shiva
+        unwindPosition(posId, ONE, 1);
+
+        // the position is successfully unwound
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertEq(fractionRemaining, 0);
+
+        assertEq(rewardVault.balanceOf(alice), 0);
+    }
+
+    function test_partial_unwind_pol_unstake() public {
+        vm.startPrank(alice);
+        uint256 collateral = 2e18;
+        uint256 leverage = 3e18;
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
+
+        // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
+        uint256 notional = collateral.mulUp(leverage);
+        assertEq(rewardVault.balanceOf(alice), notional);
+
+        // Alice unwinds her position through Shiva
+        uint256 fraction = ONE / 2;
+        unwindPosition(posId, fraction, 1);
+
+        // the position is successfully unwound
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertEq(fractionRemaining, 10_000 * (ONE - fraction) / ONE);
+
+        assertEq(rewardVault.balanceOf(alice), (ONE -fraction).mulUp(notional));
+
+        unwindPosition(posId, fraction, 1);
+        assertEq(rewardVault.balanceOf(alice), (ONE -fraction).mulUp(ONE -fraction).mulUp(notional));
+
+        unwindPosition(posId, ONE, 1);
+        assertEq(rewardVault.balanceOf(alice), 0);
+    }
+
+    function testFuzz_partial_unwind_pol_unstake(uint256 collateral, uint256 leverage, uint256 fraction) public {
+        collateral =
+            bound(collateral, ovMarket.params(uint256(Risk.Parameters.MinCollateral)), 500e18);
+        leverage = bound(leverage, 1e18, ovMarket.params(uint256(Risk.Parameters.CapLeverage)));
+        fraction = bound(leverage, 1e17, 9e17);
+        console.log(fraction, "fraction");
+        uint256 roundedFraction = fraction - fraction % 1e14;
+        console.log(roundedFraction, "roundedFraction");
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
+
+        // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
+        uint256 notional = collateral.mulUp(leverage);
+        console.log(notional, "notional");
+        assertEq(rewardVault.balanceOf(alice), notional);
+
+        // Alice unwinds her position through Shiva
+        unwindPosition(posId, fraction, 1);
+
+        // the position is successfully unwound
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertEq(fractionRemaining, 10_000 * (ONE - roundedFraction) / ONE, "fraction remaining");
+
+        assertApproxEqAbs(rewardVault.balanceOf(alice), (ONE - roundedFraction).mulDown(notional), 1, "reward balance, 1st unwind");
+
+        {
+            (
+                uint96 notionalInitial_,
+                uint96 debtInitial_,
+                int24 midTick_,
+                int24 entryTick_,
+                bool isLong_,
+                bool liquidated_,
+                uint240 oiShares_,
+                uint16 fractionRemaining_
+            ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+            Position.Info memory positionInfo = Position.Info(
+                notionalInitial_,
+                debtInitial_,
+                midTick_,
+                entryTick_,
+                isLong_,
+                liquidated_,
+                oiShares_,
+                fractionRemaining_
+            );
+            assertEq(rewardVault.balanceOf(alice), Position.notionalInitial(positionInfo, ONE), "1st unwind: reward balance != remaining intial notional");
+        }
+
+        unwindPosition(posId, fraction, 1);
+        // estimated notional remaining on position
+        assertApproxEqRel(rewardVault.balanceOf(alice), (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional), 1e16, "reward balance, 2nd unwind");
+        // staked balance should be lower than or equal the estimated notional remaining on position (+1 for rounding error)
+        assertLeDecimal(rewardVault.balanceOf(alice), (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional) + 1, 1e18, "reward balance, 2nd unwind LE");
+
+        {
+            (
+                uint96 notionalInitial_,
+                uint96 debtInitial_,
+                int24 midTick_,
+                int24 entryTick_,
+                bool isLong_,
+                bool liquidated_,
+                uint240 oiShares_,
+                uint16 fractionRemaining_
+            ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+            Position.Info memory positionInfo = Position.Info(
+                notionalInitial_,
+                debtInitial_,
+                midTick_,
+                entryTick_,
+                isLong_,
+                liquidated_,
+                oiShares_,
+                fractionRemaining_
+            );
+            assertEq(rewardVault.balanceOf(alice), Position.notionalInitial(positionInfo, ONE), "2nd unwind: reward balance != remaining intial notional");
+        }
+
+        unwindPosition(posId, ONE, 1);
+        (,,,,,,, uint16 fractionRemaining3) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertEq(fractionRemaining3, 0, "3rd unwind: fraction remaining != 0");
+        assertEq(rewardVault.balanceOf(alice), 0, "3rd unwind: reward balance != 0");
     }
 
     // BuildSingle method tests
