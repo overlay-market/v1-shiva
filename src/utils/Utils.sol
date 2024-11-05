@@ -67,16 +67,17 @@ library Utils {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>100");
 
         // Fetch open interest shares for the position
-        (,,,, bool isLong,, uint240 oiShares,) =
+        (,,,, bool isLong,,,) =
             ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
-        uint256 oiSharesFraction = oiShares * fraction / 1e18;
-        uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, oiSharesFraction);
+        // uint256 oiSharesFraction = oiShares * fraction / 1e18;
+        uint256 currentOi = ovState.oi(ovMarket, owner, positionId);
+        uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, currentOi * fraction / 1e18);
 
         // Calculate adjusted unwind price based on slippage
-        if (isLong) {
+        if (!isLong) {
             unchecked {
                 return (
-                    ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
+                    ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
                         / SLIPPAGE_SCALE,
                     isLong
                 );
@@ -84,7 +85,7 @@ library Utils {
         } else {
             unchecked {
                 return (
-                    ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
+                    ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
                         / SLIPPAGE_SCALE,
                     isLong
                 );
