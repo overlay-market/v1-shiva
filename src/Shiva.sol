@@ -5,12 +5,20 @@ import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IO
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
+import {FixedCast} from "v1-periphery/lib/v1-core/contracts/libraries/FixedCast.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IShiva} from "./IShiva.sol";
 import {Utils} from "./utils/Utils.sol";
+import {IOverlayMarketLiquidateCallback} from
+    "v1-periphery/lib/v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
+import "./PolStakingToken.sol";
+import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "./interfaces/berachain/IRewardVaults.sol";
+import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
 
-contract Shiva is IShiva {
+contract Shiva is IShiva, IOverlayMarketLiquidateCallback {
     using FixedPoint for uint256;
+    using FixedCast for uint16;
+    using Position for Position.Info;
 
     uint256 internal constant ONE = 1e18;
 
@@ -20,9 +28,21 @@ contract Shiva is IShiva {
     mapping(IOverlayV1Market => mapping(uint256 => address)) public positionOwners;
     mapping(IOverlayV1Market => bool) public marketAllowance;
 
-    constructor(address _ovToken, address _ovState) {
+    StakingToken public stakingToken;
+    IBerachainRewardsVault public rewardVault;
+
+    constructor(address _ovToken, address _ovState, address _vaultFactory) {
         ovToken = IERC20(_ovToken);
         ovState = IOverlayV1State(_ovState);
+
+        // Create new staking token
+        stakingToken = new StakingToken();
+
+        // Create vault for newly created token
+        address vaultAddress = IBerachainRewardsVaultFactory(_vaultFactory)
+            .createRewardsVault(address(stakingToken));
+
+        rewardVault = IBerachainRewardsVault(vaultAddress);
     }
 
     modifier onlyPositionOwner(IOverlayV1Market ovMarket, uint256 positionId) {
@@ -154,6 +174,11 @@ contract Shiva is IShiva {
         // TODO: Implement this function
     }
 
+    function overlayMarketLiquidateCallback(uint256 positionId) external {
+        // TODO verify that the caller is a market
+        // TODO remove stake from vault
+    }
+
     function _onBuildPosition(
         address _owner,
         IOverlayV1Market _market,
@@ -162,6 +187,15 @@ contract Shiva is IShiva {
         bool _isLong,
         uint256 _priceLimit
     ) internal returns (uint256 positionId) {
+        // calculate the notional of the position to build
+        uint256 notional = _collateral.mulUp(_leverage);
+        // Mint StakingTokens
+        stakingToken.mint(address(this), notional);
+
+        // Stake tokens in RewardVault on behalf of user
+        stakingToken.approve(address(rewardVault), notional);
+        rewardVault.delegateStake(_owner, notional);
+
         positionId = _market.build(_collateral, _leverage, _isLong, _priceLimit);
 
         // Store position ownership
@@ -174,7 +208,45 @@ contract Shiva is IShiva {
         uint256 _fraction,
         uint256 _priceLimit
     ) internal {
+        _fraction -= _fraction % 1e14;
+        // Calculate fraction of initialNotional of the position to unwind
+        uint256 intialNotionalFractionBefore;
+        uint256 intialNotionalFraction;
+        //     // TODO make this more efficient, and nice looking
+        {
+            (
+                uint96 notionalInitial_,
+                , // uint96 debtInitial_,
+                , // int24 midTick_,
+                , // int24 entryTick_,
+                , // bool isLong_,
+                , // bool liquidated_,
+                , // uint240 oiShares_,
+                uint16 fractionRemaining_
+            ) = _market.positions(keccak256(abi.encodePacked(address(this), _positionId)));
+            intialNotionalFractionBefore = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
+        }
+
         _market.unwind(_positionId, _fraction, _priceLimit);
+
+        {
+            (
+                uint96 notionalInitial_,
+                , // uint96 debtInitial_,
+                , // int24 midTick_,
+                , // int24 entryTick_,
+                , // bool isLong_,
+                , // bool liquidated_,
+                , // uint240 oiShares_,
+                uint16 fractionRemaining_
+            ) = _market.positions(keccak256(abi.encodePacked(address(this), _positionId)));
+            intialNotionalFraction = intialNotionalFractionBefore - uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
+        }
+
+        // Withdraw tokens from the RewardVault
+        rewardVault.delegateWithdraw(positionOwners[_market][_positionId], intialNotionalFraction);
+        // Burn the withdrawn StakingTokens
+        stakingToken.burn(address(this), intialNotionalFraction);
     }
 
     function _getTradingFee(
