@@ -5,13 +5,13 @@ import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
-import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {IOverlayV1State} from "src/v1-core/IOverlayV1State.sol";
+import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
-import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
-import {OverlayV1Token} from "v1-core/contracts/OverlayV1Token.sol";
-import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
+import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.sol";
+import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 
 contract ShivaTest is Test {
     using ECDSA for bytes32;

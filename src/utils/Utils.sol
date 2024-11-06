@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
-import {IOverlayV1State} from "../../src/v1-core/IOverlayV1State.sol";
-import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 
 /// @title Utils
 /// @notice Utility functions for Overlay V1 to estimate prices and unwind positions
