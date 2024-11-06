@@ -47,10 +47,7 @@ contract Shiva is IShiva {
         ovToken.transferFrom(msg.sender, address(this), collateral + tradingFee);
 
         // Approve the ovMarket contract to spend OV
-        if (!marketAllowance[ovMarket]) {
-            ovToken.approve(address(ovMarket), type(uint256).max);
-            marketAllowance[ovMarket] = true;
-        }
+        _approveMarket(ovMarket);
 
         positionId =
             _onBuildPosition(msg.sender, ovMarket, collateral, leverage, isLong, priceLimit);
@@ -77,7 +74,7 @@ contract Shiva is IShiva {
         uint256 leverage;
         uint256 previousPositionId;
         IOverlayV1Market ovMarket;
-        uint8 slippage;
+        uint16 slippage;
     }
 
     // Function to build and keep a single position in the ovMarket for a user.
@@ -103,10 +100,8 @@ contract Shiva is IShiva {
         // transfer from OVL from user to this contract
         ovToken.transferFrom(msg.sender, address(this), params.collateral + tradingFee);
 
-        if (!marketAllowance[params.ovMarket]) {
-            ovToken.approve(address(params.ovMarket), type(uint256).max);
-            marketAllowance[params.ovMarket] = true;
-        }
+        // Approve the ovMarket contract to spend OV
+        _approveMarket(params.ovMarket);
 
         // Build new position
         uint256 buildPriceLimit = Utils.getEstimatedPrice(
@@ -184,5 +179,12 @@ contract Shiva is IShiva {
     ) internal view returns (uint256) {
         uint256 notional = collateral.mulUp(leverage);
         return notional.mulUp(ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
+    }
+
+    function _approveMarket(IOverlayV1Market ovMarket) internal {
+        if (!marketAllowance[ovMarket]) {
+            ovToken.approve(address(ovMarket), type(uint256).max);
+            marketAllowance[ovMarket] = true;
+        }
     }
 }
