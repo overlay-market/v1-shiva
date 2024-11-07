@@ -8,7 +8,7 @@ import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IO
 /// @notice Utility functions for Overlay V1 to estimate prices and unwind positions
 library Utils {
     // Slippage scale set to 10000 to allow for 2 decimal places e.g. 1% = 100; 0.80% = 80
-    uint256 private constant SLIPPAGE_SCALE = 1000;
+    uint256 private constant SLIPPAGE_SCALE = 10000;
     uint256 internal constant ONE = 1e18;
 
     /**
