@@ -1,6 +1,14 @@
 [profile.default]
+version = "0.8.10"
 src = "src"
 out = "out"
 libs = ["lib"]
 
+[fmt]
+multiline_func_header="params_first"
+line_length=100
+ignore=[
+    "*/**/IOverlayV1Market.sol",
+    "*/**/IOverlayV1State.sol"
+]
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

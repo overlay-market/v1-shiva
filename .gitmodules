@@ -3,4 +3,8 @@
 	url = https://github.com/foundry-rs/forge-std
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
-	url = https://github.com/openZeppelin/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/v1-periphery"]
+	path = lib/v1-periphery
+	url = https://github.com/overlay-market/v1-periphery
+	branch = feat/PoL

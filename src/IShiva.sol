@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.10;
 
-import {IOverlayV1Market} from "./IOverlayV1Market.sol";
+import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 
 interface IShiva {
-    error NotPositionOwner();
+    event BuildSingle(
+        address indexed owner,
+        address market,
+        uint256 previousPositionId,
+        uint256 newPositionId,
+        uint256 collateral,
+        uint256 totalCollateral
+    );
 
-    function ownerOf(
-        IOverlayV1Market market,
-        uint256 positionId
-    ) external view returns (address);
+    error NotPositionOwner();
 
     function build(
         IOverlayV1Market market,
