@@ -161,6 +161,25 @@ contract ShivaTest is Test {
         assertEq(rewardVault.balanceOf(alice), notional);
     }
 
+    error InsufficientSelfStake();
+
+    function test_build_pol_stake_revert_user_withdraw() public {
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        buildPosition(collateral, leverage, 1, true);
+
+        // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
+        uint256 notional = collateral.mulUp(leverage);
+        assertEq(rewardVault.balanceOf(alice), notional);
+
+        vm.expectRevert(InsufficientSelfStake.selector);
+        rewardVault.withdraw(notional);
+
+        vm.expectRevert(InsufficientSelfStake.selector);
+        rewardVault.exit();
+    }
+
     // Unwind method tests
 
     // Alice builds a position and then unwinds it through Shiva
