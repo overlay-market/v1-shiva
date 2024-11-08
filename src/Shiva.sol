@@ -171,7 +171,29 @@ contract Shiva is IShiva, IOverlayMarketLiquidateCallback {
 
     function overlayMarketLiquidateCallback(uint256 positionId) external {
         // TODO verify that the caller is a market
-        // TODO remove stake from vault
+        IOverlayV1Market marketAddress = IOverlayV1Market(msg.sender);
+
+        // Calculate remaining of initialNotional of the position to unwind
+        uint256 intialNotional;
+        //     // TODO make this more efficient, and nice looking
+        {
+            (
+                uint96 notionalInitial_,
+                , // uint96 debtInitial_,
+                , // int24 midTick_,
+                , // int24 entryTick_,
+                , // bool isLong_,
+                , // bool liquidated_,
+                , // uint240 oiShares_,
+                uint16 fractionRemaining_
+            ) = marketAddress.positions(keccak256(abi.encodePacked(address(this), positionId)));
+            intialNotional = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
+        }
+
+        // Withdraw tokens from the RewardVault
+        rewardVault.delegateWithdraw(positionOwners[marketAddress][positionId], intialNotional);
+        // Burn the withdrawn StakingTokens
+        stakingToken.burn(address(this), intialNotional);
     }
 
     function _onBuildPosition(
