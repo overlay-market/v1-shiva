@@ -6,9 +6,10 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {MINTER_ROLE, GOVERNOR_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {MINTER_ROLE, GOVERNOR_ROLE, LIQUIDATE_CALLBACK_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {IOverlayV1ChainlinkFeed} from "v1-periphery/lib/v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
 import {OverlayV1State} from "v1-periphery/contracts/OverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
@@ -18,6 +19,7 @@ import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
 import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
+import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 
 contract ShivaNewFactoryTest is Test {
     using ECDSA for bytes32;
@@ -56,13 +58,16 @@ contract ShivaNewFactoryTest is Test {
         ovFactory = deployFactory(ovToken);
         ovMarket = deployMarket(ovFactory, Constants.getEthdFeed());
         ovState = deployPeriphery(ovFactory);
-        vm.stopPrank();
 
         IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
             0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
         );
         shiva = new Shiva(address(ovToken), address(ovState), address(vaultFactory));
         rewardVault = shiva.rewardVault();
+
+        // configure shiva
+        ovToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
+        vm.stopPrank();
 
         // Deal tokens to alice and bob (on the forked network)
         deal(address(ovToken), alice, 1000e18);
@@ -512,6 +517,59 @@ contract ShivaNewFactoryTest is Test {
         uint256 posId = buildPosition(ONE, ONE, 1, true);
         vm.expectRevert();
         shiva.buildSingle(Shiva.BuildSingleParams(ONE, ONE, posId, ovMarket, 101));
+    }
+
+    // test liquidate
+
+    function test_liquidate_pol() public {
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
+
+        // submit a new round with price = prevPrice / 2 to make the posId liquidatable
+        {
+            IFluxAggregator aggregator = IFluxAggregator(IOverlayV1ChainlinkFeed(ovMarket.feed()).aggregator());
+            address oracle = aggregator.getOracles()[0];
+            int256 halfPrice = aggregator.latestAnswer()/2;
+
+            vm.startPrank(oracle);
+            aggregator.submit(aggregator.latestRound() + 1, halfPrice);
+            vm.warp(block.timestamp + 60*60);
+            aggregator.submit(aggregator.latestRound() + 1, halfPrice);
+            vm.warp(block.timestamp + 60*60);
+        }
+        assertTrue(ovState.liquidatable(ovMarket, address(shiva), posId));
+
+        // liquidate alice's position
+        vm.startPrank(bob);
+        ovMarket.liquidate(address(shiva), posId);
+        (
+            , //uint96 notionalInitial_,
+            , //uint96 debtInitial_,
+            , //int24 midTick_,
+            , //int24 entryTick_,
+            , //bool isLong_,
+            bool liquidated_,
+            , //uint240 oiShares_,
+            //uint16 fractionRemaining_
+        ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertTrue(liquidated_);
+
+        // rewards balance should be 0 after the position is liquidated
+        assertEq(rewardVault.balanceOf(alice), 0);
+    }
+
+    function test_revert_pol_overlayMarketLiquidateCallback_called_by_non_market() public {
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
+
+        vm.startPrank(bob);
+        vm.expectRevert();
+        shiva.overlayMarketLiquidateCallback(posId);
+        assertNotEq(rewardVault.balanceOf(alice), 0);
     }
 
     // function test_buildOnBehalfOf_ownership(bool isLong) public {
