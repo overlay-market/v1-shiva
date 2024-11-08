@@ -7,7 +7,9 @@ import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IO
 /// @title Utils
 /// @notice Utility functions for Overlay V1 to estimate prices and unwind positions
 library Utils {
-    uint256 private constant SLIPPAGE_SCALE = 100;
+    // Slippage scale set to 10000 to allow for 2 decimal places e.g. 1% = 100; 0.80% = 80
+    uint256 private constant SLIPPAGE_SCALE = 10000;
+    uint256 internal constant ONE = 1e18;
 
     /**
      * @notice Calculates the estimated price with slippage for a given market position.
@@ -15,7 +17,7 @@ library Utils {
      * @param ovMarket The overlay market contract instance.
      * @param collateral Amount of collateral used.
      * @param leverage Multiplier for the position leverage.
-     * @param slippage Acceptable slippage, expressed in percentage (0 - 100).
+     * @param slippage Acceptable slippage, expressed in percentage (0 - 100) with 2 decimal places.
      * @param isLong Boolean indicating if the position is long or short.
      * @return Estimated price after applying slippage.
      */
@@ -24,10 +26,10 @@ library Utils {
         IOverlayV1Market ovMarket,
         uint256 collateral,
         uint256 leverage,
-        uint8 slippage,
+        uint16 slippage,
         bool isLong
     ) external view returns (uint256) {
-        require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>100");
+        require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>10000");
 
         uint256 oiEstimated = ovState.oiEstimate(ovMarket, collateral, leverage, isLong);
         uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, oiEstimated);
@@ -52,8 +54,8 @@ library Utils {
      * @param ovMarket The overlay market contract instance.
      * @param positionId Identifier of the position to unwind.
      * @param owner Address of the position owner.
-     * @param fraction Fraction of the position to unwind (1e18 represents 100%).
-     * @param slippage Acceptable slippage, expressed in percentage (0 - 100).
+     * @param fraction Fraction of the position to unwind (ONE represents 100%).
+     * @param slippage Acceptable slippage, expressed in percentage (0 - 100) with 2 decimal places.
      * @return Unwind price after applying slippage.
      */
     function getUnwindPrice(
@@ -62,16 +64,15 @@ library Utils {
         uint256 positionId,
         address owner,
         uint256 fraction,
-        uint8 slippage
+        uint16 slippage
     ) external view returns (uint256, bool) {
-        require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>100");
+        require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>10000");
 
         // Fetch open interest shares for the position
         (,,,, bool isLong,,,) =
             ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
-        // uint256 oiSharesFraction = oiShares * fraction / 1e18;
         uint256 currentOi = ovState.oi(ovMarket, owner, positionId);
-        uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, currentOi * fraction / 1e18);
+        uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, currentOi * fraction / ONE);
 
         // Calculate adjusted unwind price based on slippage
         if (!isLong) {
