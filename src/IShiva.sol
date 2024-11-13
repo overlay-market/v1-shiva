@@ -19,29 +19,22 @@ interface IShiva {
     error InvalidSignature();
 
     function build(
-        IOverlayV1Market market,
-        uint256 collateral,
-        uint256 leverage,
-        bool isLong,
-        uint256 priceLimit
+        ShivaStructs.Build memory params
     ) external returns (uint256 positionId);
 
-    function buildSingle(ShivaStructs.BuildSingle memory params)
-        external
-        returns (uint256 positionId);
-
-    function buildOnBehalfOf(
+    function build(
         ShivaStructs.BuildOnBehalfOf memory params
     ) external returns (uint256 positionId);
 
-    function unwind(
-        IOverlayV1Market market,
-        uint256 positionId,
-        uint256 fraction,
-        uint256 priceLimit
-    ) external;
+    function buildSingle(
+        ShivaStructs.BuildSingle memory params
+    ) external returns (uint256 positionId);
 
-    function unwindOnBehalfOf(
-        ShivaStructs.UnwindOnBehalfOf memory params
-    ) external;
+    function buildSingle(
+        ShivaStructs.BuildSingleOnBehalfOf memory params
+    ) external returns (uint256 positionId);
+
+    function unwind(ShivaStructs.Unwind memory params) external;
+
+    function unwind(ShivaStructs.UnwindOnBehalfOf memory params) external;
 }

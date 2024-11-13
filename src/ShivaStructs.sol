@@ -4,12 +4,12 @@ pragma solidity 0.8.10;
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 
 library ShivaStructs {
-    struct BuildSingle {
+    struct Build {
+        IOverlayV1Market ovMarket;
+        bool isLong;
         uint256 collateral;
         uint256 leverage;
-        uint256 previousPositionId;
-        IOverlayV1Market ovMarket;
-        uint16 slippage;
+        uint256 priceLimit;
     }
 
     struct BuildOnBehalfOf {
@@ -23,14 +23,12 @@ library ShivaStructs {
         bool isLong;
     }
 
-    struct UnwindOnBehalfOf {
+    struct BuildSingle {
         IOverlayV1Market ovMarket;
-        uint48 deadline;
-        uint256 positionId;
-        uint256 fraction;
-        uint256 priceLimit;
-        bytes signature;
-        address owner;
+        uint16 slippage;
+        uint256 collateral;
+        uint256 leverage;
+        uint256 previousPositionId;
     }
 
     struct BuildSingleOnBehalfOf {
@@ -41,6 +39,23 @@ library ShivaStructs {
         uint256 collateral;
         uint256 leverage;
         uint256 previousPositionId;
+        bytes signature;
+        address owner;
+    }
+
+    struct Unwind {
+        IOverlayV1Market ovMarket;
+        uint256 positionId;
+        uint256 fraction;
+        uint256 priceLimit;
+    }
+
+    struct UnwindOnBehalfOf {
+        IOverlayV1Market ovMarket;
+        uint48 deadline;
+        uint256 positionId;
+        uint256 fraction;
+        uint256 priceLimit;
         bytes signature;
         address owner;
     }

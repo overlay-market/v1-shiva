@@ -58,35 +58,28 @@ contract Shiva is IShiva, EIP712 {
 
     // Function to build a position in the ovMarket for a user
     function build(
-        IOverlayV1Market ovMarket,
-        uint256 collateral,
-        uint256 leverage,
-        bool isLong,
-        uint256 priceLimit
+        ShivaStructs.Build memory params
     ) public returns (uint256 positionId) {
-        require(leverage >= ONE, "Shiva:lev<min");
-        uint256 tradingFee = _getTradingFee(ovMarket, collateral, leverage);
+        require(params.leverage >= ONE, "Shiva:lev<min");
+        uint256 tradingFee = _getTradingFee(params.ovMarket, params.collateral, params.leverage);
 
         // Transfer OV from user to this contract
-        ovToken.transferFrom(msg.sender, address(this), collateral + tradingFee);
+        ovToken.transferFrom(msg.sender, address(this), params.collateral + tradingFee);
 
         // Approve the ovMarket contract to spend OV
-        _approveMarket(ovMarket);
+        _approveMarket(params.ovMarket);
 
         positionId =
-            _onBuildPosition(msg.sender, ovMarket, collateral, leverage, isLong, priceLimit);
+            _onBuildPosition(msg.sender, params.ovMarket, params.collateral, params.leverage, params.isLong, params.priceLimit);
 
         // TODO - Emit event? because market contract will emit event
     }
 
     // Function to unwind a position for the user
     function unwind(
-        IOverlayV1Market ovMarket,
-        uint256 positionId,
-        uint256 fraction,
-        uint256 priceLimit
-    ) public onlyPositionOwner(ovMarket, positionId, msg.sender) {
-        _onUnwindPosition(ovMarket, positionId, fraction, priceLimit);
+        ShivaStructs.Unwind memory params
+    ) public onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
+        _onUnwindPosition(params.ovMarket, params.positionId, params.fraction, params.priceLimit);
 
         ovToken.transfer(msg.sender, ovToken.balanceOf(address(this)));
 
@@ -107,7 +100,7 @@ contract Shiva is IShiva, EIP712 {
     }
 
     // Function to build a position on behalf of a user (with signature verification)
-    function buildOnBehalfOf(
+    function build(
         ShivaStructs.BuildOnBehalfOf memory params
     ) external validDeadline(params.deadline) returns (uint256 positionId) {
         // build typed data hash
@@ -136,7 +129,7 @@ contract Shiva is IShiva, EIP712 {
     }
 
     // Function to unwind a position on behalf of a user (with signature verification)
-    function unwindOnBehalfOf(
+    function unwind(
         ShivaStructs.UnwindOnBehalfOf memory params
     ) external validDeadline(params.deadline) onlyPositionOwner(params.ovMarket, params.positionId, params.owner) {
         // build typed data hash
@@ -157,7 +150,7 @@ contract Shiva is IShiva, EIP712 {
     }
 
     // Function to build and keep a single position on behalf of a user (with signature verification)
-    function buildSingleOnBehalfOf(
+    function buildSingle(
         ShivaStructs.BuildSingleOnBehalfOf memory params
     ) external validDeadline(params.deadline) onlyPositionOwner(params.ovMarket, params.previousPositionId, params.owner) returns (uint256) {
         // build typed data hash

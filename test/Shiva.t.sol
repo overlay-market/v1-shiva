@@ -51,7 +51,9 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(ovMarket, ONE, ONE - 1, true, priceLimit);
+        shiva.build(
+            ShivaStructs.Build(ovMarket, true, ONE, ONE - 1, priceLimit)
+        );
     }
 
     // Build fail not enough allowance
@@ -61,7 +63,9 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(ovMarket, ONE, ONE, true, priceLimit);
+        shiva.build(
+            ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit)
+        );
     }
 
     // Build fail enough allowance but not enough balance considering the trading fee
@@ -72,7 +76,9 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(ovMarket, ONE, ONE, true, priceLimit);
+        shiva.build(
+            ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit)
+        );
     }
 
     // Unwind method tests
@@ -114,7 +120,9 @@ contract ShivaTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, !isLong);
         vm.startPrank(bob);
         vm.expectRevert();
-        shiva.unwind(ovMarket, posId, ONE, priceLimit);
+        shiva.unwind(
+            ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit)
+        );
     }
 
     // BuildSingle method tests
@@ -239,7 +247,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // execute `buildOnBehalfOf` with `automator`
         vm.prank(automator);
-        uint256 posId = shiva.buildOnBehalfOf(
+        uint256 posId = shiva.build(
             ShivaStructs.BuildOnBehalfOf(ovMarket, deadline, ONE, ONE, priceLimit, signature, address(alice), true)
         );
 
@@ -277,7 +285,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // execute `unwindOnBehalfOf` with `automator`
         vm.prank(automator);
-        shiva.unwindOnBehalfOf(
+        shiva.unwind(
             ShivaStructs.UnwindOnBehalfOf(ovMarket, deadline, posId, ONE, priceLimit, signature, address(alice))
         );
 
@@ -312,7 +320,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // execute `buildSingleOnBehalfOf` with `automator`
         vm.prank(automator);
-        uint256 posId2 = shiva.buildSingleOnBehalfOf(
+        uint256 posId2 = shiva.buildSingle(
             ShivaStructs.BuildSingleOnBehalfOf(
                 ovMarket, deadline, BASIC_SLIPPAGE, true, ONE, ONE, posId1, signature, address(alice)
             )

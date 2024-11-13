@@ -86,13 +86,17 @@ contract ShivaTestBase is Test {
     ) public returns (uint256) {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
-        return shiva.build(ovMarket, collateral, leverage, isLong, priceLimit);
+        return shiva.build(
+            ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit)
+        );
     }
 
     function unwindPosition(uint256 posId, uint256 fraction, uint16 slippage) public {
         (uint256 priceLimit,) =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
-        shiva.unwind(ovMarket, posId, fraction, priceLimit);
+        shiva.unwind(
+            ShivaStructs.Unwind(ovMarket, posId, fraction, priceLimit)
+        );
     }
 
     function buildSinglePosition(
@@ -102,7 +106,7 @@ contract ShivaTestBase is Test {
         uint16 slippage
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingle(collateral, leverage, posId1, ovMarket, slippage)
+            ShivaStructs.BuildSingle(ovMarket, slippage, collateral, leverage, posId1)
         );
     }
 
