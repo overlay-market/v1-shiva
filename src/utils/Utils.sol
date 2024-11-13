@@ -69,8 +69,7 @@ library Utils {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>10000");
 
         // Fetch open interest shares for the position
-        (,,,, bool isLong,,,) =
-            ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        (,,,, bool isLong,,,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
         uint256 currentOi = ovState.oi(ovMarket, owner, positionId);
         uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, currentOi * fraction / ONE);
 

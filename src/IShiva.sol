@@ -34,7 +34,11 @@ interface IShiva {
         ShivaStructs.BuildSingleOnBehalfOf memory params
     ) external returns (uint256 positionId);
 
-    function unwind(ShivaStructs.Unwind memory params) external;
+    function unwind(
+        ShivaStructs.Unwind memory params
+    ) external;
 
-    function unwind(ShivaStructs.UnwindOnBehalfOf memory params) external;
+    function unwind(
+        ShivaStructs.UnwindOnBehalfOf memory params
+    ) external;
 }

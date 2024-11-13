@@ -49,7 +49,9 @@ contract Shiva is IShiva, EIP712 {
         _;
     }
 
-    modifier validDeadline(uint48 deadline) {
+    modifier validDeadline(
+        uint48 deadline
+    ) {
         if (block.timestamp > deadline) {
             revert ExpiredDeadline();
         }
@@ -69,8 +71,14 @@ contract Shiva is IShiva, EIP712 {
         // Approve the ovMarket contract to spend OV
         _approveMarket(params.ovMarket);
 
-        positionId =
-            _onBuildPosition(msg.sender, params.ovMarket, params.collateral, params.leverage, params.isLong, params.priceLimit);
+        positionId = _onBuildPosition(
+            msg.sender,
+            params.ovMarket,
+            params.collateral,
+            params.leverage,
+            params.isLong,
+            params.priceLimit
+        );
 
         // TODO - Emit event? because market contract will emit event
     }
@@ -96,7 +104,14 @@ contract Shiva is IShiva, EIP712 {
         onlyPositionOwner(params.ovMarket, params.previousPositionId, msg.sender)
         returns (uint256)
     {
-        return _buildSingleLogic(params.ovMarket, params.collateral, params.leverage, params.previousPositionId, params.slippage, msg.sender);
+        return _buildSingleLogic(
+            params.ovMarket,
+            params.collateral,
+            params.leverage,
+            params.previousPositionId,
+            params.slippage,
+            msg.sender
+        );
     }
 
     // Function to build a position on behalf of a user (with signature verification)
@@ -104,16 +119,18 @@ contract Shiva is IShiva, EIP712 {
         ShivaStructs.BuildOnBehalfOf memory params
     ) external validDeadline(params.deadline) returns (uint256 positionId) {
         // build typed data hash
-        bytes32 structHash = keccak256(abi.encode(
-            BUILD_ON_BEHALF_OF_TYPEHASH,
-            params.ovMarket,
-            params.deadline,
-            params.collateral,
-            params.leverage,
-            params.isLong,
-            params.priceLimit,
-            nonces[params.owner]
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                BUILD_ON_BEHALF_OF_TYPEHASH,
+                params.ovMarket,
+                params.deadline,
+                params.collateral,
+                params.leverage,
+                params.isLong,
+                params.priceLimit,
+                nonces[params.owner]
+            )
+        );
         _checkIsValidSignature(structHash, params.signature, params.owner);
 
         require(params.leverage >= ONE, "Shiva:lev<min");
@@ -125,23 +142,36 @@ contract Shiva is IShiva, EIP712 {
         // Approve the ovMarket contract to spend OV
         _approveMarket(params.ovMarket);
 
-        positionId = _onBuildPosition(params.owner, params.ovMarket, params.collateral, params.leverage, params.isLong, params.priceLimit);
+        positionId = _onBuildPosition(
+            params.owner,
+            params.ovMarket,
+            params.collateral,
+            params.leverage,
+            params.isLong,
+            params.priceLimit
+        );
     }
 
     // Function to unwind a position on behalf of a user (with signature verification)
     function unwind(
         ShivaStructs.UnwindOnBehalfOf memory params
-    ) external validDeadline(params.deadline) onlyPositionOwner(params.ovMarket, params.positionId, params.owner) {
+    )
+        external
+        validDeadline(params.deadline)
+        onlyPositionOwner(params.ovMarket, params.positionId, params.owner)
+    {
         // build typed data hash
-        bytes32 structHash = keccak256(abi.encode(
-            UNWIND_ON_BEHALF_OF_TYPEHASH,
-            params.ovMarket,
-            params.deadline,
-            params.positionId,
-            params.fraction,
-            params.priceLimit,
-            nonces[params.owner]
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                UNWIND_ON_BEHALF_OF_TYPEHASH,
+                params.ovMarket,
+                params.deadline,
+                params.positionId,
+                params.fraction,
+                params.priceLimit,
+                nonces[params.owner]
+            )
+        );
         _checkIsValidSignature(structHash, params.signature, params.owner);
 
         _onUnwindPosition(params.ovMarket, params.positionId, params.fraction, params.priceLimit);
@@ -152,24 +182,40 @@ contract Shiva is IShiva, EIP712 {
     // Function to build and keep a single position on behalf of a user (with signature verification)
     function buildSingle(
         ShivaStructs.BuildSingleOnBehalfOf memory params
-    ) external validDeadline(params.deadline) onlyPositionOwner(params.ovMarket, params.previousPositionId, params.owner) returns (uint256) {
+    )
+        external
+        validDeadline(params.deadline)
+        onlyPositionOwner(params.ovMarket, params.previousPositionId, params.owner)
+        returns (uint256)
+    {
         // build typed data hash
-        bytes32 structHash = keccak256(abi.encode(
-            BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
+        bytes32 structHash = keccak256(
+            abi.encode(
+                BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
+                params.ovMarket,
+                params.deadline,
+                params.isLong,
+                params.collateral,
+                params.leverage,
+                params.previousPositionId,
+                nonces[params.owner]
+            )
+        );
+        _checkIsValidSignature(structHash, params.signature, params.owner);
+
+        return _buildSingleLogic(
             params.ovMarket,
-            params.deadline,
-            params.isLong,
             params.collateral,
             params.leverage,
             params.previousPositionId,
-            nonces[params.owner]
-        ));
-        _checkIsValidSignature(structHash, params.signature, params.owner);
-
-        return _buildSingleLogic(params.ovMarket, params.collateral, params.leverage, params.previousPositionId, params.slippage, params.owner);
+            params.slippage,
+            params.owner
+        );
     }
 
-    function getDigest(bytes32 structHash) external view returns (bytes32) {
+    function getDigest(
+        bytes32 structHash
+    ) external view returns (bytes32) {
         return _hashTypedDataV4(structHash);
     }
 
@@ -202,9 +248,8 @@ contract Shiva is IShiva, EIP712 {
             ovState, _ovMarket, totalCollateral, _leverage, _slippage, isLong
         );
 
-        positionId = _onBuildPosition(
-            _owner, _ovMarket, totalCollateral, _leverage, isLong, buildPriceLimit
-        );
+        positionId =
+            _onBuildPosition(_owner, _ovMarket, totalCollateral, _leverage, isLong, buildPriceLimit);
 
         emit BuildSingle(
             _owner,
@@ -248,14 +293,20 @@ contract Shiva is IShiva, EIP712 {
         return notional.mulUp(_ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
     }
 
-    function _approveMarket(IOverlayV1Market _ovMarket) internal {
+    function _approveMarket(
+        IOverlayV1Market _ovMarket
+    ) internal {
         if (!marketAllowance[_ovMarket]) {
             ovToken.approve(address(_ovMarket), type(uint256).max);
             marketAllowance[_ovMarket] = true;
         }
     }
 
-    function _checkIsValidSignature(bytes32 _structHash, bytes memory _signature, address _owner) internal {
+    function _checkIsValidSignature(
+        bytes32 _structHash,
+        bytes memory _signature,
+        address _owner
+    ) internal {
         bytes32 digest = _hashTypedDataV4(_structHash);
         address signer = digest.recover(_signature);
 

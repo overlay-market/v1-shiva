@@ -51,9 +51,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(
-            ShivaStructs.Build(ovMarket, true, ONE, ONE - 1, priceLimit)
-        );
+        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE - 1, priceLimit));
     }
 
     // Build fail not enough allowance
@@ -63,9 +61,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(
-            ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit)
-        );
+        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit));
     }
 
     // Build fail enough allowance but not enough balance considering the trading fee
@@ -76,9 +72,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(
-            ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit)
-        );
+        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit));
     }
 
     // Unwind method tests
@@ -120,9 +114,7 @@ contract ShivaTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, !isLong);
         vm.startPrank(bob);
         vm.expectRevert();
-        shiva.unwind(
-            ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit)
-        );
+        shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit));
     }
 
     // BuildSingle method tests
@@ -226,19 +218,22 @@ contract ShivaTest is Test, ShivaTestBase {
 
     function test_buildOnBehalfOf_ownership() public {
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         // create message hash
-        bytes32 structHash = keccak256(abi.encode(
-            shiva.BUILD_ON_BEHALF_OF_TYPEHASH(),
-            ovMarket,
-            deadline,
-            ONE,
-            ONE,
-            true,
-            priceLimit,
-            shiva.nonces(alice)
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.BUILD_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                ONE,
+                ONE,
+                true,
+                priceLimit,
+                shiva.nonces(alice)
+            )
+        );
         bytes32 digest = shiva.getDigest(structHash);
 
         // sign the message as Alice
@@ -248,10 +243,13 @@ contract ShivaTest is Test, ShivaTestBase {
         // execute `buildOnBehalfOf` with `automator`
         vm.prank(automator);
         uint256 posId = shiva.build(
-            ShivaStructs.BuildOnBehalfOf(ovMarket, deadline, ONE, ONE, priceLimit, signature, address(alice), true)
+            ShivaStructs.BuildOnBehalfOf(
+                ovMarket, deadline, ONE, ONE, priceLimit, signature, address(alice), true
+            )
         );
 
-        (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertGt(fractionRemaining, 0);
 
         assertEq(shiva.positionOwners(ovMarket, posId), alice);
@@ -265,18 +263,21 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // Alice unwinds her position through a signed message
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        (uint256 priceLimit,) = Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         // create message hash
-        bytes32 structHash = keccak256(abi.encode(
-            shiva.UNWIND_ON_BEHALF_OF_TYPEHASH(),
-            ovMarket,
-            deadline,
-            posId,
-            ONE,
-            priceLimit,
-            shiva.nonces(alice)
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.UNWIND_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                posId,
+                ONE,
+                priceLimit,
+                shiva.nonces(alice)
+            )
+        );
         bytes32 digest = shiva.getDigest(structHash);
 
         // sign the message as Alice
@@ -286,10 +287,13 @@ contract ShivaTest is Test, ShivaTestBase {
         // execute `unwindOnBehalfOf` with `automator`
         vm.prank(automator);
         shiva.unwind(
-            ShivaStructs.UnwindOnBehalfOf(ovMarket, deadline, posId, ONE, priceLimit, signature, address(alice))
+            ShivaStructs.UnwindOnBehalfOf(
+                ovMarket, deadline, posId, ONE, priceLimit, signature, address(alice)
+            )
         );
 
-        (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 0);
     }
 
@@ -302,16 +306,18 @@ contract ShivaTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
         // create message hash
-        bytes32 structHash = keccak256(abi.encode(
-            shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
-            ovMarket,
-            deadline,
-            true,
-            ONE,
-            ONE,
-            posId1,
-            shiva.nonces(alice)
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                true,
+                ONE,
+                ONE,
+                posId1,
+                shiva.nonces(alice)
+            )
+        );
         bytes32 digest = shiva.getDigest(structHash);
 
         // sign the message as Alice
@@ -322,7 +328,15 @@ contract ShivaTest is Test, ShivaTestBase {
         vm.prank(automator);
         uint256 posId2 = shiva.buildSingle(
             ShivaStructs.BuildSingleOnBehalfOf(
-                ovMarket, deadline, BASIC_SLIPPAGE, true, ONE, ONE, posId1, signature, address(alice)
+                ovMarket,
+                deadline,
+                BASIC_SLIPPAGE,
+                true,
+                ONE,
+                ONE,
+                posId1,
+                signature,
+                address(alice)
             )
         );
 

@@ -32,9 +32,9 @@ contract ShivaTestBase is Test {
 
     uint256 alicePk = 0x123;
     uint256 bobPk = 0x456;
-    uint256 charliePk = 0x789;    
+    uint256 charliePk = 0x789;
 
-   function setUp() public virtual {
+    function setUp() public virtual {
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), 92984086);
 
         ovToken = IERC20(Constants.getOVTokenAddress());
@@ -69,7 +69,9 @@ contract ShivaTestBase is Test {
         approveToken(bob);
     }
 
-    function approveToken(address user) internal {
+    function approveToken(
+        address user
+    ) internal {
         vm.prank(user);
         ovToken.approve(address(shiva), type(uint256).max);
     }
@@ -77,7 +79,6 @@ contract ShivaTestBase is Test {
     /**
      * Utility functions
      */
-
     function buildPosition(
         uint256 collateral,
         uint256 leverage,
@@ -86,17 +87,13 @@ contract ShivaTestBase is Test {
     ) public returns (uint256) {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
-        return shiva.build(
-            ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit)
-        );
+        return shiva.build(ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit));
     }
 
     function unwindPosition(uint256 posId, uint256 fraction, uint16 slippage) public {
         (uint256 priceLimit,) =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
-        shiva.unwind(
-            ShivaStructs.Unwind(ovMarket, posId, fraction, priceLimit)
-        );
+        shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, fraction, priceLimit));
     }
 
     function buildSinglePosition(
@@ -113,7 +110,6 @@ contract ShivaTestBase is Test {
     /**
      * Assertion functions
      */
-
     function assertFractionRemainingIsZero(address user, uint256 posId) public view {
         (,,,,,,, uint16 fractionRemaining) =
             ovMarket.positions(keccak256(abi.encodePacked(user, posId)));
@@ -132,7 +128,9 @@ contract ShivaTestBase is Test {
         assertEq(fractionRemaining, expected);
     }
 
-    function assertOVTokenBalanceIsZero(address user) public view {
+    function assertOVTokenBalanceIsZero(
+        address user
+    ) public view {
         assertEq(ovToken.balanceOf(user), 0);
     }
 
