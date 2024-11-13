@@ -310,72 +310,121 @@ contract ShivaTest is Test {
         shiva.buildSingle(ShivaStructs.BuildSingle(ONE, ONE, posId, ovMarket, 11000));
     }
 
-    // function test_buildOnBehalfOf_ownership(bool isLong) public {
-    //     uint256 deadline = block.timestamp;
-    //     uint256 collateral = 10e18;
-    //     uint256 leverage = ONE;
-    //     uint256 priceLimit = isLong ? type(uint256).max : 0;
+    function test_buildOnBehalfOf_ownership() public {
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
-    //     // TODO: use EIP712 and add random nonces that can be nullified by the owner
+        // create message hash
+        bytes32 structHash = keccak256(abi.encode(
+            shiva.BUILD_ON_BEHALF_OF_TYPEHASH(),
+            ovMarket,
+            deadline,
+            ONE,
+            ONE,
+            true,
+            priceLimit,
+            shiva.nonces(alice)
+        ));
+        bytes32 digest = shiva.getDigest(structHash);
 
-    //     bytes32 msgHash = keccak256(abi.encodePacked(
-    //         ovMarket,
-    //         block.chainid,
-    //         deadline,
-    //         collateral,
-    //         leverage,
-    //         isLong,
-    //         priceLimit
-    //     )).toEthSignedMessageHash();
+        // sign the message as Alice
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
 
-    //     bytes memory signature;
-    //     {   // avoid stack too deep error
-    //         (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, msgHash);
-    //         signature = abi.encodePacked(r, s, v);
-    //     }
+        // execute `buildOnBehalfOf` with `automator`
+        vm.prank(automator);
+        uint256 posId = shiva.buildOnBehalfOf(
+            ShivaStructs.BuildOnBehalfOf(ovMarket, deadline, ONE, ONE, priceLimit, signature, address(alice), true)
+        );
 
-    //     // the automator builds a position on behalf of Alice through Shiva
-    //     vm.prank(automator);
-    //     uint256 posId = shiva.buildOnBehalfOf(ovMarket, alice, signature, deadline, collateral, leverage, isLong, priceLimit);
+        (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertGt(fractionRemaining, 0);
 
-    //     // the position is associated with Shiva in the ovMarket
-    //     (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
-    //     assertGt(fractionRemaining, 0);
+        assertEq(shiva.positionOwners(ovMarket, posId), alice);
+    }
 
-    //     // the position is associated with Alice in Shiva
-    //     assertEq(shiva.positionOwners(ovMarket, posId), alice);
-    // }
+    function test_unwindOnBehalfOf_withdrawal() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
 
-    // function test_unwindOnBehalfOf_notOwner(bool isLong) public {
-    //     // Alice builds a position through Shiva
-    //     vm.prank(alice);
-    //     uint256 posId = shiva.build(
-    //         ovMarket, 10e18, ONE, isLong, isLong ? type(uint256).max : 0
-    //     );
+        // Alice unwinds her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        (uint256 priceLimit,) = Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
-    //     // TODO: use EIP712 and add random nonces that can be nullified by the owner
+        // create message hash
+        bytes32 structHash = keccak256(abi.encode(
+            shiva.UNWIND_ON_BEHALF_OF_TYPEHASH(),
+            ovMarket,
+            deadline,
+            posId,
+            ONE,
+            priceLimit,
+            shiva.nonces(alice)
+        ));
+        bytes32 digest = shiva.getDigest(structHash);
 
-    //     // Bob makes a signature to try to unwind Alice's position through Shiva
-    //     uint256 deadline = block.timestamp;
-    //     uint256 fraction = ONE;
-    //     uint256 priceLimit = isLong ? 0 : type(uint256).max;
-    //     bytes32 msgHash = keccak256(abi.encodePacked(
-    //         ovMarket,
-    //         block.chainid,
-    //         deadline,
-    //         posId,
-    //         fraction,
-    //         priceLimit
-    //     )).toEthSignedMessageHash();
-    //     bytes memory signature;
-    //     {   // avoid stack too deep error
-    //         (uint8 v, bytes32 r, bytes32 s) = vm.sign(bobPk, msgHash);
-    //         signature = abi.encodePacked(r, s, v);
-    //     }
+        // sign the message as Alice
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
 
-    //     vm.prank(bob);
-    //     // TODO implement Shiva.NotPositionOwner.selector
-    //     // vm.expectRevert(Shiva.NotPositionOwner.selector);
-    //     shiva.unwindOnBehalfOf(ovMarket, bob, signature, deadline, posId, fraction, priceLimit);
-    // }
+        // execute `unwindOnBehalfOf` with `automator`
+        vm.prank(automator);
+        shiva.unwindOnBehalfOf(
+            ShivaStructs.UnwindOnBehalfOf(ovMarket, deadline, posId, ONE, priceLimit, signature, address(alice))
+        );
+
+        (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertEq(fractionRemaining, 0);
+    }
+
+    function test_buildSingleOnBehalfOf_ownership() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        // create message hash
+        bytes32 structHash = keccak256(abi.encode(
+            shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
+            ovMarket,
+            deadline,
+            true,
+            ONE,
+            ONE,
+            posId1,
+            shiva.nonces(alice)
+        ));
+        bytes32 digest = shiva.getDigest(structHash);
+
+        // sign the message as Alice
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // execute `buildSingleOnBehalfOf` with `automator`
+        vm.prank(automator);
+        uint256 posId2 = shiva.buildSingleOnBehalfOf(
+            ShivaStructs.BuildSingleOnBehalfOf(
+                ovMarket, deadline, BASIC_SLIPPAGE, true, ONE, ONE, posId1, signature, address(alice)
+            )
+        );
+
+        // the first position is successfully unwound
+        (,,,,,,, uint16 fractionRemaining) =
+            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
+        assertEq(fractionRemaining, 0);
+
+        // the second position is associated with Alice in Shiva
+        assertEq(shiva.positionOwners(ovMarket, posId2), alice);
+
+        // the second position is not associated with Alice in the ovMarket
+        (,,,,,,, fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
+        assertEq(fractionRemaining, 0);
+
+        // shiva has no tokens after the transaction
+        assertEq(ovToken.balanceOf(address(shiva)), 0);
+    }
 }

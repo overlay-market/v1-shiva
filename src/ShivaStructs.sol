@@ -32,4 +32,16 @@ library ShivaStructs {
         bytes signature;
         address owner;
     }
+
+    struct BuildSingleOnBehalfOf {
+        IOverlayV1Market ovMarket;
+        uint48 deadline;
+        uint16 slippage;
+        bool isLong;
+        uint256 collateral;
+        uint256 leverage;
+        uint256 previousPositionId;
+        bytes signature;
+        address owner;
+    }
 }

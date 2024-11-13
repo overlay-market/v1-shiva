@@ -26,6 +26,10 @@ contract Shiva is IShiva, EIP712 {
         "UnwindOnBehalfOfParams(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 nonce)"
     );
 
+    bytes32 public constant BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint16 slippage,bool isLong,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
+    );
+
     IERC20 public ovToken;
     IOverlayV1State public ovState;
 
@@ -97,41 +101,9 @@ contract Shiva is IShiva, EIP712 {
     )
         external
         onlyPositionOwner(params.ovMarket, params.previousPositionId, msg.sender)
-        returns (uint256 positionId)
+        returns (uint256)
     {
-        require(params.leverage >= ONE, "Shiva:lev<min");
-
-        (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
-            ovState, params.ovMarket, params.previousPositionId, address(this), ONE, params.slippage
-        );
-        _onUnwindPosition(params.ovMarket, params.previousPositionId, ONE, unwindPriceLimit);
-
-        uint256 totalCollateral = params.collateral + ovToken.balanceOf(address(this));
-        uint256 tradingFee = _getTradingFee(params.ovMarket, totalCollateral, params.leverage);
-
-        // transfer from OVL from user to this contract
-        ovToken.transferFrom(msg.sender, address(this), params.collateral + tradingFee);
-
-        // Approve the ovMarket contract to spend OV
-        _approveMarket(params.ovMarket);
-
-        // Build new position
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovState, params.ovMarket, totalCollateral, params.leverage, params.slippage, isLong
-        );
-
-        positionId = _onBuildPosition(
-            msg.sender, params.ovMarket, totalCollateral, params.leverage, isLong, buildPriceLimit
-        );
-
-        emit BuildSingle(
-            msg.sender,
-            address(params.ovMarket),
-            params.previousPositionId,
-            positionId,
-            params.collateral,
-            totalCollateral
-        );
+        return _buildSingleLogic(params.ovMarket, params.collateral, params.leverage, params.previousPositionId, params.slippage, msg.sender);
     }
 
     // Function to build a position on behalf of a user (with signature verification)
@@ -184,6 +156,73 @@ contract Shiva is IShiva, EIP712 {
         ovToken.transfer(params.owner, ovToken.balanceOf(address(this)));
     }
 
+    // Function to build and keep a single position on behalf of a user (with signature verification)
+    function buildSingleOnBehalfOf(
+        ShivaStructs.BuildSingleOnBehalfOf memory params
+    ) external validDeadline(params.deadline) onlyPositionOwner(params.ovMarket, params.previousPositionId, params.owner) returns (uint256) {
+        // build typed data hash
+        bytes32 structHash = keccak256(abi.encode(
+            BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
+            params.ovMarket,
+            params.deadline,
+            params.isLong,
+            params.collateral,
+            params.leverage,
+            params.previousPositionId,
+            nonces[params.owner]
+        ));
+        _checkIsValidSignature(structHash, params.signature, params.owner);
+
+        return _buildSingleLogic(params.ovMarket, params.collateral, params.leverage, params.previousPositionId, params.slippage, params.owner);
+    }
+
+    function getDigest(bytes32 structHash) external view returns (bytes32) {
+        return _hashTypedDataV4(structHash);
+    }
+
+    function _buildSingleLogic(
+        IOverlayV1Market _ovMarket,
+        uint256 _collateral,
+        uint256 _leverage,
+        uint256 _previousPositionId,
+        uint16 _slippage,
+        address _owner
+    ) internal returns (uint256 positionId) {
+        require(_leverage >= ONE, "Shiva:lev<min");
+
+        (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
+            ovState, _ovMarket, _previousPositionId, address(this), ONE, _slippage
+        );
+        _onUnwindPosition(_ovMarket, _previousPositionId, ONE, unwindPriceLimit);
+
+        uint256 totalCollateral = _collateral + ovToken.balanceOf(address(this));
+        uint256 tradingFee = _getTradingFee(_ovMarket, totalCollateral, _leverage);
+
+        // transfer from OVL from user to this contract
+        ovToken.transferFrom(_owner, address(this), _collateral + tradingFee);
+
+        // Approve the ovMarket contract to spend OV
+        _approveMarket(_ovMarket);
+
+        // Build new position
+        uint256 buildPriceLimit = Utils.getEstimatedPrice(
+            ovState, _ovMarket, totalCollateral, _leverage, _slippage, isLong
+        );
+
+        positionId = _onBuildPosition(
+            _owner, _ovMarket, totalCollateral, _leverage, isLong, buildPriceLimit
+        );
+
+        emit BuildSingle(
+            _owner,
+            address(_ovMarket),
+            _previousPositionId,
+            positionId,
+            _collateral,
+            totalCollateral
+        );
+    }
+
     function _onBuildPosition(
         address _owner,
         IOverlayV1Market _market,
@@ -208,29 +247,29 @@ contract Shiva is IShiva, EIP712 {
     }
 
     function _getTradingFee(
-        IOverlayV1Market ovMarket,
-        uint256 collateral,
-        uint256 leverage
+        IOverlayV1Market _ovMarket,
+        uint256 _collateral,
+        uint256 _leverage
     ) internal view returns (uint256) {
-        uint256 notional = collateral.mulUp(leverage);
-        return notional.mulUp(ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
+        uint256 notional = _collateral.mulUp(_leverage);
+        return notional.mulUp(_ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
     }
 
-    function _approveMarket(IOverlayV1Market ovMarket) internal {
-        if (!marketAllowance[ovMarket]) {
-            ovToken.approve(address(ovMarket), type(uint256).max);
-            marketAllowance[ovMarket] = true;
+    function _approveMarket(IOverlayV1Market _ovMarket) internal {
+        if (!marketAllowance[_ovMarket]) {
+            ovToken.approve(address(_ovMarket), type(uint256).max);
+            marketAllowance[_ovMarket] = true;
         }
     }
 
-    function _checkIsValidSignature(bytes32 structHash, bytes memory signature, address owner) internal {
-        bytes32 digest = _hashTypedDataV4(structHash);
-        address signer = digest.recover(signature);
+    function _checkIsValidSignature(bytes32 _structHash, bytes memory _signature, address _owner) internal {
+        bytes32 digest = _hashTypedDataV4(_structHash);
+        address signer = digest.recover(_signature);
 
-        if (signer != owner) {
+        if (signer != _owner) {
             revert InvalidSignature();
         }
 
-        nonces[owner]++;
+        nonces[_owner]++;
     }
 }
