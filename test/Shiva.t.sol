@@ -221,38 +221,25 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
-        // create message hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                shiva.BUILD_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
-                deadline,
-                ONE,
-                ONE,
-                true,
-                priceLimit,
-                shiva.nonces(alice)
-            )
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true
         );
-        bytes32 digest = shiva.getDigest(structHash);
 
         // sign the message as Alice
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        bytes memory signature = getSignature(digest, alicePk);
 
         // execute `buildOnBehalfOf` with `automator`
         vm.prank(automator);
-        uint256 posId = shiva.build(
-            ShivaStructs.BuildOnBehalfOf(
-                ovMarket, deadline, ONE, ONE, priceLimit, signature, address(alice), true
-            )
+        uint256 posId = buildPositionOnBehalfOf(
+            ONE, ONE, priceLimit, deadline, true, signature, alice
         );
 
-        (,,,,,,, uint16 fractionRemaining) =
-            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
-        assertGt(fractionRemaining, 0);
-
-        assertEq(shiva.positionOwners(ovMarket, posId), alice);
+        // the position is not associated with Alice in the ovMarket
+        assertFractionRemainingIsZero(alice, posId);
+        // the position is associated with Shiva in the ovMarket
+        assertFractionRemainingIsGreaterThanZero(address(shiva), posId);
+        // the position is associated with Alice in Shiva
+        assertUserIsPositionOwnerInShiva(alice, posId);
     }
 
     function test_unwindOnBehalfOf_withdrawal() public {
@@ -266,35 +253,20 @@ contract ShivaTest is Test, ShivaTestBase {
         (uint256 priceLimit,) =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
-        // create message hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                shiva.UNWIND_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
-                deadline,
-                posId,
-                ONE,
-                priceLimit,
-                shiva.nonces(alice)
-            )
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, shiva.nonces(alice), deadline
         );
-        bytes32 digest = shiva.getDigest(structHash);
 
-        // sign the message as Alice
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        bytes memory signature = getSignature(digest, alicePk);
 
         // execute `unwindOnBehalfOf` with `automator`
         vm.prank(automator);
-        shiva.unwind(
-            ShivaStructs.UnwindOnBehalfOf(
-                ovMarket, deadline, posId, ONE, priceLimit, signature, address(alice)
-            )
+        unwindPositionOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice
         );
 
-        (,,,,,,, uint16 fractionRemaining) =
-            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
-        assertEq(fractionRemaining, 0);
+        // the position is successfully unwound
+        assertFractionRemainingIsZero(address(shiva), posId);
     }
 
     function test_buildSingleOnBehalfOf_ownership() public {
@@ -305,54 +277,27 @@ contract ShivaTest is Test, ShivaTestBase {
 
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
-        // create message hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
-                deadline,
-                true,
-                ONE,
-                ONE,
-                posId1,
-                shiva.nonces(alice)
-            )
+        bytes32 digest = getBuildSingleOnBehalfOfDigest(
+            ONE, ONE, posId1, shiva.nonces(alice), deadline, true
         );
-        bytes32 digest = shiva.getDigest(structHash);
 
-        // sign the message as Alice
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        bytes memory signature = getSignature(digest, alicePk);
 
         // execute `buildSingleOnBehalfOf` with `automator`
         vm.prank(automator);
-        uint256 posId2 = shiva.buildSingle(
-            ShivaStructs.BuildSingleOnBehalfOf(
-                ovMarket,
-                deadline,
-                BASIC_SLIPPAGE,
-                true,
-                ONE,
-                ONE,
-                posId1,
-                signature,
-                address(alice)
-            )
+        uint256 posId2 = buildSinglePositionOnBehalfOf(
+            ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, true, alice
         );
 
         // the first position is successfully unwound
-        (,,,,,,, uint16 fractionRemaining) =
-            ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId1)));
-        assertEq(fractionRemaining, 0);
-
+        assertFractionRemainingIsZero(address(shiva), posId1);
         // the second position is associated with Alice in Shiva
-        assertEq(shiva.positionOwners(ovMarket, posId2), alice);
-
+        assertUserIsPositionOwnerInShiva(alice, posId2);
         // the second position is not associated with Alice in the ovMarket
-        (,,,,,,, fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(alice, posId2)));
-        assertEq(fractionRemaining, 0);
-
+        assertFractionRemainingIsZero(alice, posId2);
+        // the second position is associated with Shiva in the ovMarket
+        assertFractionRemainingIsGreaterThanZero(address(shiva), posId2);
         // shiva has no tokens after the transaction
-        assertEq(ovToken.balanceOf(address(shiva)), 0);
+        assertOVTokenBalanceIsZero(address(shiva));
     }
 }

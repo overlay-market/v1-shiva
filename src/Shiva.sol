@@ -27,7 +27,7 @@ contract Shiva is IShiva, EIP712 {
     );
 
     bytes32 public constant BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint16 slippage,bool isLong,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
+        "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,bool isLong,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
     IERC20 public ovToken;

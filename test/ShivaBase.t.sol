@@ -107,6 +107,126 @@ contract ShivaTestBase is Test {
         );
     }
 
+    function getBuildOnBehalfOfDigest(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 priceLimit,
+        uint256 nonce,
+        uint48 deadline,
+        bool isLong
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.BUILD_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                collateral,
+                leverage,
+                isLong,
+                priceLimit,
+                nonce
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
+    function getUnwindOnBehalfOfDigest(
+        uint256 posId,
+        uint256 fraction,
+        uint256 priceLimit,
+        uint256 nonce,
+        uint48 deadline
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.UNWIND_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                posId,
+                fraction,
+                priceLimit,
+                nonce
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
+    function getBuildSingleOnBehalfOfDigest(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 previousPositionId,
+        uint256 nonce,
+        uint48 deadline,
+        bool isLong
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                isLong,
+                collateral,
+                leverage,
+                previousPositionId,
+                nonce
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
+    function getSignature(bytes32 digest, uint256 userPk) public pure returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPk, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function buildPositionOnBehalfOf(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 priceLimit,
+        uint48 deadline,
+        bool isLong,
+        bytes memory signature,
+        address owner
+    ) public returns (uint256) {
+        return shiva.build(
+            ShivaStructs.BuildOnBehalfOf(
+                ovMarket, deadline, collateral, leverage, priceLimit, signature, owner, isLong
+            )
+        );
+    }
+
+    function unwindPositionOnBehalfOf(
+        uint256 posId,
+        uint256 fraction,
+        uint256 priceLimit,
+        uint48 deadline,
+        bytes memory signature,
+        address owner
+    ) public {
+        shiva.unwind(
+            ShivaStructs.UnwindOnBehalfOf(
+                ovMarket, deadline, posId, fraction, priceLimit, signature, owner
+            )
+        );
+    }
+
+    function buildSinglePositionOnBehalfOf(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 posId1,
+        uint16 slippage,
+        uint48 deadline,
+        bytes memory signature,
+        bool isLong,
+        address owner
+    ) public returns (uint256) {
+        return shiva.buildSingle(
+            ShivaStructs.BuildSingleOnBehalfOf(
+                ovMarket, deadline, slippage, isLong, collateral, leverage, posId1, signature, owner
+            )
+        );
+    }
+
     /**
      * Assertion functions
      */
