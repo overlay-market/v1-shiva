@@ -19,26 +19,29 @@ interface IShiva {
     error InvalidSignature();
 
     function build(
-        ShivaStructs.Build memory params
+        ShivaStructs.Build calldata params
     ) external returns (uint256 positionId);
 
     function build(
-        ShivaStructs.BuildOnBehalfOf memory params
+        ShivaStructs.Build calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external returns (uint256 positionId);
 
     function buildSingle(
-        ShivaStructs.BuildSingle memory params
+        ShivaStructs.BuildSingle calldata params
     ) external returns (uint256 positionId);
 
     function buildSingle(
-        ShivaStructs.BuildSingleOnBehalfOf memory params
+        ShivaStructs.BuildSingle calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external returns (uint256 positionId);
 
     function unwind(
-        ShivaStructs.Unwind memory params
+        ShivaStructs.Unwind calldata params
     ) external;
 
     function unwind(
-        ShivaStructs.UnwindOnBehalfOf memory params
+        ShivaStructs.Unwind calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external;
 }

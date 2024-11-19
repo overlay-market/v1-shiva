@@ -278,7 +278,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice), deadline, true
+            ONE, ONE, posId1, shiva.nonces(alice), deadline
         );
 
         bytes memory signature = getSignature(digest, alicePk);
@@ -286,7 +286,7 @@ contract ShivaTest is Test, ShivaTestBase {
         // execute `buildSingleOnBehalfOf` with `automator`
         vm.prank(automator);
         uint256 posId2 = buildSinglePositionOnBehalfOf(
-            ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, true, alice
+            ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice
         );
 
         // the first position is successfully unwound

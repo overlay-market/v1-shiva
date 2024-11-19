@@ -156,15 +156,13 @@ contract ShivaTestBase is Test {
         uint256 leverage,
         uint256 previousPositionId,
         uint256 nonce,
-        uint48 deadline,
-        bool isLong
+        uint48 deadline
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
                 ovMarket,
                 deadline,
-                isLong,
                 collateral,
                 leverage,
                 previousPositionId,
@@ -189,14 +187,13 @@ contract ShivaTestBase is Test {
         address owner
     ) public returns (uint256) {
         return shiva.build(
-            ShivaStructs.BuildOnBehalfOf(
-                ovMarket, deadline, collateral, leverage, priceLimit, signature, owner, isLong
-            )
+            ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit),
+            ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
 
     function unwindPositionOnBehalfOf(
-        uint256 posId,
+        uint256 positionId,
         uint256 fraction,
         uint256 priceLimit,
         uint48 deadline,
@@ -204,26 +201,23 @@ contract ShivaTestBase is Test {
         address owner
     ) public {
         shiva.unwind(
-            ShivaStructs.UnwindOnBehalfOf(
-                ovMarket, deadline, posId, fraction, priceLimit, signature, owner
-            )
+            ShivaStructs.Unwind(ovMarket, positionId, fraction, priceLimit),
+            ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
 
     function buildSinglePositionOnBehalfOf(
         uint256 collateral,
         uint256 leverage,
-        uint256 posId1,
+        uint256 previousPositionId,
         uint16 slippage,
         uint48 deadline,
         bytes memory signature,
-        bool isLong,
         address owner
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingleOnBehalfOf(
-                ovMarket, deadline, slippage, isLong, collateral, leverage, posId1, signature, owner
-            )
+            ShivaStructs.BuildSingle(ovMarket, slippage, collateral, leverage, previousPositionId),
+            ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
 
