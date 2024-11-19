@@ -14,6 +14,7 @@ import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {ShivaTestBase} from "./ShivaBase.t.sol";
+import {IShiva} from "src/IShiva.sol";
 
 contract ShivaTest is Test, ShivaTestBase {
     // Build method tests
@@ -50,7 +51,7 @@ contract ShivaTest is Test, ShivaTestBase {
         vm.startPrank(alice);
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.expectRevert();
+        vm.expectRevert("Shiva:lev<min");
         shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE - 1, priceLimit));
     }
 
@@ -113,7 +114,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, !isLong);
         vm.startPrank(bob);
-        vm.expectRevert();
+        vm.expectRevert(IShiva.NotPositionOwner.selector);
         shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit));
     }
 
@@ -196,7 +197,7 @@ contract ShivaTest is Test, ShivaTestBase {
     // BuildSingle fail previous position not owned by the caller
     function test_buildSingle_noPreviousPosition() public {
         vm.startPrank(alice);
-        vm.expectRevert();
+        vm.expectRevert(IShiva.NotPositionOwner.selector);
         buildSinglePosition(ONE, ONE, 0, BASIC_SLIPPAGE);
     }
 
@@ -204,7 +205,7 @@ contract ShivaTest is Test, ShivaTestBase {
     function test_buildSingle_leverageLessThanMinimum() public {
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.expectRevert();
+        vm.expectRevert("Shiva:lev<min");
         buildSinglePosition(ONE, ONE - 1, posId, BASIC_SLIPPAGE);
     }
 
@@ -212,10 +213,11 @@ contract ShivaTest is Test, ShivaTestBase {
     function test_buildSingle_slippageGreaterThan100() public {
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.expectRevert();
+        vm.expectRevert("Shiva:slp>10000");
         buildSinglePosition(ONE, ONE, posId, 11000);
     }
 
+    // Automator build a position on behalf of Alice
     function test_buildOnBehalfOf_ownership() public {
         uint48 deadline = uint48(block.timestamp + 1 hours);
         uint256 priceLimit =
@@ -242,6 +244,61 @@ contract ShivaTest is Test, ShivaTestBase {
         assertUserIsPositionOwnerInShiva(alice, posId);
     }
 
+    // build on behalf of fail expired deadline
+    function test_buildOnBehalfOf_expiredDeadline() public {
+        uint48 deadline = uint48(block.timestamp - 1 hours);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true
+        );
+
+        // sign the message as Alice
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.ExpiredDeadline.selector);
+        vm.prank(automator);
+        buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, true, signature, alice);
+    }
+
+    // build on behalf of fail invalid signature (bad nonce)
+    function test_buildOnBehalfOf_invalidSignature_badNonce() public {
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, ONE, priceLimit, shiva.nonces(alice) + 1, deadline, true
+        );
+
+        // sign the message as Alice
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, true, signature, alice);
+    }
+
+    // build on behalf of fail invalid signature (bad owner)
+    function test_buildOnBehalfOf_invalidSignature_badOwner() public {
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true
+        );
+
+        // sign the message as Bob
+        bytes memory signature = getSignature(digest, bobPk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, true, signature, alice);
+    }
+
+    // Automator unwind a position on behalf of Alice
     function test_unwindOnBehalfOf_withdrawal() public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
@@ -269,6 +326,77 @@ contract ShivaTest is Test, ShivaTestBase {
         assertFractionRemainingIsZero(address(shiva), posId);
     }
 
+    // unwind on behalf of fail expired deadline
+    function test_unwindOnBehalfOf_expiredDeadline() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // Alice unwinds her position through a signed message
+        uint48 deadline = uint48(block.timestamp - 1 hours);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, shiva.nonces(alice), deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.ExpiredDeadline.selector);
+        vm.prank(automator);
+        unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
+    }
+
+    // unwind on behalf of fail invalid signature (bad nonce)
+    function test_unwindOnBehalfOf_invalidSignature_badNonce() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // Alice unwinds her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, shiva.nonces(alice) + 1, deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
+    }
+
+    // unwind on behalf of fail invalid signature (bad owner)
+    function test_unwindOnBehalfOf_invalidSignature_badOwner() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // Alice unwinds her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, shiva.nonces(alice), deadline
+        );
+
+        // sign the message as Bob
+        bytes memory signature = getSignature(digest, bobPk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
+    }
+
+    // Automator builds a single position on behalf of Alice
     function test_buildSingleOnBehalfOf_ownership() public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
@@ -300,4 +428,66 @@ contract ShivaTest is Test, ShivaTestBase {
         // shiva has no tokens after the transaction
         assertOVTokenBalanceIsZero(address(shiva));
     }
+
+    // build single on behalf of fail expired deadline
+    function test_buildSingleOnBehalfOf_expiredDeadline() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        uint48 deadline = uint48(block.timestamp - 1 hours);
+
+        bytes32 digest = getBuildSingleOnBehalfOfDigest(
+            ONE, ONE, posId1, shiva.nonces(alice), deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.ExpiredDeadline.selector);
+        vm.prank(automator);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+    }
+
+    // build single on behalf of fail invalid signature (bad nonce)
+    function test_buildSingleOnBehalfOf_invalidSignature_badNonce() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getBuildSingleOnBehalfOfDigest(
+            ONE, ONE, posId1, shiva.nonces(alice) + 1, deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+    }
+
+    // build single on behalf of fail invalid signature (bad owner)
+    function test_buildSingleOnBehalfOf_invalidSignature_badOwner() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getBuildSingleOnBehalfOfDigest(
+            ONE, ONE, posId1, shiva.nonces(alice), deadline
+        );
+
+        // sign the message as Bob
+        bytes memory signature = getSignature(digest, bobPk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+    }
+
 }
