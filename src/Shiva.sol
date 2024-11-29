@@ -30,6 +30,10 @@ contract Shiva is IShiva, EIP712 {
         "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
+    bytes32 public constant EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "EmergencyWithdrawOnBehalfOf(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 nonce)"
+    );
+
     IERC20 public ovToken;
     IOverlayV1State public ovState;
 
@@ -83,6 +87,14 @@ contract Shiva is IShiva, EIP712 {
         returns (uint256)
     {
         return _buildSingleLogic(params, msg.sender);
+    }
+
+    // Function to withdraw all the collateral from a position in a shutdown market
+    function emergencyWithdraw(
+        IOverlayV1Market market,
+        uint256 positionId
+    ) public onlyPositionOwner(market, positionId, msg.sender) {
+        _emergencyWithdrawLogic(market, positionId, msg.sender);
     }
 
     // Function to build a position on behalf of a user (with signature verification)
@@ -161,6 +173,30 @@ contract Shiva is IShiva, EIP712 {
         return _buildSingleLogic(params, onBehalfOf.owner);
     }
 
+    function emergencyWithdraw(
+        IOverlayV1Market market,
+        uint256 positionId,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    )
+        external
+        validDeadline(onBehalfOf.deadline)
+        onlyPositionOwner(market, positionId, onBehalfOf.owner)
+    {
+        // build typed data hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH,
+                market,
+                onBehalfOf.deadline,
+                positionId,
+                nonces[onBehalfOf.owner]
+            )
+        );
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
+
+        _emergencyWithdrawLogic(market, positionId, onBehalfOf.owner);
+    }
+
     function getDigest(
         bytes32 structHash
     ) external view returns (bytes32) {
@@ -235,6 +271,16 @@ contract Shiva is IShiva, EIP712 {
             _params.collateral,
             totalCollateral
         );
+    }
+
+    function _emergencyWithdrawLogic(
+        IOverlayV1Market _market,
+        uint256 _positionId,
+        address _owner
+    ) internal {
+        _market.emergencyWithdraw(_positionId);
+
+        ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
     }
 
     function _onBuildPosition(

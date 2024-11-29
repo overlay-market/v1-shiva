@@ -44,4 +44,15 @@ interface IShiva {
         ShivaStructs.Unwind calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external;
+
+    function emergencyWithdraw(
+        IOverlayV1Market market,
+        uint256 positionId
+    ) external;
+
+    function emergencyWithdraw(
+        IOverlayV1Market market,
+        uint256 positionId,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) external;
 }
