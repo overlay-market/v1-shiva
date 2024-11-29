@@ -7,6 +7,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
@@ -23,12 +24,14 @@ contract ShivaTestBase is Test {
     Shiva shiva;
     IOverlayV1Market ovMarket;
     IOverlayV1State ovState;
+    OverlayV1Factory ovFactory;
     IERC20 ovToken;
 
     address alice;
     address bob;
     address charlie;
     address automator;
+    address guardian;
 
     uint256 alicePk = 0x123;
     uint256 bobPk = 0x456;
@@ -40,6 +43,7 @@ contract ShivaTestBase is Test {
         ovToken = IERC20(Constants.getOVTokenAddress());
         ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
         ovState = IOverlayV1State(Constants.getOVStateAddress());
+        ovFactory = OverlayV1Factory(ovMarket.factory());
 
         shiva = new Shiva(address(ovToken), address(ovState));
 
@@ -47,6 +51,7 @@ contract ShivaTestBase is Test {
         bob = vm.addr(bobPk);
         charlie = vm.addr(charliePk);
         automator = makeAddr("automator");
+        guardian = Constants.getGuardianAddress();
 
         labelAddresses();
         setInitialBalancesAndApprovals();
@@ -56,6 +61,8 @@ contract ShivaTestBase is Test {
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
         vm.label(charlie, "Charlie");
+        vm.label(automator, "Automator");
+        vm.label(guardian, "Guardian");
         vm.label(address(ovMarket), "Market");
         vm.label(address(shiva), "Shiva");
         vm.label(address(ovToken), "OVL");
@@ -74,6 +81,13 @@ contract ShivaTestBase is Test {
     ) internal {
         vm.prank(user);
         ovToken.approve(address(shiva), type(uint256).max);
+    }
+
+    function shutDownMarket() internal {
+        vm.startPrank(guardian);
+        ovFactory.shutdown(ovMarket.feed());
+        vm.stopPrank();
+        assertEq(ovMarket.isShutdown(), true, "Market should be shutdown");
     }
 
     /**
@@ -151,6 +165,23 @@ contract ShivaTestBase is Test {
         return shiva.getDigest(structHash);
     }
 
+    function getEmergencyWithdrawOnBehalfOfDigest(
+        uint256 posId,
+        uint256 nonce,
+        uint48 deadline
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH(),
+                ovMarket,
+                deadline,
+                posId,
+                nonce
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
     function getBuildSingleOnBehalfOfDigest(
         uint256 collateral,
         uint256 leverage,
@@ -202,6 +233,19 @@ contract ShivaTestBase is Test {
     ) public {
         shiva.unwind(
             ShivaStructs.Unwind(ovMarket, positionId, fraction, priceLimit),
+            ShivaStructs.OnBehalfOf(owner, deadline, signature)
+        );
+    }
+
+    function emergencyWithdrawOnBehalfOf(
+        uint256 positionId,
+        uint48 deadline,
+        bytes memory signature,
+        address owner
+    ) public {
+        shiva.emergencyWithdraw(
+            ovMarket,
+            positionId,
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }

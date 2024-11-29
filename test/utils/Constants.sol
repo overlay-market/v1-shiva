@@ -20,4 +20,8 @@ library Constants {
     function getForkedNetworkRPC() external pure returns (string memory) {
         return "ARBITRUM_SEPOLIA_RPC";
     }
+
+    function getGuardianAddress() external pure returns (address) {
+        return 0xc946446711eE82b87cc34611810B0f2DD14c15DD;
+    }
 }

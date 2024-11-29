@@ -118,6 +118,36 @@ contract ShivaTest is Test, ShivaTestBase {
         shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit));
     }
 
+    // Emergency withdraw method tests
+
+    // Alice builds a position and then emergency withdraws it through Shiva
+    function test_emergencyWithdraw() public {
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        // Alice emergency withdraws her position through Shiva
+        vm.prank(alice);
+        shiva.emergencyWithdraw(ovMarket, posId);
+
+        // the position is successfully unwound
+        assertFractionRemainingIsZero(address(shiva), posId);
+    }
+
+    function test_emergencyWithdraw_notOwner() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+        // Bob tries to emergency withdraw Alice's position through Shiva
+        shutDownMarket();
+        vm.startPrank(bob);
+        vm.expectRevert(IShiva.NotPositionOwner.selector);
+        shiva.emergencyWithdraw(ovMarket, posId);
+    }
+
     // BuildSingle method tests
 
     // Alice builds a position through Shiva and then builds another one
@@ -394,6 +424,101 @@ contract ShivaTest is Test, ShivaTestBase {
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
         unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
+    }
+
+    // Automator emergency withdraw a position on behalf of Alice
+    function test_emergencyWithdrawOnBehalfOf() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        // Alice emergency withdraws her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
+            posId, shiva.nonces(alice), deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.prank(automator);
+        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
+
+        // the position is successfully unwound
+        assertFractionRemainingIsZero(address(shiva), posId);
+    }
+
+    // emergency withdraw on behalf of fail expired deadline
+    function test_emergencyWithdrawOnBehalfOf_expiredDeadline() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        // Alice emergency withdraws her position through a signed message
+        uint48 deadline = uint48(block.timestamp - 1 hours);
+
+        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
+            posId, shiva.nonces(alice), deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.ExpiredDeadline.selector);
+        vm.prank(automator);
+        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
+    }
+
+    // emergency withdraw on behalf of fail invalid signature (bad nonce)
+    function test_emergencyWithdrawOnBehalfOf_invalidSignature_badNonce() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        // Alice emergency withdraws her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
+            posId, shiva.nonces(alice) + 1, deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
+    }
+
+    // emergency withdraw on behalf of fail invalid signature (bad owner)
+    function test_emergencyWithdrawOnBehalfOf_invalidSignature_badOwner() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        // Alice emergency withdraws her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
+            posId, shiva.nonces(alice), deadline
+        );
+
+        // sign the message as Bob
+        bytes memory signature = getSignature(digest, bobPk);
+
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
     }
 
     // Automator builds a single position on behalf of Alice
