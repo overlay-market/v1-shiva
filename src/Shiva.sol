@@ -3,9 +3,9 @@ pragma solidity 0.8.10;
 
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {IOverlayV1Token} from "v1-periphery/contracts/interfaces/IOverlayV1Token.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IShiva} from "./IShiva.sol";
@@ -34,16 +34,31 @@ contract Shiva is IShiva, EIP712 {
         "EmergencyWithdrawOnBehalfOf(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 nonce)"
     );
 
-    IERC20 public ovToken;
-    IOverlayV1State public ovState;
+    IOverlayV1Token public immutable ovToken;
+    IOverlayV1State public immutable ovState;
+
+    IOverlayV1Factory[] public authorizedFactories;
 
     mapping(IOverlayV1Market => mapping(uint256 => address)) public positionOwners;
     mapping(IOverlayV1Market => bool) public marketAllowance;
     mapping(address => uint256) public nonces;
+    mapping(address => bool) public validMarkets;
 
     constructor(address _ovToken, address _ovState) EIP712("Shiva", "0.1.0") {
-        ovToken = IERC20(_ovToken);
+        ovToken = IOverlayV1Token(_ovToken);
         ovState = IOverlayV1State(_ovState);
+    }
+
+    // governor modifier for governance sensitive functions
+    modifier onlyGovernor(address _msgSender) {
+        require(ov.hasRole(GOVERNOR_ROLE, _msgSender), "Shiva: !governor");
+        _;
+    }
+
+    // pauser modifier for pausable functions
+    modifier onlyPauser(address _msgSender) {
+        require(ov.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
+        _;
     }
 
     modifier onlyPositionOwner(IOverlayV1Market ovMarket, uint256 positionId, address owner) {
@@ -62,10 +77,33 @@ contract Shiva is IShiva, EIP712 {
         _;
     }
 
+    modifier validMarket(
+        IOverlayV1Market market
+    ) {
+        if (!_checkIsValidMarket(address(market))) {
+            revert MarketNotValid();
+        }
+        _;
+    }
+
+    function addFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
+        authorizedFactories.push(_factory);
+    }
+
+    function removeFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
+        for (uint256 i = 0; i < authorizedFactories.length; i++) {
+            if (authorizedFactories[i] == _factory) {
+                authorizedFactories[i] = authorizedFactories[authorizedFactories.length - 1];
+                authorizedFactories.pop();
+                break;
+            }
+        }
+    }
+
     // Function to build a position in the ovMarket for a user
     function build(
         ShivaStructs.Build calldata params
-    ) public returns (uint256) {
+    ) public validMarket(params.ovMarket) returns (uint256) {
         return _buildLogic(params, msg.sender);
     }
 
@@ -101,7 +139,12 @@ contract Shiva is IShiva, EIP712 {
     function build(
         ShivaStructs.Build calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) external validDeadline(onBehalfOf.deadline) returns (uint256 positionId) {
+    )
+        external
+        validMarket(params.ovMarket)
+        validDeadline(onBehalfOf.deadline)
+        returns (uint256)
+    {
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
@@ -337,5 +380,20 @@ contract Shiva is IShiva, EIP712 {
         }
 
         nonces[_owner]++;
+    }
+
+    function _checkIsValidMarket(address _market) internal returns (bool) {
+        if (validMarkets[_market]) {
+            return true;
+        }
+
+        for (uint256 i = 0; i < authorizedFactories.length; i++) {
+            if (authorizedFactories[i].isMarket(_market)) {
+                validMarkets[_market] = true;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

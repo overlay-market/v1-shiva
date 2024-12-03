@@ -17,6 +17,7 @@ interface IShiva {
     error NotPositionOwner();
     error ExpiredDeadline();
     error InvalidSignature();
+    error MarketNotValid();
 
     function build(
         ShivaStructs.Build calldata params
