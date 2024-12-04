@@ -3,7 +3,8 @@ pragma solidity 0.8.10;
 
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {IOverlayV1Token} from "v1-periphery/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
+import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -51,13 +52,13 @@ contract Shiva is IShiva, EIP712 {
 
     // governor modifier for governance sensitive functions
     modifier onlyGovernor(address _msgSender) {
-        require(ov.hasRole(GOVERNOR_ROLE, _msgSender), "Shiva: !governor");
+        require(ovToken.hasRole(GOVERNOR_ROLE, _msgSender), "Shiva: !governor");
         _;
     }
 
     // pauser modifier for pausable functions
     modifier onlyPauser(address _msgSender) {
-        require(ov.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
+        require(ovToken.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
         _;
     }
 
@@ -130,9 +131,10 @@ contract Shiva is IShiva, EIP712 {
     // Function to withdraw all the collateral from a position in a shutdown market
     function emergencyWithdraw(
         IOverlayV1Market market,
-        uint256 positionId
-    ) public onlyPositionOwner(market, positionId, msg.sender) {
-        _emergencyWithdrawLogic(market, positionId, msg.sender);
+        uint256 positionId,
+        address owner
+    ) public onlyPositionOwner(market, positionId, owner) {
+        _emergencyWithdrawLogic(market, positionId, owner);
     }
 
     // Function to build a position on behalf of a user (with signature verification)
@@ -214,30 +216,6 @@ contract Shiva is IShiva, EIP712 {
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
 
         return _buildSingleLogic(params, onBehalfOf.owner);
-    }
-
-    function emergencyWithdraw(
-        IOverlayV1Market market,
-        uint256 positionId,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf
-    )
-        external
-        validDeadline(onBehalfOf.deadline)
-        onlyPositionOwner(market, positionId, onBehalfOf.owner)
-    {
-        // build typed data hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH,
-                market,
-                onBehalfOf.deadline,
-                positionId,
-                nonces[onBehalfOf.owner]
-            )
-        );
-        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
-
-        _emergencyWithdrawLogic(market, positionId, onBehalfOf.owner);
     }
 
     function getDigest(

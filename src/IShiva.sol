@@ -48,12 +48,7 @@ interface IShiva {
 
     function emergencyWithdraw(
         IOverlayV1Market market,
-        uint256 positionId
-    ) external;
-
-    function emergencyWithdraw(
-        IOverlayV1Market market,
         uint256 positionId,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf
+        address owner
     ) external;
 }
