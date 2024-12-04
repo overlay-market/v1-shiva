@@ -6,12 +6,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
-import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 
@@ -55,6 +54,7 @@ contract ShivaTestBase is Test {
 
         labelAddresses();
         setInitialBalancesAndApprovals();
+        addAuthorizedFactory();
     }
 
     function labelAddresses() internal {
@@ -74,6 +74,20 @@ contract ShivaTestBase is Test {
         deal(address(ovToken), bob, 1000e18);
         approveToken(alice);
         approveToken(bob);
+    }
+
+    function addAuthorizedFactory() internal {
+        IOverlayV1Factory factory = IOverlayV1Factory(Constants.getFactoryAddress());
+        vm.startPrank(guardian);
+        shiva.addFactory(factory);
+        vm.stopPrank();
+    }
+
+    function removeAuthorizedFactory() internal {
+        IOverlayV1Factory factory = IOverlayV1Factory(Constants.getFactoryAddress());
+        vm.startPrank(guardian);
+        shiva.removeFactory(factory);
+        vm.stopPrank();
     }
 
     function approveToken(
@@ -165,23 +179,6 @@ contract ShivaTestBase is Test {
         return shiva.getDigest(structHash);
     }
 
-    function getEmergencyWithdrawOnBehalfOfDigest(
-        uint256 posId,
-        uint256 nonce,
-        uint48 deadline
-    ) public view returns (bytes32) {
-        bytes32 structHash = keccak256(
-            abi.encode(
-                shiva.EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
-                deadline,
-                posId,
-                nonce
-            )
-        );
-        return shiva.getDigest(structHash);
-    }
-
     function getBuildSingleOnBehalfOfDigest(
         uint256 collateral,
         uint256 leverage,
@@ -233,19 +230,6 @@ contract ShivaTestBase is Test {
     ) public {
         shiva.unwind(
             ShivaStructs.Unwind(ovMarket, positionId, fraction, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, signature)
-        );
-    }
-
-    function emergencyWithdrawOnBehalfOf(
-        uint256 positionId,
-        uint48 deadline,
-        bytes memory signature,
-        address owner
-    ) public {
-        shiva.emergencyWithdraw(
-            ovMarket,
-            positionId,
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }

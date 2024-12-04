@@ -17,11 +17,19 @@ library Constants {
         return 0x2878837EA173e8BD40Db7CEE360b15c1C27dEB5A;
     }
 
+    function getFactoryAddress() external pure returns (address) {
+        return 0xa2dBe262D27647243Ac3187d05DBF6c3C6ECC14D;
+    }
+
     function getForkedNetworkRPC() external pure returns (string memory) {
         return "ARBITRUM_SEPOLIA_RPC";
     }
 
     function getGuardianAddress() external pure returns (address) {
+        return 0xc946446711eE82b87cc34611810B0f2DD14c15DD;
+    }
+
+    function getGovernorAddress() external pure returns (address) {
         return 0xc946446711eE82b87cc34611810B0f2DD14c15DD;
     }
 }

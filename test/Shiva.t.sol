@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
@@ -17,6 +18,63 @@ import {ShivaTestBase} from "./ShivaBase.t.sol";
 import {IShiva} from "src/IShiva.sol";
 
 contract ShivaTest is Test, ShivaTestBase {
+
+    // Test setup
+    // Governor adds an authorized factory
+    function test_addAuthorizedFactory() public {
+        addAuthorizedFactory();
+    }
+
+    // Governor removes an authorized factory
+    function test_removeAuthorizedFactory() public {
+        removeAuthorizedFactory();
+    }
+
+    // Build should fail due to unauthorized factory
+    function test_build_unauthorizedFactory() public {
+        // Governor removes the authorized factory; this is already added in the setup
+        removeAuthorizedFactory();
+
+        vm.startPrank(alice);
+        vm.expectRevert(IShiva.MarketNotValid.selector);
+        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, BASIC_SLIPPAGE));
+    }
+
+    // Build on behalf of should fail due to unauthorized factory
+    function test_buildOnBehalfOf_unauthorizedFactory() public {
+        // Governor removes the authorized factory; this is already added in the setup
+        removeAuthorizedFactory();
+
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true
+        );
+
+        // sign the message as Alice
+        bytes memory signature = getSignature(digest, alicePk);
+
+        vm.startPrank(automator);
+        vm.expectRevert(IShiva.MarketNotValid.selector);
+        buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, true, signature, alice);
+    }
+
+    // Add authorized factory fail not governor
+    function test_addAuthorizedFactory_notGovernor() public {
+        vm.startPrank(alice);
+        vm.expectRevert();
+        shiva.addFactory(IOverlayV1Factory(address(0)));
+    }
+
+    // Remove authorized factory fail not governor
+    function test_removeAuthorizedFactory_notGovernor() public {
+        vm.startPrank(alice);
+        vm.expectRevert();
+        shiva.removeFactory(IOverlayV1Factory(address(0)));
+    }
+
     // Build method tests
 
     // Alice builds a position through Shiva
@@ -130,7 +188,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // Alice emergency withdraws her position through Shiva
         vm.prank(alice);
-        shiva.emergencyWithdraw(ovMarket, posId);
+        shiva.emergencyWithdraw(ovMarket, posId, alice);
 
         // the position is successfully unwound
         assertFractionRemainingIsZero(address(shiva), posId);
@@ -145,7 +203,23 @@ contract ShivaTest is Test, ShivaTestBase {
         shutDownMarket();
         vm.startPrank(bob);
         vm.expectRevert(IShiva.NotPositionOwner.selector);
-        shiva.emergencyWithdraw(ovMarket, posId);
+        shiva.emergencyWithdraw(ovMarket, posId, bob);
+    }
+
+    // Automator can execute the emergency withdraw method on behalf of Alice
+    function test_emergencyWithdraw_onBehalfOf() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        vm.startPrank(automator);
+        shiva.emergencyWithdraw(ovMarket, posId, alice);
+
+        // the position is successfully unwound
+        assertFractionRemainingIsZero(address(shiva), posId);
     }
 
     // BuildSingle method tests
@@ -424,101 +498,6 @@ contract ShivaTest is Test, ShivaTestBase {
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
         unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
-    }
-
-    // Automator emergency withdraw a position on behalf of Alice
-    function test_emergencyWithdrawOnBehalfOf() public {
-        // Alice builds a position through Shiva
-        vm.startPrank(alice);
-        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.stopPrank();
-
-        shutDownMarket();
-
-        // Alice emergency withdraws her position through a signed message
-        uint48 deadline = uint48(block.timestamp + 1 hours);
-
-        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
-            posId, shiva.nonces(alice), deadline
-        );
-
-        bytes memory signature = getSignature(digest, alicePk);
-
-        vm.prank(automator);
-        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
-
-        // the position is successfully unwound
-        assertFractionRemainingIsZero(address(shiva), posId);
-    }
-
-    // emergency withdraw on behalf of fail expired deadline
-    function test_emergencyWithdrawOnBehalfOf_expiredDeadline() public {
-        // Alice builds a position through Shiva
-        vm.startPrank(alice);
-        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.stopPrank();
-
-        shutDownMarket();
-
-        // Alice emergency withdraws her position through a signed message
-        uint48 deadline = uint48(block.timestamp - 1 hours);
-
-        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
-            posId, shiva.nonces(alice), deadline
-        );
-
-        bytes memory signature = getSignature(digest, alicePk);
-
-        vm.expectRevert(IShiva.ExpiredDeadline.selector);
-        vm.prank(automator);
-        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
-    }
-
-    // emergency withdraw on behalf of fail invalid signature (bad nonce)
-    function test_emergencyWithdrawOnBehalfOf_invalidSignature_badNonce() public {
-        // Alice builds a position through Shiva
-        vm.startPrank(alice);
-        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.stopPrank();
-
-        shutDownMarket();
-
-        // Alice emergency withdraws her position through a signed message
-        uint48 deadline = uint48(block.timestamp + 1 hours);
-
-        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
-            posId, shiva.nonces(alice) + 1, deadline
-        );
-
-        bytes memory signature = getSignature(digest, alicePk);
-
-        vm.expectRevert(IShiva.InvalidSignature.selector);
-        vm.prank(automator);
-        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
-    }
-
-    // emergency withdraw on behalf of fail invalid signature (bad owner)
-    function test_emergencyWithdrawOnBehalfOf_invalidSignature_badOwner() public {
-        // Alice builds a position through Shiva
-        vm.startPrank(alice);
-        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        vm.stopPrank();
-
-        shutDownMarket();
-
-        // Alice emergency withdraws her position through a signed message
-        uint48 deadline = uint48(block.timestamp + 1 hours);
-
-        bytes32 digest = getEmergencyWithdrawOnBehalfOfDigest(
-            posId, shiva.nonces(alice), deadline
-        );
-
-        // sign the message as Bob
-        bytes memory signature = getSignature(digest, bobPk);
-
-        vm.expectRevert(IShiva.InvalidSignature.selector);
-        vm.prank(automator);
-        emergencyWithdrawOnBehalfOf(posId, deadline, signature, alice);
     }
 
     // Automator builds a single position on behalf of Alice
