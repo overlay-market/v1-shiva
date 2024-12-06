@@ -13,6 +13,7 @@ import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
+import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
 
 contract ShivaTestBase is Test {
     using ECDSA for bytes32;
@@ -25,6 +26,7 @@ contract ShivaTestBase is Test {
     IOverlayV1State ovState;
     OverlayV1Factory ovFactory;
     IERC20 ovToken;
+    IBerachainRewardsVault public rewardVault;
 
     address alice;
     address bob;
@@ -37,14 +39,18 @@ contract ShivaTestBase is Test {
     uint256 charliePk = 0x789;
 
     function setUp() public virtual {
-        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), 92984086);
+        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
 
         ovToken = IERC20(Constants.getOVTokenAddress());
         ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
         ovState = IOverlayV1State(Constants.getOVStateAddress());
         ovFactory = OverlayV1Factory(ovMarket.factory());
 
-        shiva = new Shiva(address(ovToken), address(ovState));
+        IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
+            0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
+        );
+        shiva = new Shiva(address(ovToken), address(ovState), address(vaultFactory));
+        rewardVault = shiva.rewardVault();
 
         alice = vm.addr(alicePk);
         bob = vm.addr(bobPk);
