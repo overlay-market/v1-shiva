@@ -2,9 +2,9 @@
 pragma solidity <=0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
+import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE, GUARDIAN_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
@@ -25,7 +25,7 @@ contract ShivaTestBase is Test {
     IOverlayV1Market ovMarket;
     IOverlayV1State ovState;
     OverlayV1Factory ovFactory;
-    IERC20 ovToken;
+    IOverlayV1Token ovToken;
     IBerachainRewardsVault public rewardVault;
 
     address alice;
@@ -41,10 +41,16 @@ contract ShivaTestBase is Test {
     function setUp() public virtual {
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
 
-        ovToken = IERC20(Constants.getOVTokenAddress());
+        ovToken = IOverlayV1Token(Constants.getOVTokenAddress());
         ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
         ovState = IOverlayV1State(Constants.getOVStateAddress());
         ovFactory = OverlayV1Factory(ovMarket.factory());
+
+        vm.startPrank(Constants.getDeployerAddress());
+        ovToken.grantRole(GOVERNOR_ROLE, Constants.getGovernorAddress());
+        ovToken.grantRole(PAUSER_ROLE, Constants.getPauserAddress());
+        ovToken.grantRole(GUARDIAN_ROLE, Constants.getGuardianAddress());
+        vm.stopPrank();
 
         IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
             0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
