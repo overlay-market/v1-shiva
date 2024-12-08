@@ -6,53 +6,26 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {MINTER_ROLE, GOVERNOR_ROLE, LIQUIDATE_CALLBACK_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1Token, LIQUIDATE_CALLBACK_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {IOverlayV1ChainlinkFeed} from "v1-periphery/lib/v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
-import {OverlayV1State} from "v1-periphery/contracts/OverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
-import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.sol";
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
 import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
+import {ShivaTestBase} from "./ShivaBase.t.sol";
 
-contract ShivaNewFactoryTest is Test {
-    using ECDSA for bytes32;
+contract ShivaNewFactoryTest is Test, ShivaTestBase {
     using FixedPoint for uint256;
 
-    uint256 constant ONE = 1e18;
-
-    Shiva shiva;
-    IOverlayV1Factory ovFactory;
-    IOverlayV1Market ovMarket;
-    IOverlayV1State ovState;
-    OverlayV1Token ovToken;
-    IBerachainRewardsVault public rewardVault;
-
-    uint256 alicePk = 0x123;
-    address alice = vm.addr(alicePk);
-    uint256 bobPk = 0x456;
-    address bob = vm.addr(bobPk);
-    uint256 charliePk = 0x789;
-    address charlie = vm.addr(charliePk);
-    uint256 deployerPk = 0x890;
-    address deployer = vm.addr(deployerPk);
-    address automator = makeAddr("automator");
-
-    function setUp() public {
+    function setUp() public override {
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
-
-        // Label the addresses for clarity in the test output
-        vm.label(alice, "Alice");
-        vm.label(bob, "Bob");
-        vm.label(charlie, "Charlie");
-        vm.label(deployer, "deployer");
 
         vm.startPrank(deployer);
         ovToken = deployToken();
@@ -70,82 +43,18 @@ contract ShivaNewFactoryTest is Test {
         ovToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
         vm.stopPrank();
 
-        // Deal tokens to alice and bob (on the forked network)
-        deal(address(ovToken), alice, 1000e18);
-        deal(address(ovToken), bob, 1000e18);
-        vm.label(address(ovMarket), "Market");
-        vm.label(address(shiva), "Shiva");
-        vm.label(address(ovToken), "OVL");
+        alice = vm.addr(alicePk);
+        bob = vm.addr(bobPk);
+        charlie = vm.addr(charliePk);
+        automator = makeAddr("automator");
+        guardian = Constants.getGuardianAddress();
 
-        // Alice and Bob approve the Shiva contract to spend their OVL tokens
-        vm.prank(alice);
-        ovToken.approve(address(shiva), type(uint256).max);
-        vm.prank(bob);
-        ovToken.approve(address(shiva), type(uint256).max);
-    }
-
-    function deployToken() public returns (OverlayV1Token ovToken_) {
-        ovToken_ = new OverlayV1Token();
-    }
-
-    function deployFactory(OverlayV1Token _ovToken) public returns (IOverlayV1Factory factory_) {
-        factory_ = new OverlayV1Factory(
-            address(_ovToken),
-            deployer,
-            Constants.getSequencer(),
-            1 hours
-        );
-
-        // 3. Grant factory admin role so that it can grant minter + burner roles to markets
-        _ovToken.grantRole(0x00, address(factory_)); // admin role = 0x00
-        _ovToken.grantRole(MINTER_ROLE, deployer);
-        _ovToken.grantRole(GOVERNOR_ROLE, deployer);
-
-        factory_.addFeedFactory(Constants.getFeedFactory());
-    }
-
-    function deployMarket(IOverlayV1Factory _factory, address _feed) public returns (IOverlayV1Market ovMarket_) {
-        uint256[15] memory MARKET_PARAMS = [
-            uint256(122000000000), // k
-            500000000000000000, // lmbda
-            2500000000000000, // delta
-            5000000000000000000, // capPayoff
-            8e23, // capNotional
-            5000000000000000000, // capLeverage
-            2592000, // circuitBreakerWindow
-            66670000000000000000000, // circuitBreakerMintTarget
-            100000000000000000, // maintenanceMargin
-            100000000000000000, // maintenanceMarginBurnRate
-            50000000000000000, // liquidationFeeRate
-            750000000000000, // tradingFeeRate
-            1e14, // minCollateral
-            25000000000000, // priceDriftUpperLimit
-            250 // averageBlockTime
-        ];
-        ovMarket_ = IOverlayV1Market(_factory.deployMarket(Constants.getFeedFactory(), _feed, MARKET_PARAMS));
-    }
-
-    function deployPeriphery(IOverlayV1Factory _factory) public returns (IOverlayV1State ovState_) {
-        ovState_ = new OverlayV1State(_factory);
-    }
-
-    // Utility function to get price limit and build a position
-    function buildPosition(
-        uint256 collateral,
-        uint256 leverage,
-        uint8 slippage,
-        bool isLong
-    ) public returns (uint256) {
-        uint256 priceLimit =
-            Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
-        return shiva.build(ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit));
-    }
-
-    // Utility function to unwind a position
-    function unwindPosition(uint256 posId, uint256 fraction, uint8 slippage) public {
-        (uint256 priceLimit,) =
-            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
-        shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, fraction, priceLimit));
+        labelAddresses();
+        setInitialBalancesAndApprovals();
+        
+        vm.startPrank(guardian);
+        shiva.addFactory(ovFactory);
+        vm.stopPrank();
     }
 
     // Build method tests

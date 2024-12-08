@@ -4,10 +4,12 @@ pragma solidity <=0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
-import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE, GUARDIAN_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE, GUARDIAN_ROLE, MINTER_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.sol";
+import {OverlayV1State} from "v1-periphery/contracts/OverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
@@ -33,6 +35,7 @@ contract ShivaTestBase is Test {
     address charlie;
     address automator;
     address guardian;
+    address deployer = Constants.getDeployerAddress();
 
     uint256 alicePk = 0x123;
     uint256 bobPk = 0x456;
@@ -86,6 +89,54 @@ contract ShivaTestBase is Test {
         deal(address(ovToken), bob, 1000e18);
         approveToken(alice);
         approveToken(bob);
+    }
+
+    function deployToken() public returns (IOverlayV1Token ovToken_) {
+        OverlayV1Token ovToken = new OverlayV1Token();
+        ovToken_ = IOverlayV1Token(address(ovToken));
+    }
+
+    function deployFactory(IOverlayV1Token _ovToken) public returns (OverlayV1Factory factory_) {
+        factory_ = new OverlayV1Factory(
+            address(_ovToken),
+            deployer,
+            Constants.getSequencer(),
+            1 hours
+        );
+
+        // 3. Grant factory admin role so that it can grant minter + burner roles to markets
+        _ovToken.grantRole(0x00, address(factory_)); // admin role = 0x00
+        _ovToken.grantRole(MINTER_ROLE, deployer);
+        _ovToken.grantRole(GOVERNOR_ROLE, deployer);
+        _ovToken.grantRole(GUARDIAN_ROLE, deployer);
+        _ovToken.grantRole(PAUSER_ROLE, deployer);
+
+        factory_.addFeedFactory(Constants.getFeedFactory());
+    }
+
+    function deployMarket(IOverlayV1Factory _factory, address _feed) public returns (IOverlayV1Market ovMarket_) {
+        uint256[15] memory MARKET_PARAMS = [
+            uint256(122000000000), // k
+            500000000000000000, // lmbda
+            2500000000000000, // delta
+            5000000000000000000, // capPayoff
+            8e23, // capNotional
+            5000000000000000000, // capLeverage
+            2592000, // circuitBreakerWindow
+            66670000000000000000000, // circuitBreakerMintTarget
+            100000000000000000, // maintenanceMargin
+            100000000000000000, // maintenanceMarginBurnRate
+            50000000000000000, // liquidationFeeRate
+            750000000000000, // tradingFeeRate
+            1e14, // minCollateral
+            25000000000000, // priceDriftUpperLimit
+            250 // averageBlockTime
+        ];
+        ovMarket_ = IOverlayV1Market(_factory.deployMarket(Constants.getFeedFactory(), _feed, MARKET_PARAMS));
+    }
+
+    function deployPeriphery(IOverlayV1Factory _factory) public returns (IOverlayV1State ovState_) {
+        ovState_ = new OverlayV1State(_factory);
     }
 
     function addAuthorizedFactory() internal {
