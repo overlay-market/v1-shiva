@@ -8,7 +8,7 @@ import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-periphery/lib/v1-c
 import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
 import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
 import {FixedCast} from "v1-periphery/lib/v1-core/contracts/libraries/FixedCast.sol";
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IShiva} from "./IShiva.sol";
 import {Utils} from "./utils/Utils.sol";
@@ -18,8 +18,9 @@ import {IOverlayMarketLiquidateCallback} from
 import "./PolStakingToken.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "./interfaces/berachain/IRewardVaults.sol";
 import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
+contract Shiva is Initializable, IShiva, EIP712Upgradeable, IOverlayMarketLiquidateCallback {
     using FixedPoint for uint256;
     using FixedCast for uint16;
     using Position for Position.Info;
@@ -39,10 +40,10 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
         "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
-    IOverlayV1Token public constant ovToken;
-    IOverlayV1State public constant ovState;
-    StakingToken public constant stakingToken;
-    IBerachainRewardsVault public constant rewardVault;
+    IOverlayV1Token public ovToken;
+    IOverlayV1State public ovState;
+    StakingToken public stakingToken;
+    IBerachainRewardsVault public rewardVault;
 
     IOverlayV1Factory[] public authorizedFactories;
 
@@ -51,7 +52,9 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
     mapping(address => uint256) public nonces;
     mapping(address => bool) public validMarkets;
 
-    constructor(address _ovToken, address _ovState, address _vaultFactory) EIP712("Shiva", "0.1.0") {
+    function initialize(address _ovToken, address _ovState, address _vaultFactory) public initializer {
+        __EIP712_init("Shiva", "0.1.0");
+
         ovToken = IOverlayV1Token(_ovToken);
         ovState = IOverlayV1State(_ovState);
 

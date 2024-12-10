@@ -36,7 +36,8 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
             0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
         );
-        shiva = new Shiva(address(ovToken), address(ovState), address(vaultFactory));
+        shiva = new Shiva();
+        shiva.initialize(address(ovToken), address(ovState), address(vaultFactory));
         rewardVault = shiva.rewardVault();
 
         // configure shiva
