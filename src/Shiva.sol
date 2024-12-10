@@ -39,12 +39,10 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
         "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
-    bytes32 public constant EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "EmergencyWithdrawOnBehalfOf(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 nonce)"
-    );
-
-    IOverlayV1Token public immutable ovToken;
-    IOverlayV1State public immutable ovState;
+    IOverlayV1Token public constant ovToken;
+    IOverlayV1State public constant ovState;
+    StakingToken public constant stakingToken;
+    IBerachainRewardsVault public constant rewardVault;
 
     IOverlayV1Factory[] public authorizedFactories;
 
@@ -52,9 +50,6 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
     mapping(IOverlayV1Market => bool) public marketAllowance;
     mapping(address => uint256) public nonces;
     mapping(address => bool) public validMarkets;
-
-    StakingToken public stakingToken;
-    IBerachainRewardsVault public rewardVault;
 
     constructor(address _ovToken, address _ovState, address _vaultFactory) EIP712("Shiva", "0.1.0") {
         ovToken = IOverlayV1Token(_ovToken);
@@ -124,14 +119,14 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
     // Function to build a position in the ovMarket for a user
     function build(
         ShivaStructs.Build calldata params
-    ) public validMarket(params.ovMarket) returns (uint256) {
+    ) external validMarket(params.ovMarket) returns (uint256) {
         return _buildLogic(params, msg.sender);
     }
 
     // Function to unwind a position for the user
     function unwind(
         ShivaStructs.Unwind calldata params
-    ) public onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
+    ) external onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
         _unwindLogic(params, msg.sender);
     }
 
@@ -153,7 +148,7 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
         IOverlayV1Market market,
         uint256 positionId,
         address owner
-    ) public onlyPositionOwner(market, positionId, owner) {
+    ) external onlyPositionOwner(market, positionId, owner) {
         _emergencyWithdrawLogic(market, positionId, owner);
     }
 
