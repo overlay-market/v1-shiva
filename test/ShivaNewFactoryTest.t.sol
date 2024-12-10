@@ -426,8 +426,8 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
     function test_buildSingle_slippageGreaterThan100() public {
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, 1, true);
-        vm.expectRevert();
-        shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, 101, ONE, ONE, posId));
+        vm.expectRevert("Shiva:slp>10000");
+        buildSinglePosition(ONE, ONE, posId, 11000);
     }
 
     // test liquidate
