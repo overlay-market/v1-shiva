@@ -20,9 +20,10 @@ import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
 
-contract Shiva is Initializable, IShiva, EIP712Upgradeable, IOverlayMarketLiquidateCallback {
+contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOverlayMarketLiquidateCallback {
     using FixedPoint for uint256;
     using FixedCast for uint16;
     using Position for Position.Info;
@@ -53,22 +54,6 @@ contract Shiva is Initializable, IShiva, EIP712Upgradeable, IOverlayMarketLiquid
     mapping(IOverlayV1Market => bool) public marketAllowance;
     mapping(address => uint256) public nonces;
     mapping(address => bool) public validMarkets;
-
-    function initialize(address _ovToken, address _ovState, address _vaultFactory) public initializer {
-        __EIP712_init("Shiva", "0.1.0");
-
-        ovToken = IOverlayV1Token(_ovToken);
-        ovState = IOverlayV1State(_ovState);
-
-        // Create new staking token
-        stakingToken = new StakingToken();
-
-        // Create vault for newly created token
-        address vaultAddress = IBerachainRewardsVaultFactory(_vaultFactory)
-            .createRewardsVault(address(stakingToken));
-
-        rewardVault = IBerachainRewardsVault(vaultAddress);
-    }
 
     // governor modifier for governance sensitive functions
     modifier onlyGovernor(address _msgSender) {
@@ -105,6 +90,31 @@ contract Shiva is Initializable, IShiva, EIP712Upgradeable, IOverlayMarketLiquid
             revert MarketNotValid();
         }
         _;
+    }
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @dev override from UUPSUpgradeable, added onlyGovernor modifier
+    /// for access control. Called by {upgradeTo} and {upgradeToAndCall}.
+    function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
+
+    function initialize(address _ovToken, address _ovState, address _vaultFactory) public initializer {
+        __EIP712_init("Shiva", "0.1.0");
+
+        ovToken = IOverlayV1Token(_ovToken);
+        ovState = IOverlayV1State(_ovState);
+
+        // Create new staking token
+        stakingToken = new StakingToken();
+
+        // Create vault for newly created token
+        address vaultAddress = IBerachainRewardsVaultFactory(_vaultFactory)
+            .createRewardsVault(address(stakingToken));
+
+        rewardVault = IBerachainRewardsVault(vaultAddress);
     }
 
     function addFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {

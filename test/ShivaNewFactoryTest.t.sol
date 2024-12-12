@@ -20,6 +20,7 @@ import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {ShivaTestBase} from "./ShivaBase.t.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract ShivaNewFactoryTest is Test, ShivaTestBase {
     using FixedPoint for uint256;
@@ -36,8 +37,10 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
             0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
         );
-        shiva = new Shiva();
-        shiva.initialize(address(ovToken), address(ovState), address(vaultFactory));
+        Shiva shivaImplementation = new Shiva();
+        string memory functionName = "initialize(address,address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, address(ovToken), address(ovState), address(vaultFactory));
+        shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
         rewardVault = shiva.rewardVault();
 
         // configure shiva
