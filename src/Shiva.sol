@@ -1,23 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
-import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IShiva} from "./IShiva.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayMarketLiquidateCallback} from
+    "v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
+import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
+import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
-import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
-import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
-import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
-import {FixedCast} from "v1-periphery/lib/v1-core/contracts/libraries/FixedCast.sol";
+import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "./interfaces/berachain/IRewardVaults.sol";
+
+import "./PolStakingToken.sol";
+import {ShivaStructs} from "./ShivaStructs.sol";
+import {Utils} from "./utils/Utils.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {Position} from "v1-core/contracts/libraries/Position.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
+import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {IShiva} from "./IShiva.sol";
-import {Utils} from "./utils/Utils.sol";
-import {ShivaStructs} from "./ShivaStructs.sol";
-import {IOverlayMarketLiquidateCallback} from
-    "v1-periphery/lib/v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
-import "./PolStakingToken.sol";
-import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "./interfaces/berachain/IRewardVaults.sol";
-import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
 
 contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
     using FixedPoint for uint256;
@@ -39,12 +40,10 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
         "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
-    bytes32 public constant EMERGENCY_WITHDRAW_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "EmergencyWithdrawOnBehalfOf(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 nonce)"
-    );
-
-    IOverlayV1Token public immutable ovToken;
-    IOverlayV1State public immutable ovState;
+    IOverlayV1Token public ovToken;
+    IOverlayV1State public ovState;
+    StakingToken public stakingToken;
+    IBerachainRewardsVault public rewardVault;
 
     IOverlayV1Factory[] public authorizedFactories;
 
@@ -52,9 +51,6 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
     mapping(IOverlayV1Market => bool) public marketAllowance;
     mapping(address => uint256) public nonces;
     mapping(address => bool) public validMarkets;
-
-    StakingToken public stakingToken;
-    IBerachainRewardsVault public rewardVault;
 
     constructor(address _ovToken, address _ovState, address _vaultFactory) EIP712("Shiva", "0.1.0") {
         ovToken = IOverlayV1Token(_ovToken);
@@ -124,14 +120,14 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
     // Function to build a position in the ovMarket for a user
     function build(
         ShivaStructs.Build calldata params
-    ) public validMarket(params.ovMarket) returns (uint256) {
+    ) external validMarket(params.ovMarket) returns (uint256) {
         return _buildLogic(params, msg.sender);
     }
 
     // Function to unwind a position for the user
     function unwind(
         ShivaStructs.Unwind calldata params
-    ) public onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
+    ) external onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
         _unwindLogic(params, msg.sender);
     }
 
@@ -153,7 +149,7 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
         IOverlayV1Market market,
         uint256 positionId,
         address owner
-    ) public onlyPositionOwner(market, positionId, owner) {
+    ) external onlyPositionOwner(market, positionId, owner) {
         _emergencyWithdrawLogic(market, positionId, owner);
     }
 

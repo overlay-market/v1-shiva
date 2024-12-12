@@ -5,18 +5,18 @@ import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
-import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {IOverlayV1Token, LIQUIDATE_CALLBACK_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
-import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Token, LIQUIDATE_CALLBACK_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {IOverlayV1ChainlinkFeed} from "v1-periphery/lib/v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
+import {IOverlayV1ChainlinkFeed} from "v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
-import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
-import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
-import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
+import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
-import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {ShivaTestBase} from "./ShivaBase.t.sol";
@@ -426,8 +426,8 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
     function test_buildSingle_slippageGreaterThan100() public {
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, 1, true);
-        vm.expectRevert();
-        shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, 101, ONE, ONE, posId));
+        vm.expectRevert("Shiva:slp>10000");
+        buildSinglePosition(ONE, ONE, posId, 11000);
     }
 
     // test liquidate
