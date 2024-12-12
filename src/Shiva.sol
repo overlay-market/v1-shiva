@@ -40,10 +40,10 @@ contract Shiva is IShiva, EIP712, IOverlayMarketLiquidateCallback {
         "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
-    IOverlayV1Token public constant ovToken;
-    IOverlayV1State public constant ovState;
-    StakingToken public constant stakingToken;
-    IBerachainRewardsVault public constant rewardVault;
+    IOverlayV1Token public ovToken;
+    IOverlayV1State public ovState;
+    StakingToken public stakingToken;
+    IBerachainRewardsVault public rewardVault;
 
     IOverlayV1Factory[] public authorizedFactories;
 
