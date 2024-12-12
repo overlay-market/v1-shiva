@@ -16,6 +16,7 @@ import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract ShivaTestBase is Test {
     using ECDSA for bytes32;
@@ -58,8 +59,10 @@ contract ShivaTestBase is Test {
         IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
             0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B
         );
-        shiva = new Shiva();
-        shiva.initialize(address(ovToken), address(ovState), address(vaultFactory));
+        Shiva shivaImplementation = new Shiva();
+        string memory functionName = "initialize(address,address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, address(ovToken), address(ovState), address(vaultFactory));
+        shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
         rewardVault = shiva.rewardVault();
 
         alice = vm.addr(alicePk);
