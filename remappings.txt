@@ -2,3 +2,4 @@
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 forge-std/=lib/forge-std/src/
 v1-periphery/=lib/v1-periphery/
+v1-core/=lib/v1-periphery/lib/v1-core/

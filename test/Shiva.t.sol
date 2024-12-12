@@ -5,19 +5,19 @@ import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Shiva} from "src/Shiva.sol";
-import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
-import {OverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/OverlayV1Factory.sol";
-import {OverlayV1Token} from "v1-periphery/lib/v1-core/contracts/OverlayV1Token.sol";
-import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
+import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
+import {OverlayV1Token} from "v1-core/contracts/OverlayV1Token.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {ShivaTestBase} from "./ShivaBase.t.sol";
 import {IShiva} from "src/IShiva.sol";
-import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
-import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
+import {Position} from "v1-core/contracts/libraries/Position.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 
 contract ShivaTest is Test, ShivaTestBase {
     using FixedPoint for uint256;

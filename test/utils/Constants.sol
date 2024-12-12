@@ -2,7 +2,7 @@
 pragma solidity 0.8.10;
 
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 
 library Constants {
     function getOVTokenAddress() external pure returns (address) {

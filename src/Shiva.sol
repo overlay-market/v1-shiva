@@ -1,24 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
-import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {IOverlayV1Factory} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Factory.sol";
-import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Token.sol";
-import {Risk} from "v1-periphery/lib/v1-core/contracts/libraries/Risk.sol";
-import {FixedPoint} from "v1-periphery/lib/v1-core/contracts/libraries/FixedPoint.sol";
-import {FixedCast} from "v1-periphery/lib/v1-core/contracts/libraries/FixedCast.sol";
-import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IShiva} from "./IShiva.sol";
-import {Utils} from "./utils/Utils.sol";
-import {ShivaStructs} from "./ShivaStructs.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayMarketLiquidateCallback} from
-    "v1-periphery/lib/v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
-import "./PolStakingToken.sol";
+    "v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
+import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
+import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "./interfaces/berachain/IRewardVaults.sol";
-import {Position} from "v1-periphery/lib/v1-core/contracts/libraries/Position.sol";
+
+import "./PolStakingToken.sol";
+import {ShivaStructs} from "./ShivaStructs.sol";
+import {Utils} from "./utils/Utils.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {Position} from "v1-core/contracts/libraries/Position.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
+import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
 
 contract Shiva is Initializable, IShiva, EIP712Upgradeable, IOverlayMarketLiquidateCallback {
     using FixedPoint for uint256;
