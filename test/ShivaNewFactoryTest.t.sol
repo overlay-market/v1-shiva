@@ -12,6 +12,7 @@ import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State
 import {IOverlayV1ChainlinkFeed} from "v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
+import {MarketImpersonator} from "./utils/MarketImpersonator.sol";
 import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
@@ -487,72 +488,16 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         assertNotEq(rewardVault.balanceOf(alice), 0);
     }
 
-    // function test_buildOnBehalfOf_ownership(bool isLong) public {
-    //     uint256 deadline = block.timestamp;
-    //     uint256 collateral = 10e18;
-    //     uint256 leverage = ONE;
-    //     uint256 priceLimit = isLong ? type(uint256).max : 0;
+    function test_pol_overlayMarketLiquidateCallback_called_by_impersonator_market() public {
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
 
-    //     // TODO: use EIP712 and add random nonces that can be nullified by the owner
-
-    //     bytes32 msgHash = keccak256(abi.encodePacked(
-    //         ovMarket,
-    //         block.chainid,
-    //         deadline,
-    //         collateral,
-    //         leverage,
-    //         isLong,
-    //         priceLimit
-    //     )).toEthSignedMessageHash();
-
-    //     bytes memory signature;
-    //     {   // avoid stack too deep error
-    //         (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePk, msgHash);
-    //         signature = abi.encodePacked(r, s, v);
-    //     }
-
-    //     // the automator builds a position on behalf of Alice through Shiva
-    //     vm.prank(automator);
-    //     uint256 posId = shiva.buildOnBehalfOf(ovMarket, alice, signature, deadline, collateral, leverage, isLong, priceLimit);
-
-    //     // the position is associated with Shiva in the ovMarket
-    //     (,,,,,,,uint16 fractionRemaining) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
-    //     assertGt(fractionRemaining, 0);
-
-    //     // the position is associated with Alice in Shiva
-    //     assertEq(shiva.positionOwners(ovMarket, posId), alice);
-    // }
-
-    // function test_unwindOnBehalfOf_notOwner(bool isLong) public {
-    //     // Alice builds a position through Shiva
-    //     vm.prank(alice);
-    //     uint256 posId = shiva.build(
-    //         ovMarket, 10e18, ONE, isLong, isLong ? type(uint256).max : 0
-    //     );
-
-    //     // TODO: use EIP712 and add random nonces that can be nullified by the owner
-
-    //     // Bob makes a signature to try to unwind Alice's position through Shiva
-    //     uint256 deadline = block.timestamp;
-    //     uint256 fraction = ONE;
-    //     uint256 priceLimit = isLong ? 0 : type(uint256).max;
-    //     bytes32 msgHash = keccak256(abi.encodePacked(
-    //         ovMarket,
-    //         block.chainid,
-    //         deadline,
-    //         posId,
-    //         fraction,
-    //         priceLimit
-    //     )).toEthSignedMessageHash();
-    //     bytes memory signature;
-    //     {   // avoid stack too deep error
-    //         (uint8 v, bytes32 r, bytes32 s) = vm.sign(bobPk, msgHash);
-    //         signature = abi.encodePacked(r, s, v);
-    //     }
-
-    //     vm.prank(bob);
-    //     // TODO implement Shiva.NotPositionOwner.selector
-    //     // vm.expectRevert(Shiva.NotPositionOwner.selector);
-    //     shiva.unwindOnBehalfOf(ovMarket, bob, signature, deadline, posId, fraction, priceLimit);
-    // }
+        vm.startPrank(bob);
+        // vm.expectRevert();
+        MarketImpersonator impersonator = new MarketImpersonator();
+        impersonator.impersonateLiquidation(address(shiva), posId, uint96(leverage.mulDown(collateral)));
+        assertNotEq(rewardVault.balanceOf(alice), 0);
+    }
 }
