@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
-import {IOverlayV1Market} from "v1-periphery/lib/v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {ShivaStructs} from "./ShivaStructs.sol";
 
 interface IShiva {
     event BuildSingle(
@@ -14,40 +15,40 @@ interface IShiva {
     );
 
     error NotPositionOwner();
+    error ExpiredDeadline();
+    error InvalidSignature();
+    error MarketNotValid();
 
     function build(
-        IOverlayV1Market market,
-        uint256 collateral,
-        uint256 leverage,
-        bool isLong,
-        uint256 priceLimit
+        ShivaStructs.Build calldata params
     ) external returns (uint256 positionId);
 
-    function buildOnBehalfOf(
-        IOverlayV1Market market,
-        address owner,
-        bytes calldata signature,
-        uint256 deadline,
-        uint256 collateral,
-        uint256 leverage,
-        bool isLong,
-        uint256 priceLimit
+    function build(
+        ShivaStructs.Build calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) external returns (uint256 positionId);
+
+    function buildSingle(
+        ShivaStructs.BuildSingle calldata params
+    ) external returns (uint256 positionId);
+
+    function buildSingle(
+        ShivaStructs.BuildSingle calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external returns (uint256 positionId);
 
     function unwind(
-        IOverlayV1Market market,
-        uint256 positionId,
-        uint256 fraction,
-        uint256 priceLimit
+        ShivaStructs.Unwind calldata params
     ) external;
 
-    function unwindOnBehalfOf(
+    function unwind(
+        ShivaStructs.Unwind calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) external;
+
+    function emergencyWithdraw(
         IOverlayV1Market market,
-        address owner,
-        bytes calldata signature,
-        uint256 deadline,
         uint256 positionId,
-        uint256 fraction,
-        uint256 priceLimit
+        address owner
     ) external;
 }
