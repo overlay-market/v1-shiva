@@ -498,6 +498,6 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         // vm.expectRevert();
         MarketImpersonator impersonator = new MarketImpersonator();
         impersonator.impersonateLiquidation(address(shiva), posId, uint96(leverage.mulDown(collateral)));
-        assertNotEq(rewardVault.balanceOf(alice), 0);
+        assertEq(rewardVault.balanceOf(alice), leverage.mulUp(collateral));
     }
 }
