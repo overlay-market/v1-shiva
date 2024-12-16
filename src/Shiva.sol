@@ -16,7 +16,6 @@ import {Utils} from "./utils/Utils.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
-import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -25,7 +24,6 @@ import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/crypt
 
 contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOverlayMarketLiquidateCallback {
     using FixedPoint for uint256;
-    using FixedCast for uint16;
     using Position for Position.Info;
     using ECDSA for bytes32;
 
@@ -355,22 +353,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         IOverlayV1Market marketAddress = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind
-        uint256 intialNotional;
-        // TODO make this more efficient, and nice looking
-        {
-            (
-                uint96 notionalInitial_,
-                , // uint96 debtInitial_,
-                , // int24 midTick_,
-                , // int24 entryTick_,
-                , // bool isLong_,
-                , // bool liquidated_,
-                , // uint240 oiShares_,
-                uint16 fractionRemaining_
-            ) = marketAddress.positions(keccak256(abi.encodePacked(address(this), positionId)));
-            intialNotional = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
-        }
-
+        uint256 intialNotional = Utils.getNotionalRemaining(marketAddress, positionId, address(this));
         // Withdraw tokens from the RewardVault
         rewardVault.delegateWithdraw(positionOwners[marketAddress][positionId], intialNotional);
         // Burn the withdrawn StakingTokens
@@ -408,38 +391,11 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
     ) internal {
         _fraction -= _fraction % 1e14;
         // Calculate fraction of initialNotional of the position to unwind
-        uint256 intialNotionalFractionBefore;
-        uint256 intialNotionalFraction;
-        //     // TODO make this more efficient, and nice looking
-        {
-            (
-                uint96 notionalInitial_,
-                , // uint96 debtInitial_,
-                , // int24 midTick_,
-                , // int24 entryTick_,
-                , // bool isLong_,
-                , // bool liquidated_,
-                , // uint240 oiShares_,
-                uint16 fractionRemaining_
-            ) = _market.positions(keccak256(abi.encodePacked(address(this), _positionId)));
-            intialNotionalFractionBefore = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
-        }
+        uint256 intialNotionalFractionBefore = Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         _market.unwind(_positionId, _fraction, _priceLimit);
 
-        {
-            (
-                uint96 notionalInitial_,
-                , // uint96 debtInitial_,
-                , // int24 midTick_,
-                , // int24 entryTick_,
-                , // bool isLong_,
-                , // bool liquidated_,
-                , // uint240 oiShares_,
-                uint16 fractionRemaining_
-            ) = _market.positions(keccak256(abi.encodePacked(address(this), _positionId)));
-            intialNotionalFraction = intialNotionalFractionBefore - uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
-        }
+        uint256 intialNotionalFraction = intialNotionalFractionBefore - Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         // Withdraw tokens from the RewardVault
         rewardVault.delegateWithdraw(positionOwners[_market][_positionId], intialNotionalFraction);
