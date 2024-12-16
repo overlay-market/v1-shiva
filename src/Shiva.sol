@@ -334,13 +334,12 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
     }
 
-    function overlayMarketLiquidateCallback(uint256 positionId) external {
-        // TODO verify that the caller is a market
+    function overlayMarketLiquidateCallback(uint256 positionId) external validMarket(IOverlayV1Market(msg.sender)) {
         IOverlayV1Market marketAddress = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind
         uint256 intialNotional;
-        //     // TODO make this more efficient, and nice looking
+        // TODO make this more efficient, and nice looking
         {
             (
                 uint96 notionalInitial_,
