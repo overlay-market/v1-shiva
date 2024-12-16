@@ -500,4 +500,24 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         impersonator.impersonateLiquidation(address(shiva), posId, uint96(leverage.mulDown(collateral)));
         assertEq(rewardVault.balanceOf(alice), leverage.mulUp(collateral));
     }
+
+    function test_pol_withdraw_emergencyWithdraw_function() public {
+         // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        assertEq(rewardVault.balanceOf(alice), ONE);
+
+        unwindPosition(posId, 0.123e18, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        vm.startPrank(Constants.getGovernorAddress());
+        ovFactory.shutdown(ovMarket.feed());
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        shiva.emergencyWithdraw(ovMarket, posId, alice);
+        vm.stopPrank();
+
+        assertEq(rewardVault.balanceOf(alice), 0);
+    }
 }

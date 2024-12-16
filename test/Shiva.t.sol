@@ -763,4 +763,23 @@ contract ShivaTest is Test, ShivaTestBase {
         buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
     }
 
+    function test_pol_withdraw_emergencyWithdraw_function() public {
+         // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        assertEq(rewardVault.balanceOf(alice), ONE);
+
+        unwindPosition(posId, 0.123e18, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        vm.startPrank(Constants.getGovernorAddress());
+        ovFactory.shutdown(ovMarket.feed());
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        shiva.emergencyWithdraw(ovMarket, posId, alice);
+        vm.stopPrank();
+
+        assertEq(rewardVault.balanceOf(alice), 0);
+    }
 }
