@@ -103,7 +103,7 @@ library Utils {
      * @param ovMarket The overlay market contract instance.
      * @param positionId Identifier of the position to unwind.
      * @param owner Address of the position owner.
-     * @return Notional remaining for the position.
+     * @return notionalRemaining Notional remaining for the position.
      */
     function getNotionalRemaining(
         IOverlayV1Market ovMarket,
