@@ -117,6 +117,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
     function addFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
         authorizedFactories.push(_factory);
+
+        emit FactoryAdded(address(_factory));
     }
 
     function removeFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
@@ -124,6 +126,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
             if (authorizedFactories[i] == _factory) {
                 authorizedFactories[i] = authorizedFactories[authorizedFactories.length - 1];
                 authorizedFactories.pop();
+
+                emit FactoryRemoved(address(_factory));
                 break;
             }
         }
@@ -312,14 +316,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         positionId =
             _onBuildPosition(_owner, _params.ovMarket, totalCollateral, _params.leverage, isLong, buildPriceLimit);
 
-        emit BuildSingle(
-            _owner,
-            address(_params.ovMarket),
-            _params.previousPositionId,
-            positionId,
-            _params.collateral,
-            totalCollateral
-        );
+        emit ShivaBuildSingle(_owner, address(_params.ovMarket), msg.sender, _params.previousPositionId, positionId, totalCollateral);
     }
 
     function _emergencyWithdrawLogic(
@@ -347,6 +344,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         stakingToken.burn(address(this), intialNotionalFraction);
 
         ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
+
+        emit ShivaEmergencyWithdraw(_owner, address(_market), msg.sender, _positionId);
     }
 
     function overlayMarketLiquidateCallback(uint256 positionId) external validMarket(IOverlayV1Market(msg.sender)) {
@@ -374,6 +373,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
         // Store position ownership
         positionOwners[_market][positionId] = _owner;
+
+        emit ShivaBuild(_owner, address(_market), msg.sender, positionId, _collateral, _leverage, _isLong);
     }
 
     function _onStake(
@@ -389,6 +390,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         // Stake tokens in RewardVault on behalf of user
         stakingToken.approve(address(rewardVault), notional);
         rewardVault.delegateStake(_owner, notional);
+
+        emit ShivaStake(_owner, notional);
     }
 
     function _onUnwindPosition(
@@ -407,6 +410,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         // Unstake the fraction of the position
         uint256 intialNotionalFraction = intialNotionalFractionBefore - Utils.getNotionalRemaining(_market, _positionId, address(this));
         _onUnstake(_market, _positionId, intialNotionalFraction);
+
+        emit ShivaUnwind(positionOwners[_market][_positionId], address(_market), msg.sender, _positionId, _fraction);
     }
 
     function _onUnstake(
@@ -418,6 +423,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         rewardVault.delegateWithdraw(positionOwners[_market][_positionId], _intialNotionalFraction);
         // Burn the withdrawn StakingTokens
         stakingToken.burn(address(this), _intialNotionalFraction);
+
+        emit ShivaUnstake(positionOwners[_market][_positionId], _intialNotionalFraction);
     }
 
     function _getTradingFee(
@@ -461,6 +468,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         for (uint256 i = 0; i < authorizedFactories.length; i++) {
             if (authorizedFactories[i].isMarket(_market)) {
                 validMarkets[_market] = true;
+
+                emit MarketValidated(_market);
                 return true;
             }
         }

@@ -5,14 +5,111 @@ import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.so
 import {ShivaStructs} from "./ShivaStructs.sol";
 
 interface IShiva {
-    event BuildSingle(
+    /**
+     * @notice Emitted when a position is built through Shiva.
+     * @param owner Address of the position owner.
+     * @param market Address of the market where the position was built.
+     * @param performer Address of the account that called the build function.
+     * @param positionId Unique ID of the built position.
+     * @param collateral Amount of collateral used to build the position.
+     * @param leverage Leverage applied to the position.
+     * @param isLong Indicates whether the position is long or short.
+     */
+    event ShivaBuild(
         address indexed owner,
-        address market,
+        address indexed market,
+        address performer,
+        uint256 positionId,
+        uint256 collateral,
+        uint256 leverage,
+        bool isLong
+    );
+
+    /**
+     * @notice Emitted when a position is unwound through Shiva.
+     * @param owner Address of the position owner.
+     * @param market Address of the market where the position was unwound.
+     * @param performer Address of the account that called the unwind function.
+     * @param positionId Unique ID of the unwound position.
+     * @param fraction Fraction of the position unwound.
+     */
+    event ShivaUnwind(
+        address indexed owner,
+        address indexed market,
+        address performer,
+        uint256 positionId,
+        uint256 fraction
+    );
+
+    /**
+     * @notice Emitted when a position is unwound and rebuilt through Shiva.
+     * @param owner Address of the position owner.
+     * @param market Address of the market where the position was unwound and rebuilt.
+     * @param performer Address of the account that called the unwind and build function.
+     * @param previousPositionId Unique ID of the unwound position.
+     * @param newPositionId Unique ID of the rebuilt position.
+     * @param totalCollateral Amount of collateral used for the operation.
+     */
+    event ShivaBuildSingle(
+        address indexed owner,
+        address indexed market,
+        address performer,
         uint256 previousPositionId,
         uint256 newPositionId,
-        uint256 collateral,
         uint256 totalCollateral
     );
+
+    /**
+     * @notice Emitted when an emergency withdrawal is performed through Shiva.
+     * @param owner Address of the position owner who performed the withdrawal.
+     * @param market Address of the market from which funds were withdrawn.
+     * @param performer Address of the account that called the emergencyWithdraw function.
+     * @param positionId Unique ID of the withdrawn position.
+     */
+    event ShivaEmergencyWithdraw(
+        address indexed owner,
+        address indexed market,
+        address performer,
+        uint256 positionId
+    );
+
+    /**
+     * @notice Emitted when tokens are staked through Shiva.
+     * @param owner Address of the user who performed the stake.
+     * @param amount Amount of tokens staked.
+     */
+    event ShivaStake(
+        address indexed owner,
+        uint256 amount
+    );
+
+    /**
+     * @notice Emitted when staked tokens are withdrawn through Shiva.
+     * @param owner Address of the user who performed the unstake.
+     * @param amount Amount of tokens unstaked.
+     */
+    event ShivaUnstake(
+        address indexed owner,
+        uint256 amount
+    );
+
+    /**
+     * @notice Emitted when an authorized factory is added to Shiva.
+     * @param factory Address of the added factory.
+     */
+    event FactoryAdded(address indexed factory);
+
+    /**
+     * @notice Emitted when an authorized factory is removed from Shiva.
+     * @param factory Address of the removed factory.
+     */
+    event FactoryRemoved(address indexed factory);
+
+    /**
+     * @notice Emitted when a market is dynamically validated by Shiva.
+     * @param market Address of the validated market.
+     */
+    event MarketValidated(address indexed market);
 
     error NotPositionOwner();
     error ExpiredDeadline();
