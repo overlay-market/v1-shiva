@@ -327,7 +327,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
         _market.emergencyWithdraw(_positionId);
 
-        _onUnstake(_market, _positionId, intialNotionalFraction);
+        _onUnstake(positionOwners[_market][_positionId], intialNotionalFraction);
 
         ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
 
@@ -340,7 +340,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         // Calculate remaining of initialNotional of the position to unwind
         uint256 intialNotional = Utils.getNotionalRemaining(market, positionId, address(this));
         // Unstake the remaining of the position
-        _onUnstake(market, positionId, intialNotional);
+        _onUnstake(positionOwners[market][positionId], intialNotional);
     }
 
     function _onBuildPosition(
@@ -352,8 +352,10 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         uint256 _priceLimit,
         uint32 _brokerId
     ) internal returns (uint256 positionId) {
+        // calculate the notional of the position to build
+        uint256 notional = _collateral.mulUp(_leverage);
         // Stake the collateral
-        _onStake(_owner, _collateral, _leverage);
+        _onStake(_owner, notional);
 
         // Build position in the market
         positionId = _market.build(_collateral, _leverage, _isLong, _priceLimit);
@@ -366,19 +368,16 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
     function _onStake(
         address _owner,
-        uint256 _collateral,
-        uint256 _leverage
+        uint256 _amount
     ) internal {
-        // calculate the notional of the position to build
-        uint256 notional = _collateral.mulUp(_leverage);
         // Mint StakingTokens
-        stakingToken.mint(address(this), notional);
+        stakingToken.mint(address(this), _amount);
 
         // Stake tokens in RewardVault on behalf of user
-        stakingToken.approve(address(rewardVault), notional);
-        rewardVault.delegateStake(_owner, notional);
+        stakingToken.approve(address(rewardVault), _amount);
+        rewardVault.delegateStake(_owner, _amount);
 
-        emit ShivaStake(_owner, notional);
+        emit ShivaStake(_owner, _amount);
     }
 
     function _onUnwindPosition(
@@ -397,22 +396,21 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
         // Unstake the fraction of the position
         uint256 intialNotionalFraction = intialNotionalFractionBefore - Utils.getNotionalRemaining(_market, _positionId, address(this));
-        _onUnstake(_market, _positionId, intialNotionalFraction);
+        _onUnstake(positionOwners[_market][_positionId], intialNotionalFraction);
 
         emit ShivaUnwind(positionOwners[_market][_positionId], address(_market), msg.sender, _positionId, _fraction, _brokerId);
     }
 
     function _onUnstake(
-        IOverlayV1Market _market,
-        uint256 _positionId,
-        uint256 _intialNotionalFraction
+        address _owner,
+        uint256 _amount
     ) internal {
         // Withdraw tokens from the RewardVault
-        rewardVault.delegateWithdraw(positionOwners[_market][_positionId], _intialNotionalFraction);
+        rewardVault.delegateWithdraw(_owner, _amount);
         // Burn the withdrawn StakingTokens
-        stakingToken.burn(address(this), _intialNotionalFraction);
+        stakingToken.burn(address(this), _amount);
 
-        emit ShivaUnstake(positionOwners[_market][_positionId], _intialNotionalFraction);
+        emit ShivaUnstake(_owner, _amount);
     }
 
     function _getTradingFee(
