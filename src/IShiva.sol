@@ -42,24 +42,6 @@ interface IShiva {
     );
 
     /**
-     * @notice Emitted when a position is unwound and rebuilt through Shiva.
-     * @param owner Address of the position owner.
-     * @param market Address of the market where the position was unwound and rebuilt.
-     * @param performer Address of the account that called the unwind and build function.
-     * @param previousPositionId Unique ID of the unwound position.
-     * @param newPositionId Unique ID of the rebuilt position.
-     * @param totalCollateral Amount of collateral used for the operation.
-     */
-    event ShivaBuildSingle(
-        address indexed owner,
-        address indexed market,
-        address performer,
-        uint256 previousPositionId,
-        uint256 newPositionId,
-        uint256 totalCollateral
-    );
-
-    /**
      * @notice Emitted when an emergency withdrawal is performed through Shiva.
      * @param owner Address of the position owner who performed the withdrawal.
      * @param market Address of the market from which funds were withdrawn.

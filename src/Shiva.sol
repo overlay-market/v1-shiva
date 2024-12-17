@@ -315,8 +315,6 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
         positionId =
             _onBuildPosition(_owner, _params.ovMarket, totalCollateral, _params.leverage, isLong, buildPriceLimit);
-
-        emit ShivaBuildSingle(_owner, address(_params.ovMarket), msg.sender, _params.previousPositionId, positionId, totalCollateral);
     }
 
     function _emergencyWithdrawLogic(
@@ -324,24 +322,11 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         uint256 _positionId,
         address _owner
     ) internal {
-        (
-            uint96 notionalInitial_,
-            , // uint96 debtInitial_,
-            , // int24 midTick_,
-            , // int24 entryTick_,
-            , // bool isLong_,
-            , // bool liquidated_,
-            , // uint240 oiShares_,
-            uint16 fractionRemaining_
-        ) = _market.positions(keccak256(abi.encodePacked(address(this), _positionId)));
-        uint256 intialNotionalFraction = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
+        uint256 intialNotionalFraction = Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         _market.emergencyWithdraw(_positionId);
 
-        // Withdraw tokens from the RewardVault
-        rewardVault.delegateWithdraw(positionOwners[_market][_positionId], intialNotionalFraction);
-        // Burn the withdrawn StakingTokens
-        stakingToken.burn(address(this), intialNotionalFraction);
+        _onUnstake(_market, _positionId, intialNotionalFraction);
 
         ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
 
