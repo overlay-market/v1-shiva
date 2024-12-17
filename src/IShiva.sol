@@ -13,6 +13,7 @@ interface IShiva {
      * @param positionId Unique ID of the built position.
      * @param collateral Amount of collateral used to build the position.
      * @param leverage Leverage applied to the position.
+     * @param brokerId ID of the broker used to build the position.
      * @param isLong Indicates whether the position is long or short.
      */
     event ShivaBuild(
@@ -22,6 +23,7 @@ interface IShiva {
         uint256 positionId,
         uint256 collateral,
         uint256 leverage,
+        uint32 brokerId,
         bool isLong
     );
 
@@ -32,13 +34,15 @@ interface IShiva {
      * @param performer Address of the account that called the unwind function.
      * @param positionId Unique ID of the unwound position.
      * @param fraction Fraction of the position unwound.
+     * @param brokerId ID of the broker used to unwind the position.
      */
     event ShivaUnwind(
         address indexed owner,
         address indexed market,
         address performer,
         uint256 positionId,
-        uint256 fraction
+        uint256 fraction,
+        uint32 brokerId
     );
 
     /**

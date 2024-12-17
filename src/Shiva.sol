@@ -275,7 +275,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
             _params.collateral,
             _params.leverage,
             _params.isLong,
-            _params.priceLimit
+            _params.priceLimit,
+            _params.brokerId
         );
     }
 
@@ -283,7 +284,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         ShivaStructs.Unwind calldata _params,
         address _owner
     ) internal {
-        _onUnwindPosition(_params.ovMarket, _params.positionId, _params.fraction, _params.priceLimit);
+        _onUnwindPosition(_params.ovMarket, _params.positionId, _params.fraction, _params.priceLimit, _params.brokerId);
 
         ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
     }
@@ -297,7 +298,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
             ovState, _params.ovMarket, _params.previousPositionId, address(this), ONE, _params.slippage
         );
-        _onUnwindPosition(_params.ovMarket, _params.previousPositionId, ONE, unwindPriceLimit);
+        _onUnwindPosition(_params.ovMarket, _params.previousPositionId, ONE, unwindPriceLimit, _params.brokerId);
 
         uint256 totalCollateral = _params.collateral + ovToken.balanceOf(address(this));
         uint256 tradingFee = _getTradingFee(_params.ovMarket, totalCollateral, _params.leverage);
@@ -314,7 +315,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         );
 
         positionId =
-            _onBuildPosition(_owner, _params.ovMarket, totalCollateral, _params.leverage, isLong, buildPriceLimit);
+            _onBuildPosition(_owner, _params.ovMarket, totalCollateral, _params.leverage, isLong, buildPriceLimit, _params.brokerId);
     }
 
     function _emergencyWithdrawLogic(
@@ -348,7 +349,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         uint256 _collateral,
         uint256 _leverage,
         bool _isLong,
-        uint256 _priceLimit
+        uint256 _priceLimit,
+        uint32 _brokerId
     ) internal returns (uint256 positionId) {
         // Stake the collateral
         _onStake(_owner, _collateral, _leverage);
@@ -359,7 +361,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         // Store position ownership
         positionOwners[_market][positionId] = _owner;
 
-        emit ShivaBuild(_owner, address(_market), msg.sender, positionId, _collateral, _leverage, _isLong);
+        emit ShivaBuild(_owner, address(_market), msg.sender, positionId, _collateral, _leverage, _brokerId, _isLong);
     }
 
     function _onStake(
@@ -383,7 +385,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         IOverlayV1Market _market,
         uint256 _positionId,
         uint256 _fraction,
-        uint256 _priceLimit
+        uint256 _priceLimit,
+        uint32 _brokerId
     ) internal {
         _fraction -= _fraction % 1e14;
         // Calculate fraction of initialNotional of the position to unwind
@@ -396,7 +399,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         uint256 intialNotionalFraction = intialNotionalFractionBefore - Utils.getNotionalRemaining(_market, _positionId, address(this));
         _onUnstake(_market, _positionId, intialNotionalFraction);
 
-        emit ShivaUnwind(positionOwners[_market][_positionId], address(_market), msg.sender, _positionId, _fraction);
+        emit ShivaUnwind(positionOwners[_market][_positionId], address(_market), msg.sender, _positionId, _fraction, _brokerId);
     }
 
     function _onUnstake(

@@ -6,6 +6,7 @@ import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.so
 library ShivaStructs {
     struct Build {
         IOverlayV1Market ovMarket;
+        uint32 brokerId;
         bool isLong;
         uint256 collateral;
         uint256 leverage;
@@ -14,6 +15,7 @@ library ShivaStructs {
 
     struct BuildSingle {
         IOverlayV1Market ovMarket;
+        uint32 brokerId;
         uint16 slippage;
         uint256 collateral;
         uint256 leverage;
@@ -22,6 +24,7 @@ library ShivaStructs {
 
     struct Unwind {
         IOverlayV1Market ovMarket;
+        uint32 brokerId;
         uint256 positionId;
         uint256 fraction;
         uint256 priceLimit;

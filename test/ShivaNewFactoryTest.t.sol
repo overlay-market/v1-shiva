@@ -102,7 +102,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         vm.startPrank(alice);
         uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE - 1, priceLimit));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE - 1, priceLimit));
     }
 
     // Build fail not enough allowance
@@ -111,7 +111,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         vm.startPrank(charlie);
         uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, priceLimit));
 
     }
 
@@ -122,7 +122,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         ovToken.approve(address(shiva), type(uint256).max);
         uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, priceLimit));
     }
 
     function test_build_pol_stake() public {
@@ -179,7 +179,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         uint256 priceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, 1, !isLong);
         vm.startPrank(bob);
         vm.expectRevert();
-        shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit));
+        shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, ONE, priceLimit));
     }
 
     function test_unwind_pol_unstake() public {
@@ -335,7 +335,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         // Alice builds a second position after a while
         vm.warp(block.timestamp + 1000);
 
-        uint256 posId2 = shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, 1, ONE, ONE, posId1));
+        uint256 posId2 = shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, BROKER_ID, 1, ONE, ONE, posId1));
 
         // the first position is successfully unwound
         (,,,,,,, uint16 fractionRemaining) =
@@ -368,7 +368,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         vm.warp(block.timestamp + 1000);
 
         uint256 posId2 =
-            shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, 1, collateral, leverage, posId1));
+            shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, BROKER_ID, 1, collateral, leverage, posId1));
 
         // the first position is successfully unwound
         (,,,,,,, uint16 fractionRemaining) =
@@ -396,7 +396,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         vm.warp(block.timestamp + 1000);
 
         shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, 1, numberWithDecimals, numberWithDecimals, posId1)
+            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, 1, numberWithDecimals, numberWithDecimals, posId1)
         );
         assertEq(ovToken.balanceOf(address(shiva)), 0);
 
@@ -407,7 +407,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         vm.warp(block.timestamp + 1000);
 
         shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, 1, numberWithDecimals, numberWithDecimals, posId3)
+            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, 1, numberWithDecimals, numberWithDecimals, posId3)
         );
         assertEq(ovToken.balanceOf(address(shiva)), 0);
     }
@@ -416,7 +416,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
     function test_buildSingle_noPreviousPosition() public {
         vm.startPrank(alice);
         vm.expectRevert();
-        shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, 1, ONE, ONE, 0));
+        shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, BROKER_ID, 1, ONE, ONE, 0));
     }
 
     // BuildSingle fail leverage less than minimum
@@ -424,7 +424,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, 1, true);
         vm.expectRevert();
-        shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, 1, ONE, ONE - 1, posId));
+        shiva.buildSingle(ShivaStructs.BuildSingle(ovMarket, BROKER_ID, 1, ONE, ONE - 1, posId));
     }
 
     // BuildSingle fail slippage greater than 100

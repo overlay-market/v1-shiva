@@ -24,6 +24,8 @@ contract ShivaTestBase is Test {
     uint256 constant ONE = 1e18;
     uint16 constant BASIC_SLIPPAGE = 100; // 1%
 
+    uint32 constant BROKER_ID = 0;
+
     Shiva shiva;
     IOverlayV1Market ovMarket;
     IOverlayV1State ovState;
@@ -182,13 +184,13 @@ contract ShivaTestBase is Test {
     ) public returns (uint256) {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
-        return shiva.build(ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit));
+        return shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, isLong, collateral, leverage, priceLimit));
     }
 
     function unwindPosition(uint256 posId, uint256 fraction, uint16 slippage) public {
         (uint256 priceLimit,) =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
-        shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, fraction, priceLimit));
+        shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, fraction, priceLimit));
     }
 
     function buildSinglePosition(
@@ -198,7 +200,7 @@ contract ShivaTestBase is Test {
         uint16 slippage
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, slippage, collateral, leverage, posId1)
+            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, slippage, collateral, leverage, posId1)
         );
     }
 
@@ -282,7 +284,7 @@ contract ShivaTestBase is Test {
         address owner
     ) public returns (uint256) {
         return shiva.build(
-            ShivaStructs.Build(ovMarket, isLong, collateral, leverage, priceLimit),
+            ShivaStructs.Build(ovMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
@@ -296,7 +298,7 @@ contract ShivaTestBase is Test {
         address owner
     ) public {
         shiva.unwind(
-            ShivaStructs.Unwind(ovMarket, positionId, fraction, priceLimit),
+            ShivaStructs.Unwind(ovMarket, BROKER_ID, positionId, fraction, priceLimit),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
@@ -311,7 +313,7 @@ contract ShivaTestBase is Test {
         address owner
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, slippage, collateral, leverage, previousPositionId),
+            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, slippage, collateral, leverage, previousPositionId),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
