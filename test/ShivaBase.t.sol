@@ -38,6 +38,7 @@ contract ShivaTestBase is Test {
     address charlie;
     address automator;
     address guardian;
+    address pauser;
     address deployer = Constants.getDeployerAddress();
 
     uint256 alicePk = 0x123;
@@ -72,6 +73,7 @@ contract ShivaTestBase is Test {
         charlie = vm.addr(charliePk);
         automator = makeAddr("automator");
         guardian = Constants.getGuardianAddress();
+        pauser = Constants.getPauserAddress();
 
         labelAddresses();
         setInitialBalancesAndApprovals();
@@ -84,6 +86,7 @@ contract ShivaTestBase is Test {
         vm.label(charlie, "Charlie");
         vm.label(automator, "Automator");
         vm.label(guardian, "Guardian");
+        vm.label(pauser, "Pauser");
         vm.label(address(ovMarket), "Market");
         vm.label(address(shiva), "Shiva");
         vm.label(address(ovToken), "OVL");
@@ -156,6 +159,18 @@ contract ShivaTestBase is Test {
         IOverlayV1Factory factory = IOverlayV1Factory(Constants.getFactoryAddress());
         vm.startPrank(guardian);
         shiva.removeFactory(factory);
+        vm.stopPrank();
+    }
+
+    function pauseShiva() internal {
+        vm.startPrank(pauser);
+        shiva.pause();
+        vm.stopPrank();
+    }
+
+    function unpauseShiva() internal {
+        vm.startPrank(pauser);
+        shiva.unpause();
         vm.stopPrank();
     }
 
