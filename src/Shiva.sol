@@ -21,8 +21,9 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
-contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOverlayMarketLiquidateCallback {
+contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOverlayMarketLiquidateCallback, PausableUpgradeable {
     using FixedPoint for uint256;
     using Position for Position.Info;
     using ECDSA for bytes32;
@@ -101,6 +102,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
 
     function initialize(address _ovToken, address _ovState, address _vaultFactory) public initializer {
         __EIP712_init("Shiva", "0.1.0");
+        __Pausable_init();
 
         ovToken = IOverlayV1Token(_ovToken);
         ovState = IOverlayV1State(_ovState);
@@ -133,17 +135,25 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         }
     }
 
+    function pause() external onlyPauser(msg.sender) {
+        _pause();
+    }
+
+    function unpause() external onlyPauser(msg.sender) {
+        _unpause();
+    }
+
     // Function to build a position in the ovMarket for a user
     function build(
         ShivaStructs.Build calldata params
-    ) external validMarket(params.ovMarket) returns (uint256) {
+    ) external whenNotPaused validMarket(params.ovMarket) returns (uint256) {
         return _buildLogic(params, msg.sender);
     }
 
     // Function to unwind a position for the user
     function unwind(
         ShivaStructs.Unwind calldata params
-    ) external onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
+    ) external whenNotPaused onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
         _unwindLogic(params, msg.sender);
     }
 
@@ -154,6 +164,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         ShivaStructs.BuildSingle calldata params
     )
         external
+        whenNotPaused
         onlyPositionOwner(params.ovMarket, params.previousPositionId, msg.sender)
         returns (uint256)
     {
@@ -165,7 +176,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         IOverlayV1Market market,
         uint256 positionId,
         address owner
-    ) external onlyPositionOwner(market, positionId, owner) {
+    ) external whenNotPaused onlyPositionOwner(market, positionId, owner) {
         _emergencyWithdrawLogic(market, positionId, owner);
     }
 
@@ -175,6 +186,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
+        whenNotPaused
         validMarket(params.ovMarket)
         validDeadline(onBehalfOf.deadline)
         returns (uint256)
@@ -203,6 +215,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
+        whenNotPaused
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovMarket, params.positionId, onBehalfOf.owner)
     {
@@ -229,6 +242,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
+        whenNotPaused
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovMarket, params.previousPositionId, onBehalfOf.owner)
         returns (uint256)
@@ -334,7 +348,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         emit ShivaEmergencyWithdraw(_owner, address(_market), msg.sender, _positionId);
     }
 
-    function overlayMarketLiquidateCallback(uint256 positionId) external validMarket(IOverlayV1Market(msg.sender)) {
+    function overlayMarketLiquidateCallback(uint256 positionId) external whenNotPaused validMarket(IOverlayV1Market(msg.sender)) {
         IOverlayV1Market market = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind
