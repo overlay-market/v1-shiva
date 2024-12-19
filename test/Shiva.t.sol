@@ -137,6 +137,31 @@ contract ShivaTest is Test, ShivaTestBase {
         shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, priceLimit));
     }
 
+    // Build fail due to paused shiva
+    function test_build_pausedShiva() public {
+        pauseShiva();
+        vm.startPrank(alice);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.expectRevert("Pausable: paused");
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, priceLimit));
+    }
+
+    // Build should work after unpausing Shiva
+    function test_build_afterUnpause() public {
+        pauseShiva();
+        unpauseShiva();
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+
+        // the position is not associated with Alice in the ovMarket
+        assertFractionRemainingIsZero(alice, posId);
+        // the position is associated with Shiva in the ovMarket
+        assertFractionRemainingIsGreaterThanZero(address(shiva), posId);
+        // the position is associated with Alice in Shiva
+        assertUserIsPositionOwnerInShiva(alice, posId);
+    }
+
     function test_build_pol_stake() public {
         vm.startPrank(alice);
         uint256 collateral = ONE;
@@ -181,6 +206,7 @@ contract ShivaTest is Test, ShivaTestBase {
         assertFractionRemainingIsZero(address(shiva), posId);
     }
 
+    // Alice builds a position and then unwinds a fraction of it through Shiva
     function test_partial_unwind() public {
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
@@ -194,6 +220,7 @@ contract ShivaTest is Test, ShivaTestBase {
         assertUserIsPositionOwnerInShiva(alice, posId);
     }
 
+    // Unwind fail not owner
     function test_unwind_notOwner(
         bool isLong
     ) public {
@@ -206,6 +233,21 @@ contract ShivaTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, !isLong);
         vm.startPrank(bob);
         vm.expectRevert(IShiva.NotPositionOwner.selector);
+        shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, ONE, priceLimit));
+    }
+
+    // Unwind fail paused shiva
+    function test_unwind_pausedShiva() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+        // Alice unwinds her position through Shiva
+        pauseShiva();
+        vm.startPrank(alice);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+        vm.expectRevert("Pausable: paused");
         shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, ONE, priceLimit));
     }
 
@@ -227,6 +269,7 @@ contract ShivaTest is Test, ShivaTestBase {
         assertFractionRemainingIsZero(address(shiva), posId);
     }
 
+    // Emergency withdraw fail not owner
     function test_emergencyWithdraw_notOwner() public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
@@ -237,6 +280,20 @@ contract ShivaTest is Test, ShivaTestBase {
         vm.startPrank(bob);
         vm.expectRevert(IShiva.NotPositionOwner.selector);
         shiva.emergencyWithdraw(ovMarket, posId, bob);
+    }
+
+    // Emergency withdraw fail paused shiva
+    function test_emergencyWithdraw_pausedShiva() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+        // Alice emergency withdraws her position through Shiva
+        pauseShiva();
+        shutDownMarket();
+        vm.startPrank(alice);
+        vm.expectRevert("Pausable: paused");
+        shiva.emergencyWithdraw(ovMarket, posId, alice);
     }
 
     // Automator can execute the emergency withdraw method on behalf of Alice
@@ -467,6 +524,21 @@ contract ShivaTest is Test, ShivaTestBase {
         assertOVTokenBalanceIsZero(address(shiva));
     }
 
+    // BuildSingle fail paused shiva
+    function test_buildSingle_pausedShiva() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+        // Alice builds a second position after a while
+        vm.warp(block.timestamp + 1000);
+        // Alice builds a second position after a while
+        pauseShiva();
+        vm.startPrank(alice);
+        vm.expectRevert("Pausable: paused");
+        buildSinglePosition(ONE, ONE, posId, BASIC_SLIPPAGE);
+    }
+
     // BuildSingle fail previous position not owned by the caller
     function test_buildSingle_noPreviousPosition() public {
         vm.startPrank(alice);
@@ -571,6 +643,26 @@ contract ShivaTest is Test, ShivaTestBase {
         buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, true, signature, alice);
     }
 
+    // build on behalf of fail paused shiva
+    function test_buildOnBehalfOf_pausedShiva() public {
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true
+        );
+
+        // sign the message as Alice
+        bytes memory signature = getSignature(digest, alicePk);
+
+        pauseShiva();
+
+        vm.prank(automator);
+        vm.expectRevert("Pausable: paused");
+        buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, true, signature, alice);
+    }
+
     // Automator unwind a position on behalf of Alice
     function test_unwindOnBehalfOf_withdrawal() public {
         // Alice builds a position through Shiva
@@ -669,6 +761,31 @@ contract ShivaTest is Test, ShivaTestBase {
         unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
     }
 
+    // unwind on behalf of fail paused shiva
+    function test_unwindOnBehalfOf_pausedShiva() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // Alice unwinds her position through a signed message
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        (uint256 priceLimit,) =
+            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, shiva.nonces(alice), deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        pauseShiva();
+
+        vm.prank(automator);
+        vm.expectRevert("Pausable: paused");
+        unwindPositionOnBehalfOf(posId, ONE, priceLimit, deadline, signature, alice);
+    }
+
     // Automator builds a single position on behalf of Alice
     function test_buildSingleOnBehalfOf_ownership() public {
         // Alice builds a position through Shiva
@@ -760,6 +877,28 @@ contract ShivaTest is Test, ShivaTestBase {
 
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+    }
+
+    // build single on behalf of fail paused shiva
+    function test_buildSingleOnBehalfOf_pausedShiva() public {
+        // Alice builds a position through Shiva
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getBuildSingleOnBehalfOfDigest(
+            ONE, ONE, posId1, shiva.nonces(alice), deadline
+        );
+
+        bytes memory signature = getSignature(digest, alicePk);
+
+        pauseShiva();
+
+        vm.prank(automator);
+        vm.expectRevert("Pausable: paused");
         buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
     }
 

@@ -53,6 +53,7 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
         charlie = vm.addr(charliePk);
         automator = makeAddr("automator");
         guardian = Constants.getGuardianAddress();
+        pauser = Constants.getPauserAddress();
 
         labelAddresses();
         setInitialBalancesAndApprovals();
@@ -456,6 +457,49 @@ contract ShivaNewFactoryTest is Test, ShivaTestBase {
             vm.warp(block.timestamp + 60*60);
         }
         assertTrue(ovState.liquidatable(ovMarket, address(shiva), posId));
+
+        // liquidate alice's position
+        vm.startPrank(bob);
+        ovMarket.liquidate(address(shiva), posId);
+        (
+            , //uint96 notionalInitial_,
+            , //uint96 debtInitial_,
+            , //int24 midTick_,
+            , //int24 entryTick_,
+            , //bool isLong_,
+            bool liquidated_,
+            , //uint240 oiShares_,
+            //uint16 fractionRemaining_
+        ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertTrue(liquidated_);
+
+        // rewards balance should be 0 after the position is liquidated
+        assertEq(rewardVault.balanceOf(alice), 0);
+    }
+
+    // liquidate should not fail if paused Shiva
+    function test_liquidate_pausedShiva() public {
+         vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        uint256 posId = buildPosition(collateral, leverage, 1, true);
+
+        // submit a new round with price = prevPrice / 2 to make the posId liquidatable
+        {
+            IFluxAggregator aggregator = IFluxAggregator(IOverlayV1ChainlinkFeed(ovMarket.feed()).aggregator());
+            address oracle = aggregator.getOracles()[0];
+            int256 halfPrice = aggregator.latestAnswer()/2;
+
+            vm.startPrank(oracle);
+            aggregator.submit(aggregator.latestRound() + 1, halfPrice);
+            vm.warp(block.timestamp + 60*60);
+            aggregator.submit(aggregator.latestRound() + 1, halfPrice);
+            vm.warp(block.timestamp + 60*60);
+        }
+        assertTrue(ovState.liquidatable(ovMarket, address(shiva), posId));
+        vm.stopPrank();
+
+        pauseShiva();
 
         // liquidate alice's position
         vm.startPrank(bob);
