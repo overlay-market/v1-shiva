@@ -23,6 +23,13 @@ contract ShivaTest is Test, ShivaTestBase {
     using FixedPoint for uint256;
 
     // Test setup
+
+    // Check Shiva gives approval to reward vault to spend staking tokens
+    function test_shivaApproveRewardVault() public {
+        IERC20 stakingToken = IERC20(shiva.stakingToken());
+        assertEq(shiva.stakingToken().allowance(address(shiva), address(rewardVault)), type(uint256).max);
+    }
+
     // Governor adds an authorized factory
     function test_addAuthorizedFactory() public {
         addAuthorizedFactory();
