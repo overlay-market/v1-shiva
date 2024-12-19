@@ -13,9 +13,13 @@ interface IBerachainRewardsVault {
         address account
     ) external view returns (uint256);
 
-    function balanceOf(address account) external returns (uint256);
+    function balanceOf(
+        address account
+    ) external returns (uint256);
 
-    function withdraw(uint256 amount) external;
+    function withdraw(
+        uint256 amount
+    ) external;
 
     function exit() external;
 }

@@ -57,10 +57,7 @@ interface IShiva {
      * @param positionId Unique ID of the withdrawn position.
      */
     event ShivaEmergencyWithdraw(
-        address indexed owner,
-        address indexed market,
-        address performer,
-        uint256 positionId
+        address indexed owner, address indexed market, address performer, uint256 positionId
     );
 
     /**
@@ -68,20 +65,14 @@ interface IShiva {
      * @param owner Address of the user who performed the stake.
      * @param amount Amount of tokens staked.
      */
-    event ShivaStake(
-        address indexed owner,
-        uint256 amount
-    );
+    event ShivaStake(address indexed owner, uint256 amount);
 
     /**
      * @notice Emitted when staked tokens are withdrawn through Shiva.
      * @param owner Address of the user who performed the unstake.
      * @param amount Amount of tokens unstaked.
      */
-    event ShivaUnstake(
-        address indexed owner,
-        uint256 amount
-    );
+    event ShivaUnstake(address indexed owner, uint256 amount);
 
     /**
      * @notice Emitted when an authorized factory is added to Shiva.

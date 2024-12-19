@@ -2,15 +2,23 @@
 pragma solidity 0.8.10;
 
 import {IShiva} from "./IShiva.sol";
-import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "./interfaces/berachain/IRewardVaults.sol";
+import {
+    IBerachainRewardsVault,
+    IBerachainRewardsVaultFactory
+} from "./interfaces/berachain/IRewardVaults.sol";
 import {StakingToken} from "./PolStakingToken.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 import {Utils} from "./utils/Utils.sol";
 
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {IOverlayMarketLiquidateCallback} from "v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
+import {IOverlayMarketLiquidateCallback} from
+    "v1-core/contracts/interfaces/callback/IOverlayMarketLiquidateCallback.sol";
 import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
-import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {
+    IOverlayV1Token,
+    GOVERNOR_ROLE,
+    PAUSER_ROLE
+} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
@@ -19,8 +27,10 @@ import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import {EIP712Upgradeable} from
+    "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
+import {PausableUpgradeable} from
+    "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 /**
  * @title Shiva
@@ -34,14 +44,21 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/
  * @dev Uses EIP712 for signature verification
  * @dev This contract is pausable
  */
-contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOverlayMarketLiquidateCallback, PausableUpgradeable {
+contract Shiva is
+    IShiva,
+    Initializable,
+    UUPSUpgradeable,
+    EIP712Upgradeable,
+    IOverlayMarketLiquidateCallback,
+    PausableUpgradeable
+{
     using FixedPoint for uint256;
     using Position for Position.Info;
     using ECDSA for bytes32;
 
     uint256 public constant ONE = 1e18;
 
-    /** 
+    /**
      * @notice Typehash for the BuildOnBehalfOfParams struct
      * @dev Used for EIP-712 encoding of the build on behalf of parameters
      */
@@ -49,7 +66,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         "BuildOnBehalfOfParams(IOverlayV1Market ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 priceLimit,uint256 nonce)"
     );
 
-    /** 
+    /**
      * @notice Typehash for the UnwindOnBehalfOfParams struct
      * @dev Used for EIP-712 encoding of the unwind on behalf of parameters
      */
@@ -57,7 +74,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         "UnwindOnBehalfOfParams(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 nonce)"
     );
 
-    /** 
+    /**
      * @notice Typehash for the BuildSingleOnBehalfOf struct
      * @dev Used for EIP-712 encoding of the build single on behalf of parameters
      */
@@ -100,25 +117,29 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @dev Modifiers section
      */
 
-    /** 
+    /**
      * @notice Ensures the caller has the governor role
      * @param _msgSender The address of the caller
      */
-    modifier onlyGovernor(address _msgSender) {
+    modifier onlyGovernor(
+        address _msgSender
+    ) {
         require(ovToken.hasRole(GOVERNOR_ROLE, _msgSender), "Shiva: !governor");
         _;
     }
 
-    /** 
+    /**
      * @notice Ensures the caller has the pauser role
      * @param _msgSender The address of the caller
      */
-    modifier onlyPauser(address _msgSender) {
+    modifier onlyPauser(
+        address _msgSender
+    ) {
         require(ovToken.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
         _;
     }
 
-    /** 
+    /**
      * @notice Ensures the caller is the owner of the specified position
      * @param ovMarket The market of the position
      * @param positionId The ID of the position
@@ -131,7 +152,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         _;
     }
 
-    /** 
+    /**
      * @notice Ensures the deadline has not expired
      * @param deadline The deadline timestamp
      */
@@ -144,7 +165,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         _;
     }
 
-    /** 
+    /**
      * @notice Ensures the market is valid
      * @param market The market to check
      */
@@ -168,7 +189,11 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @param _ovState The address of the Overlay V1 State contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
      */
-    function initialize(address _ovToken, address _ovState, address _vaultFactory) external initializer {
+    function initialize(
+        address _ovToken,
+        address _ovState,
+        address _vaultFactory
+    ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
@@ -179,8 +204,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         stakingToken = new StakingToken();
 
         // Create vault for newly created token
-        address vaultAddress = IBerachainRewardsVaultFactory(_vaultFactory)
-            .createRewardsVault(address(stakingToken));
+        address vaultAddress =
+            IBerachainRewardsVaultFactory(_vaultFactory).createRewardsVault(address(stakingToken));
 
         rewardVault = IBerachainRewardsVault(vaultAddress);
 
@@ -192,7 +217,9 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @notice Adds a new factory to the list of authorized factories
      * @param _factory The address of the factory to add
      */
-    function addFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
+    function addFactory(
+        IOverlayV1Factory _factory
+    ) external onlyGovernor(msg.sender) {
         authorizedFactories.push(_factory);
 
         emit FactoryAdded(address(_factory));
@@ -202,7 +229,9 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @notice Removes a factory from the list of authorized factories
      * @param _factory The address of the factory to remove
      */
-    function removeFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
+    function removeFactory(
+        IOverlayV1Factory _factory
+    ) external onlyGovernor(msg.sender) {
         for (uint256 i = 0; i < authorizedFactories.length; i++) {
             if (authorizedFactories[i] == _factory) {
                 authorizedFactories[i] = authorizedFactories[authorizedFactories.length - 1];
@@ -259,10 +288,11 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @notice Builds and keeps a single position in the ovMarket for a user
      * @dev If the user already has a position in the ovMarket, it will be unwound before building
      * a new one and previous collateral and new collateral will be used to build the new position
-     * @param params The parameters for building the single position based on the 
+     * @param params The parameters for building the single position based on the
      * ShivaStructs.BuildSingle struct
      * @return The ID of the newly created position
      */
+
     function buildSingle(
         ShivaStructs.BuildSingle calldata params
     )
@@ -330,7 +360,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * ShivaStructs.Unwind struct
      * @param onBehalfOf The parameters for unwinding on behalf of a user based on the
      * ShivaStructs.OnBehalfOf struct
-     * @dev Only callable when the contract is not paused, the deadline is valid, and the caller 
+     * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
      * is the owner of the position
      */
     function unwind(
@@ -401,7 +431,9 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @param positionId The ID of the position to liquidate
      * @dev Only callable when the contract is not paused and the market is valid
      */
-    function overlayMarketLiquidateCallback(uint256 positionId) external whenNotPaused validMarket(IOverlayV1Market(msg.sender)) {
+    function overlayMarketLiquidateCallback(
+        uint256 positionId
+    ) external whenNotPaused validMarket(IOverlayV1Market(msg.sender)) {
         IOverlayV1Market market = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind
@@ -456,11 +488,14 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
      */
-    function _unwindLogic(
-        ShivaStructs.Unwind calldata _params,
-        address _owner
-    ) internal {
-        _onUnwindPosition(_params.ovMarket, _params.positionId, _params.fraction, _params.priceLimit, _params.brokerId);
+    function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
+        _onUnwindPosition(
+            _params.ovMarket,
+            _params.positionId,
+            _params.fraction,
+            _params.priceLimit,
+            _params.brokerId
+        );
 
         ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
     }
@@ -478,9 +513,16 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
         (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
-            ovState, _params.ovMarket, _params.previousPositionId, address(this), ONE, _params.slippage
+            ovState,
+            _params.ovMarket,
+            _params.previousPositionId,
+            address(this),
+            ONE,
+            _params.slippage
         );
-        _onUnwindPosition(_params.ovMarket, _params.previousPositionId, ONE, unwindPriceLimit, _params.brokerId);
+        _onUnwindPosition(
+            _params.ovMarket, _params.previousPositionId, ONE, unwindPriceLimit, _params.brokerId
+        );
 
         uint256 totalCollateral = _params.collateral + ovToken.balanceOf(address(this));
         uint256 tradingFee = _getTradingFee(_params.ovMarket, totalCollateral, _params.leverage);
@@ -496,8 +538,15 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
             ovState, _params.ovMarket, totalCollateral, _params.leverage, _params.slippage, isLong
         );
 
-        positionId =
-            _onBuildPosition(_owner, _params.ovMarket, totalCollateral, _params.leverage, isLong, buildPriceLimit, _params.brokerId);
+        positionId = _onBuildPosition(
+            _owner,
+            _params.ovMarket,
+            totalCollateral,
+            _params.leverage,
+            isLong,
+            buildPriceLimit,
+            _params.brokerId
+        );
     }
 
     /**
@@ -512,7 +561,8 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         uint256 _positionId,
         address _owner
     ) internal {
-        uint256 intialNotionalFraction = Utils.getNotionalRemaining(_market, _positionId, address(this));
+        uint256 intialNotionalFraction =
+            Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         _market.emergencyWithdraw(_positionId);
 
@@ -554,7 +604,16 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         // Store position ownership
         positionOwners[_market][positionId] = _owner;
 
-        emit ShivaBuild(_owner, address(_market), msg.sender, positionId, _collateral, _leverage, _brokerId, _isLong);
+        emit ShivaBuild(
+            _owner,
+            address(_market),
+            msg.sender,
+            positionId,
+            _collateral,
+            _leverage,
+            _brokerId,
+            _isLong
+        );
     }
 
     /**
@@ -562,10 +621,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @param _owner The address of the owner
      * @param _amount The amount to stake
      */
-    function _onStake(
-        address _owner,
-        uint256 _amount
-    ) internal {
+    function _onStake(address _owner, uint256 _amount) internal {
         // Mint StakingTokens
         stakingToken.mint(address(this), _amount);
         // Stake tokens in RewardVault on behalf of user
@@ -591,16 +647,25 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
     ) internal {
         _fraction -= _fraction % 1e14;
         // Calculate fraction of initialNotional of the position to unwind
-        uint256 intialNotionalFractionBefore = Utils.getNotionalRemaining(_market, _positionId, address(this));
+        uint256 intialNotionalFractionBefore =
+            Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         // Unwind position in the market
         _market.unwind(_positionId, _fraction, _priceLimit);
 
         // Unstake the fraction of the position
-        uint256 intialNotionalFraction = intialNotionalFractionBefore - Utils.getNotionalRemaining(_market, _positionId, address(this));
+        uint256 intialNotionalFraction = intialNotionalFractionBefore
+            - Utils.getNotionalRemaining(_market, _positionId, address(this));
         _onUnstake(positionOwners[_market][_positionId], intialNotionalFraction);
 
-        emit ShivaUnwind(positionOwners[_market][_positionId], address(_market), msg.sender, _positionId, _fraction, _brokerId);
+        emit ShivaUnwind(
+            positionOwners[_market][_positionId],
+            address(_market),
+            msg.sender,
+            _positionId,
+            _fraction,
+            _brokerId
+        );
     }
 
     /**
@@ -608,10 +673,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @param _owner The address of the owner
      * @param _amount The amount to unstake
      */
-    function _onUnstake(
-        address _owner,
-        uint256 _amount
-    ) internal {
+    function _onUnstake(address _owner, uint256 _amount) internal {
         // Withdraw tokens from the RewardVault
         rewardVault.delegateWithdraw(_owner, _amount);
         // Burn the withdrawn StakingTokens
@@ -676,7 +738,9 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @param _market The address of the market
      * @return True if the market is valid, false otherwise
      */
-    function _checkIsValidMarket(address _market) internal returns (bool) {
+    function _checkIsValidMarket(
+        address _market
+    ) internal returns (bool) {
         if (validMarkets[_market]) {
             return true;
         }
@@ -697,5 +761,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
      * @notice Authorizes an upgrade to the contract
      * @dev Only callable by the governor
      */
-    function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
+    function _authorizeUpgrade(
+        address
+    ) internal override onlyGovernor(msg.sender) {}
 }

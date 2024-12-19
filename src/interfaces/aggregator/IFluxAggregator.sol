@@ -16,26 +16,13 @@ interface IFluxAggregator {
         uint32 restartDelay,
         uint32 timeout
     );
-    event OraclePermissionsUpdated(
-        address indexed oracle,
-        bool indexed whitelisted
-    );
+    event OraclePermissionsUpdated(address indexed oracle, bool indexed whitelisted);
     event OracleAdminUpdated(address indexed oracle, address indexed newAdmin);
-    event OracleAdminUpdateRequested(
-        address indexed oracle,
-        address admin,
-        address newAdmin
-    );
+    event OracleAdminUpdateRequested(address indexed oracle, address admin, address newAdmin);
     event SubmissionReceived(
-        int256 indexed submission,
-        uint32 indexed round,
-        address indexed oracle
+        int256 indexed submission, uint32 indexed round, address indexed oracle
     );
-    event RequesterPermissionsSet(
-        address indexed requester,
-        bool authorized,
-        uint32 delay
-    );
+    event RequesterPermissionsSet(address indexed requester, bool authorized, uint32 delay);
     event ValidatorUpdated(address indexed previous, address indexed current);
 
     // Functions
@@ -63,9 +50,15 @@ interface IFluxAggregator {
     function latestAnswer() external view returns (int256);
     function latestTimestamp() external view returns (uint256);
     function latestRound() external view returns (uint256);
-    function getAnswer(uint256 _roundId) external view returns (int256);
-    function getTimestamp(uint256 _roundId) external view returns (uint256);
-    function getRoundData(uint80 _roundId)
+    function getAnswer(
+        uint256 _roundId
+    ) external view returns (int256);
+    function getTimestamp(
+        uint256 _roundId
+    ) external view returns (uint256);
+    function getRoundData(
+        uint80 _roundId
+    )
         external
         view
         returns (
@@ -85,27 +78,25 @@ interface IFluxAggregator {
             uint256 updatedAt,
             uint80 answeredInRound
         );
-    function withdrawablePayment(address _oracle) external view returns (uint256);
-    function withdrawPayment(
-        address _oracle,
-        address _recipient,
-        uint256 _amount
-    ) external;
+    function withdrawablePayment(
+        address _oracle
+    ) external view returns (uint256);
+    function withdrawPayment(address _oracle, address _recipient, uint256 _amount) external;
     function withdrawFunds(address _recipient, uint256 _amount) external;
-    function getAdmin(address _oracle) external view returns (address);
+    function getAdmin(
+        address _oracle
+    ) external view returns (address);
     function transferAdmin(address _oracle, address _newAdmin) external;
-    function acceptAdmin(address _oracle) external;
+    function acceptAdmin(
+        address _oracle
+    ) external;
     function requestNewRound() external returns (uint80);
     function setRequesterPermissions(
         address _requester,
         bool _authorized,
         uint32 _delay
     ) external;
-    function onTokenTransfer(
-        address _sender,
-        uint256 _amount,
-        bytes calldata _data
-    ) external;
+    function onTokenTransfer(address _sender, uint256 _amount, bytes calldata _data) external;
     function oracleRoundState(
         address _oracle,
         uint32 _queriedRoundId
@@ -122,5 +113,7 @@ interface IFluxAggregator {
             uint8 _oracleCount,
             uint128 _paymentAmount
         );
-    function setValidator(address _newValidator) external;
+    function setValidator(
+        address _newValidator
+    ) external;
 }
