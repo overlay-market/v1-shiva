@@ -26,7 +26,6 @@ contract ShivaTest is Test, ShivaTestBase {
 
     // Check Shiva gives approval to reward vault to spend staking tokens
     function test_shivaApproveRewardVault() public {
-        IERC20 stakingToken = IERC20(shiva.stakingToken());
         assertEq(shiva.stakingToken().allowance(address(shiva), address(rewardVault)), type(uint256).max);
     }
 
