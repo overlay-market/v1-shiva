@@ -3,10 +3,15 @@ pragma solidity 0.8.10;
 
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
+import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
 
 /// @title Utils
 /// @notice Utility functions for Overlay V1 to estimate prices and unwind positions
 library Utils {
+    using FixedPoint for uint256;
+    using FixedCast for uint16;
+
     // Slippage scale set to 10000 to allow for 2 decimal places e.g. 1% = 100; 0.80% = 80
     uint256 private constant SLIPPAGE_SCALE = 10000;
     uint256 internal constant ONE = 1e18;
@@ -91,5 +96,30 @@ library Utils {
                 );
             }
         }
+    }
+
+    /**
+     * @notice Calculates the notional remaining for a given position.
+     * @param ovMarket The overlay market contract instance.
+     * @param positionId Identifier of the position to unwind.
+     * @param owner Address of the position owner.
+     * @return notionalRemaining Notional remaining for the position.
+     */
+    function getNotionalRemaining(
+        IOverlayV1Market ovMarket,
+        uint256 positionId,
+        address owner
+    ) external view returns (uint256 notionalRemaining) {
+        (
+            uint96 notionalInitial_,
+            , // uint96 debtInitial_,
+            , // int24 midTick_,
+            , // int24 entryTick_,
+            , // bool isLong_,
+            , // bool liquidated_,
+            , // uint240 oiShares_,
+            uint16 fractionRemaining_
+        ) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        notionalRemaining = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
     }
 }

@@ -40,7 +40,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         vm.startPrank(alice);
         vm.expectRevert(IShiva.MarketNotValid.selector);
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, BASIC_SLIPPAGE));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, BASIC_SLIPPAGE));
     }
 
     // Build on behalf of should fail due to unauthorized factory
@@ -113,7 +113,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert("Shiva:lev<min");
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE - 1, priceLimit));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE - 1, priceLimit));
     }
 
     // Build fail not enough allowance
@@ -123,7 +123,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, priceLimit));
     }
 
     // Build fail enough allowance but not enough balance considering the trading fee
@@ -134,7 +134,7 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
         vm.expectRevert();
-        shiva.build(ShivaStructs.Build(ovMarket, true, ONE, ONE, priceLimit));
+        shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, true, ONE, ONE, priceLimit));
     }
 
     function test_build_pol_stake() public {
@@ -206,7 +206,7 @@ contract ShivaTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, !isLong);
         vm.startPrank(bob);
         vm.expectRevert(IShiva.NotPositionOwner.selector);
-        shiva.unwind(ShivaStructs.Unwind(ovMarket, posId, ONE, priceLimit));
+        shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, ONE, priceLimit));
     }
 
     // Emergency withdraw method tests
