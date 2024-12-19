@@ -16,7 +16,9 @@ contract ShivaV1 is Shiva {
         return "V1";
     }
 
-    function setMagicNumber(uint256 newMagicNumber) public {
+    function setMagicNumber(
+        uint256 newMagicNumber
+    ) public {
         magicNumber = newMagicNumber;
     }
 }
@@ -29,7 +31,9 @@ contract ShivaV2 is ShivaV1 {
         return "V2";
     }
 
-    function setMagicString(string memory newMagicString) public {
+    function setMagicString(
+        string memory newMagicString
+    ) public {
         magicString = newMagicString;
     }
 }
@@ -42,11 +46,13 @@ contract ImplementationV1Test is Test {
     address vaultFactory = Constants.getVaultFactoryAddress();
 
     function setUp() public {
-        vm.createSelectFork(vm.envString(TestConstants.getForkedNetworkRPC()), TestConstants.getForkBlock());
+        vm.createSelectFork(
+            vm.envString(TestConstants.getForkedNetworkRPC()), TestConstants.getForkBlock()
+        );
 
         // deploy logic contract
         shivaV1 = new ShivaV1();
-        
+
         /*Proxy initialize data*/
         string memory functionName = "initialize(address,address,address)";
         bytes memory data = abi.encodeWithSignature(functionName, token, state, vaultFactory);
@@ -58,9 +64,7 @@ contract ImplementationV1Test is Test {
     }
 
     function testInitialized() public {
-        (, bytes memory returnedData) = address(proxy).call(
-            abi.encodeWithSignature("ovToken()")
-        );
+        (, bytes memory returnedData) = address(proxy).call(abi.encodeWithSignature("ovToken()"));
         address ovToken = abi.decode(returnedData, (address));
 
         // ovToken should be this contract
@@ -78,26 +82,25 @@ contract ImplementationV2Test is Test {
     address rewardVault;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString(TestConstants.getForkedNetworkRPC()), TestConstants.getForkBlock());
+        vm.createSelectFork(
+            vm.envString(TestConstants.getForkedNetworkRPC()), TestConstants.getForkBlock()
+        );
 
         // deploy logic contract
         shivaV1 = new ShivaV1();
-        
+
         /*Proxy initialize data*/
         string memory functionName = "initialize(address,address,address)";
         bytes memory data = abi.encodeWithSignature(functionName, token, state, vaultFactory);
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
-        (, bytes memory returnedRewardVault) = address(proxy).call(
-            abi.encodeWithSignature("rewardVault()")
-        );
+        (, bytes memory returnedRewardVault) =
+            address(proxy).call(abi.encodeWithSignature("rewardVault()"));
         rewardVault = abi.decode(returnedRewardVault, (address));
 
         // set magic number via old impl contract for testing purposes
-        address(proxy).call(
-            abi.encodeWithSignature("setMagicNumber(uint256)", 42)
-        );
+        address(proxy).call(abi.encodeWithSignature("setMagicNumber(uint256)", 42));
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
         shivaV1.initialize(token, state, vaultFactory);
@@ -111,43 +114,32 @@ contract ImplementationV2Test is Test {
         vm.startPrank(address(0x123));
 
         vm.expectRevert(); // caller is not the owner
-        address(proxy).call(
-            abi.encodeWithSignature("upgradeTo(address)", address(shivaV2))
-        );
+        address(proxy).call(abi.encodeWithSignature("upgradeTo(address)", address(shivaV2)));
 
         vm.stopPrank();
         vm.startPrank(address(0x85f66DBe1ed470A091d338CFC7429AA871720283));
 
         // update proxy to new implementation contract
-        address(proxy).call(
-            abi.encodeWithSignature("upgradeTo(address)", address(shivaV2))
-        );
+        address(proxy).call(abi.encodeWithSignature("upgradeTo(address)", address(shivaV2)));
         vm.stopPrank();
 
-        (, bytes memory returnedNewRewardVault) = address(proxy).call(
-            abi.encodeWithSignature("rewardVault()")
-        );
+        (, bytes memory returnedNewRewardVault) =
+            address(proxy).call(abi.encodeWithSignature("rewardVault()"));
         address newRewardVault = abi.decode(returnedNewRewardVault, (address));
         assertEq(rewardVault, newRewardVault);
     }
 
     function testMagicNumber() public {
         // proxy points to implV2, but magic value set via impl should still be valid, since storage from proxy contract is read
-        (, bytes memory data) = address(proxy).call(
-            abi.encodeWithSignature("magicNumber()")
-        );
+        (, bytes memory data) = address(proxy).call(abi.encodeWithSignature("magicNumber()"));
         assertEq(abi.decode(data, (uint256)), 42);
     }
 
     function testMagicString() public {
-        address(proxy).call(
-            abi.encodeWithSignature("setMagicString(string)", "Test")
-        );
+        address(proxy).call(abi.encodeWithSignature("setMagicString(string)", "Test"));
 
         // magic string should be "Test"
-        (, bytes memory data) = address(proxy).call(
-            abi.encodeWithSignature("magicString()")
-        );
+        (, bytes memory data) = address(proxy).call(abi.encodeWithSignature("magicString()"));
         assertEq(abi.decode(data, (string)), "Test");
     }
 }

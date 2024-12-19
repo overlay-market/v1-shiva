@@ -4,6 +4,10 @@ pragma solidity 0.8.10;
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 
+/**
+ * @dev Library containing constants for the Bartio Berachain testnet.
+ * These addresses are used for tests that fork the Bartio Berachain network.
+ */
 library Constants {
     function getOVTokenAddress() external pure returns (address) {
         return 0x97576e088f0d05EF68cac2EEc63d017FE90952a0;
@@ -55,5 +59,9 @@ library Constants {
 
     function getDeployerAddress() external pure returns (address) {
         return 0x85f66DBe1ed470A091d338CFC7429AA871720283;
+    }
+
+    function getVaultFactoryAddress() external pure returns (address) {
+        return 0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B;
     }
 }
