@@ -154,8 +154,20 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
 
         // liquidate alice's position
         vm.startPrank(bob);
-        vm.expectRevert("Pausable: paused");
         ovMarket.liquidate(address(shiva), posId);
+        (
+            , //uint96 notionalInitial_,
+            , //uint96 debtInitial_,
+            , //int24 midTick_,
+            , //int24 entryTick_,
+            , //bool isLong_,
+            bool liquidated_,
+            , //uint240 oiShares_,
+            //uint16 fractionRemaining_
+        ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertTrue(liquidated_);
+        // rewards balance should be 0 after the position is liquidated
+        assertEq(rewardVault.balanceOf(alice), 0);
     }
 
     /**
