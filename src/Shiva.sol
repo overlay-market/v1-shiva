@@ -429,11 +429,11 @@ contract Shiva is
     /**
      * @notice Callback function for market liquidation
      * @param positionId The ID of the position to liquidate
-     * @dev Only callable when the contract is not paused and the market is valid
+     * @dev Only callable by a valid market
      */
     function overlayMarketLiquidateCallback(
         uint256 positionId
-    ) external whenNotPaused validMarket(IOverlayV1Market(msg.sender)) {
+    ) external validMarket(IOverlayV1Market(msg.sender)) {
         IOverlayV1Market market = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind

@@ -28,6 +28,15 @@ contract ShivaTest is Test, ShivaTestBase {
      */
 
     /**
+     * @notice Tests that the Shiva contract approves the reward vault to spend staking tokens
+     */
+    function test_shivaApproveRewardVault() public {
+        assertEq(
+            shiva.stakingToken().allowance(address(shiva), address(rewardVault)), type(uint256).max
+        );
+    }
+
+    /**
      * @notice Tests that adding an authorized factory works
      */
     function test_addAuthorizedFactory() public {
