@@ -34,6 +34,12 @@ contract ShivaTest is Test, ShivaTestBase {
         assertEq(
             shiva.stakingToken().allowance(address(shiva), address(rewardVault)), type(uint256).max
         );
+
+        vm.startPrank(alice);
+        buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+        assertEq(shiva.stakingToken().allowance(address(shiva), address(rewardVault)), type(uint256).max);
+        assertEq(shiva.stakingToken().balanceOf(address(rewardVault)), ONE);
     }
 
     /**
