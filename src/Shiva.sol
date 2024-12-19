@@ -351,7 +351,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
         emit ShivaEmergencyWithdraw(_owner, address(_market), msg.sender, _positionId);
     }
 
-    function overlayMarketLiquidateCallback(uint256 positionId) external whenNotPaused validMarket(IOverlayV1Market(msg.sender)) {
+    function overlayMarketLiquidateCallback(uint256 positionId) external validMarket(IOverlayV1Market(msg.sender)) {
         IOverlayV1Market market = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind
