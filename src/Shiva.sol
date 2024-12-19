@@ -115,6 +115,9 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
             .createRewardsVault(address(stakingToken));
 
         rewardVault = IBerachainRewardsVault(vaultAddress);
+
+        // Approve rewardVault to spend max amount of stakingToken
+        stakingToken.approve(address(rewardVault), type(uint256).max);
     }
 
     function addFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
@@ -386,9 +389,7 @@ contract Shiva is IShiva, Initializable, UUPSUpgradeable, EIP712Upgradeable, IOv
     ) internal {
         // Mint StakingTokens
         stakingToken.mint(address(this), _amount);
-
         // Stake tokens in RewardVault on behalf of user
-        stakingToken.approve(address(rewardVault), _amount);
         rewardVault.delegateStake(_owner, _amount);
 
         emit ShivaStake(_owner, _amount);
