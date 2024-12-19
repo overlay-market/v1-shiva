@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// Generate automatically by LLM - TODO review
+/**
+ * @title IFluxAggregator
+ * @notice Interface for the FluxAggregator contract
+ * @dev Generated using the LLM - TODO review
+ */
 interface IFluxAggregator {
     // Events
     event AvailableFundsUpdated(uint256 indexed amount);
