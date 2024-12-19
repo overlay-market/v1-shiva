@@ -9,9 +9,18 @@ import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
-import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "src/interfaces/berachain/IRewardVaults.sol";
+import {
+    IBerachainRewardsVault,
+    IBerachainRewardsVaultFactory
+} from "src/interfaces/berachain/IRewardVaults.sol";
 
-import {IOverlayV1Token, GOVERNOR_ROLE, PAUSER_ROLE, GUARDIAN_ROLE, MINTER_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {
+    IOverlayV1Token,
+    GOVERNOR_ROLE,
+    PAUSER_ROLE,
+    GUARDIAN_ROLE,
+    MINTER_ROLE
+} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
@@ -28,7 +37,7 @@ contract ShivaTestBase is Test {
 
     /// @notice Represents one unit in the system (1e18)
     uint256 constant ONE = 1e18;
-    
+
     /// @notice Basic slippage percentage (1%)
     uint16 constant BASIC_SLIPPAGE = 100;
 
@@ -36,8 +45,8 @@ contract ShivaTestBase is Test {
     uint32 constant BROKER_ID = 0;
 
     /**
-    * @notice Shiva test contracts
-    */
+     * @notice Shiva test contracts
+     */
     Shiva shiva;
     IOverlayV1Market ovMarket;
     IOverlayV1State ovState;
@@ -46,8 +55,8 @@ contract ShivaTestBase is Test {
     IBerachainRewardsVault rewardVault;
 
     /**
-    * @notice Test addresses
-    */
+     * @notice Test addresses
+     */
     address alice;
     address bob;
     address charlie;
@@ -57,8 +66,8 @@ contract ShivaTestBase is Test {
     address deployer = Constants.getDeployerAddress();
 
     /**
-    * @notice Test private keys
-    */
+     * @notice Test private keys
+     */
     uint256 alicePk = 0x123;
     uint256 bobPk = 0x456;
     uint256 charliePk = 0x789;
@@ -84,14 +93,15 @@ contract ShivaTestBase is Test {
         vm.stopPrank();
 
         // Set Vault Factory
-        IBerachainRewardsVaultFactory vaultFactory = IBerachainRewardsVaultFactory(
-            Constants.getVaultFactoryAddress()
-        );
+        IBerachainRewardsVaultFactory vaultFactory =
+            IBerachainRewardsVaultFactory(Constants.getVaultFactoryAddress());
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
         string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, address(ovToken), address(ovState), address(vaultFactory));
+        bytes memory data = abi.encodeWithSignature(
+            functionName, address(ovToken), address(ovState), address(vaultFactory)
+        );
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -151,13 +161,11 @@ contract ShivaTestBase is Test {
      * @param _ovToken The OverlayV1Token contract to be used by the factory.
      * @return factory_ The deployed OverlayV1Factory contract.
      */
-    function deployFactory(IOverlayV1Token _ovToken) public returns (OverlayV1Factory factory_) {
-        factory_ = new OverlayV1Factory(
-            address(_ovToken),
-            deployer,
-            Constants.getSequencer(),
-            1 hours
-        );
+    function deployFactory(
+        IOverlayV1Token _ovToken
+    ) public returns (OverlayV1Factory factory_) {
+        factory_ =
+            new OverlayV1Factory(address(_ovToken), deployer, Constants.getSequencer(), 1 hours);
 
         // Grant factory admin role so that it can grant minter + burner roles to markets
         _ovToken.grantRole(0x00, address(factory_)); // admin role = 0x00
@@ -176,7 +184,10 @@ contract ShivaTestBase is Test {
      * @param _feed The address of the feed to be used by the market.
      * @return ovMarket_ The deployed OverlayV1Market contract.
      */
-    function deployMarket(IOverlayV1Factory _factory, address _feed) public returns (IOverlayV1Market ovMarket_) {
+    function deployMarket(
+        IOverlayV1Factory _factory,
+        address _feed
+    ) public returns (IOverlayV1Market ovMarket_) {
         uint256[15] memory MARKET_PARAMS = [
             uint256(122000000000), // k
             500000000000000000, // lmbda
@@ -194,7 +205,9 @@ contract ShivaTestBase is Test {
             25000000000000, // priceDriftUpperLimit
             250 // averageBlockTime
         ];
-        ovMarket_ = IOverlayV1Market(_factory.deployMarket(Constants.getFeedFactory(), _feed, MARKET_PARAMS));
+        ovMarket_ = IOverlayV1Market(
+            _factory.deployMarket(Constants.getFeedFactory(), _feed, MARKET_PARAMS)
+        );
     }
 
     /**
@@ -202,7 +215,9 @@ contract ShivaTestBase is Test {
      * @param _factory The OverlayV1Factory contract to be used by the state.
      * @return ovState_ The deployed OverlayV1State contract.
      */
-    function deployPeriphery(IOverlayV1Factory _factory) public returns (IOverlayV1State ovState_) {
+    function deployPeriphery(
+        IOverlayV1Factory _factory
+    ) public returns (IOverlayV1State ovState_) {
         ovState_ = new OverlayV1State(_factory);
     }
 
@@ -266,10 +281,10 @@ contract ShivaTestBase is Test {
 
     /**
      * @dev Utility functions for the ShivaBase contract.
-     * 
-     * This section contains helper functions that assist with various 
-     * operations within the ShivaBase contract. These functions are 
-     * designed to be reusable and provide common functionality needed 
+     *
+     * This section contains helper functions that assist with various
+     * operations within the ShivaBase contract. These functions are
+     * designed to be reusable and provide common functionality needed
      * throughout the contract.
      */
 
@@ -289,7 +304,9 @@ contract ShivaTestBase is Test {
     ) public returns (uint256) {
         uint256 priceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
-        return shiva.build(ShivaStructs.Build(ovMarket, BROKER_ID, isLong, collateral, leverage, priceLimit));
+        return shiva.build(
+            ShivaStructs.Build(ovMarket, BROKER_ID, isLong, collateral, leverage, priceLimit)
+        );
     }
 
     /**
@@ -497,7 +514,9 @@ contract ShivaTestBase is Test {
         address owner
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, slippage, collateral, leverage, previousPositionId),
+            ShivaStructs.BuildSingle(
+                ovMarket, BROKER_ID, slippage, collateral, leverage, previousPositionId
+            ),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }

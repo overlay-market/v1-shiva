@@ -302,7 +302,7 @@ contract ShivaTest is Test, ShivaTestBase {
     }
 
     /**
-     * @notice Tests emergency withdrawing a position through Shiva fails due to the caller not 
+     * @notice Tests emergency withdrawing a position through Shiva fails due to the caller not
      * being the owner of the position
      */
     function test_emergencyWithdraw_notOwner() public {
@@ -383,10 +383,12 @@ contract ShivaTest is Test, ShivaTestBase {
             ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 10_000 * (ONE - fraction) / ONE);
 
-        assertEq(rewardVault.balanceOf(alice), (ONE -fraction).mulUp(notional));
+        assertEq(rewardVault.balanceOf(alice), (ONE - fraction).mulUp(notional));
 
         unwindPosition(posId, fraction, 1);
-        assertEq(rewardVault.balanceOf(alice), (ONE -fraction).mulUp(ONE -fraction).mulUp(notional));
+        assertEq(
+            rewardVault.balanceOf(alice), (ONE - fraction).mulUp(ONE - fraction).mulUp(notional)
+        );
 
         unwindPosition(posId, ONE, 1);
         assertEq(rewardVault.balanceOf(alice), 0);
@@ -397,14 +399,18 @@ contract ShivaTest is Test, ShivaTestBase {
      * @param collateral The initial collateral amount.
      * @param leverage The leverage applied to the position.
      * @param fraction The fraction of the position to unwind.
-     * 
+     *
      * This test verifies:
      * - The initial staking of the notional amount of receipt tokens on behalf of the user.
      * - The correct unwinding of the position and the corresponding updates to the user's reward balance.
      * - The remaining fraction of the position after each unwind operation.
      * - The final state where the position is fully unwound and the reward balance is zero.
      */
-    function testFuzz_partial_unwind_pol_unstake(uint256 collateral, uint256 leverage, uint256 fraction) public {
+    function testFuzz_partial_unwind_pol_unstake(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 fraction
+    ) public {
         collateral =
             bound(collateral, ovMarket.params(uint256(Risk.Parameters.MinCollateral)), 500e18);
         leverage = bound(leverage, 1e18, ovMarket.params(uint256(Risk.Parameters.CapLeverage)));
@@ -429,7 +435,12 @@ contract ShivaTest is Test, ShivaTestBase {
             ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 10_000 * (ONE - roundedFraction) / ONE, "fraction remaining");
 
-        assertApproxEqAbs(rewardVault.balanceOf(alice), (ONE - roundedFraction).mulDown(notional), 1, "reward balance, 1st unwind");
+        assertApproxEqAbs(
+            rewardVault.balanceOf(alice),
+            (ONE - roundedFraction).mulDown(notional),
+            1,
+            "reward balance, 1st unwind"
+        );
 
         {
             (
@@ -452,14 +463,28 @@ contract ShivaTest is Test, ShivaTestBase {
                 oiShares_,
                 fractionRemaining_
             );
-            assertEq(rewardVault.balanceOf(alice), Position.notionalInitial(positionInfo, ONE), "1st unwind: reward balance != remaining intial notional");
+            assertEq(
+                rewardVault.balanceOf(alice),
+                Position.notionalInitial(positionInfo, ONE),
+                "1st unwind: reward balance != remaining intial notional"
+            );
         }
 
         unwindPosition(posId, fraction, 1);
         // estimated notional remaining on position
-        assertApproxEqRel(rewardVault.balanceOf(alice), (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional), 1e16, "reward balance, 2nd unwind");
+        assertApproxEqRel(
+            rewardVault.balanceOf(alice),
+            (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional),
+            1e16,
+            "reward balance, 2nd unwind"
+        );
         // staked balance should be lower than or equal the estimated notional remaining on position (+1 for rounding error)
-        assertLeDecimal(rewardVault.balanceOf(alice), (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional) + 1, 1e18, "reward balance, 2nd unwind LE");
+        assertLeDecimal(
+            rewardVault.balanceOf(alice),
+            (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional) + 1,
+            1e18,
+            "reward balance, 2nd unwind LE"
+        );
 
         {
             (
@@ -482,7 +507,11 @@ contract ShivaTest is Test, ShivaTestBase {
                 oiShares_,
                 fractionRemaining_
             );
-            assertEq(rewardVault.balanceOf(alice), Position.notionalInitial(positionInfo, ONE), "2nd unwind: reward balance != remaining intial notional");
+            assertEq(
+                rewardVault.balanceOf(alice),
+                Position.notionalInitial(positionInfo, ONE),
+                "2nd unwind: reward balance != remaining intial notional"
+            );
         }
 
         unwindPosition(posId, ONE, 1);
@@ -494,7 +523,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
     /**
      * @dev Group of tests for the buildSingle method
-    */
+     */
 
     /**
      * @notice Tests building a position through Shiva and then building another one using buildSingle
@@ -621,7 +650,7 @@ contract ShivaTest is Test, ShivaTestBase {
      * @notice Tests rewards value are zero after emergency withdrawing a position
      */
     function test_pol_withdraw_emergencyWithdraw_function() public {
-         // Alice builds a position through Shiva
+        // Alice builds a position through Shiva
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
         assertEq(rewardVault.balanceOf(alice), ONE);
