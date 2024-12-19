@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
+/**
+ * @title MarketImpersonator
+ * @notice Contract to impersonate a market liquidation
+ */
 contract MarketImpersonator {
     uint96 notionalInitial;
     uint16 fractionRemaining;
