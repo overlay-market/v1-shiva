@@ -17,8 +17,9 @@ import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {IBerachainRewardsVault, IBerachainRewardsVaultFactory} from "../src/interfaces/berachain/IRewardVaults.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {BaseSetup} from "@chimera/BaseSetup.sol";
 
-contract ShivaTestBase is Test {
+contract ShivaTestBase is Test, BaseSetup {
     using ECDSA for bytes32;
 
     uint256 constant ONE = 1e18;
@@ -42,7 +43,7 @@ contract ShivaTestBase is Test {
     uint256 bobPk = 0x456;
     uint256 charliePk = 0x789;
 
-    function setUp() public virtual {
+    function setup() internal virtual override {
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
 
         ovToken = IOverlayV1Token(Constants.getOVTokenAddress());
@@ -74,6 +75,10 @@ contract ShivaTestBase is Test {
         labelAddresses();
         setInitialBalancesAndApprovals();
         addAuthorizedFactory();
+    }
+
+    function setUp() public virtual {
+        setup();
     }
 
     function labelAddresses() internal {
