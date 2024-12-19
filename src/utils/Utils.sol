@@ -6,13 +6,15 @@ import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.so
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
 
-/// @title Utils
-/// @notice Utility functions for Overlay V1 to estimate prices and unwind positions
+/**
+ * @title Utils
+ * @notice Utility functions for Overlay V1 to estimate prices and unwind positions
+ */
 library Utils {
     using FixedPoint for uint256;
     using FixedCast for uint16;
 
-    // Slippage scale set to 10000 to allow for 2 decimal places e.g. 1% = 100; 0.80% = 80
+    /// @dev Slippage scale set to 10000 to allow for 2 decimal places e.g. 1% = 100; 0.80% = 80
     uint256 private constant SLIPPAGE_SCALE = 10000;
     uint256 internal constant ONE = 1e18;
 

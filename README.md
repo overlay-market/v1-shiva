@@ -1,34 +1,126 @@
-# Shiva (v1)
+# Shiva Contract Documentation
 
-Shiva is an intermediary smart contract designed to facilitate interactions between users and multiple market smart contracts in Overlay ecosystem. 
-Inspired by the multifaceted deity Shiva, this protocol aims to efficiently manage ownership of positions within various markets, offering additional functionalities such as building and unwinding positions on behalf of users.
+## Overview
+
+The `Shiva` contract is designed for interacting with the OverlayV1 protocol. It provides a streamlined way to build, unwind, and manage positions in OverlayV1 markets. It also integrates staking mechanisms through the BerachainRewardsVault, enabling users to stake their collateral to earn rewards.
+
+This contract is:
+
+- **Upgradeable:** Uses the UUPS pattern for contract upgrades.
+- **Pausable:** Includes functionality to pause and unpause critical operations.
+- **EIP-712 Compliant:** Supports signature-based actions for on-behalf-of operations.
+
+---
 
 ## Features
 
-- **Ownership Management**: Shiva manages ownership of positions within different markets, allowing seamless interaction between users and market smart contracts.
-- **Building on Behalf Of**: Users can delegate others to build and unwinding positions on their behalf, enabling efficient portfolio management strategies.
+### Core Functionalities
 
-## How It Works
+1. **Position Management**
+   - **Build Positions:** Allows users to build leveraged positions in OverlayV1 markets.
+   - **Unwind Positions:** Enables users to unwind (partially or fully) their positions.
+   - **Emergency Withdrawal:** Allows users to withdraw their collateral in case of market shutdown.
 
-Shiva Protocol acts as an intermediary between users and market smart contracts. 
-When a user interacts with Shiva, they can set up allowances to enable other addresses to act on their behalf. 
-This feature allows users to delegate the authority to build or unwind positions without directly interacting with the market smart contracts.
+2. **Staking and Rewards**
+   - Stake collateral to earn rewards through the Berachain Rewards Vault.
+   - Unstake collateral when positions are unwound.
 
-When a transaction is initiated through Shiva, the ownership of the position in the market smart contract will be attributed to Shiva. 
-However, within Shiva's system, the ownership will be associated with the user who initiated the transaction (or the user the sender acted on behalf of). 
-This mechanism ensures that users maintain control over their positions while leveraging the functionalities provided by Shiva.
+3. **On-Behalf-Of Operations**
+   - Users can authorize others to build or unwind positions on their behalf using EIP-712 signatures.
 
-To ensure security and prevent unauthorized actions, Shiva implements robust security mechanisms. 
-These mechanisms verify that the allowed sender is executing transactions that align with the user's intentions. 
-By enforcing strict authentication protocols (like signed messages from the user), Shiva mitigates the risk of malicious actors intervening in the transaction process, safeguarding users' assets and interests.
+4. **Factory and Market Management**
+   - Add or remove authorized factories dynamically.
+   - Validate markets through authorized factories.
 
-## Limitations
+---
 
-While Shiva Protocol offers powerful features for managing positions within supported markets, it comes with certain limitations:
+## Contract Details
 
-- **Position Restriction**: Shiva can only handle positions that were initially built through its interface. If a user creates a position directly on the market smart contract without utilizing Shiva, the protocol cannot delegate the unwinding of that position. Users should ensure that all position interactions are conducted through Shiva to leverage its full capabilities effectively.
+### Key Contracts and Libraries
 
-## Contributing
+- **`IOverlayV1Market`:** Interface for OverlayV1 markets.
+- **`ShivaStructs`:** Library defining the data structures for `build`, `unwind`, and on-behalf-of operations.
+- **`IBerachainRewardsVault`:** Interface for interacting with the Berachain Rewards Vault.
 
-We welcome contributions from the community to improve and enhance Shiva - and Overlay. To contribute, please fork this repository, make your changes, and submit a pull request. 
-For major changes, please open an issue first to discuss the proposed modifications.
+### Key Variables
+
+- **`ovToken`:** The OverlayV1 Token contract.
+- **`ovState`:** The OverlayV1 State contract.
+- **`stakingToken`:** The token used for staking in the rewards vault.
+- **`authorizedFactories`:** A list of authorized factories for market validation.
+- **`positionOwners`:** Tracks ownership of positions in markets.
+
+### Events
+
+- **`ShivaBuild`:** Emitted when a position is built.
+- **`ShivaUnwind`:** Emitted when a position is unwound.
+- **`ShivaEmergencyWithdraw`:** Emitted when an emergency withdrawal occurs.
+- **`ShivaStake`:** Emitted when tokens are staked.
+- **`ShivaUnstake`:** Emitted when tokens are unstaked.
+- **`FactoryAdded`:** Emitted when a factory is added.
+- **`FactoryRemoved`:** Emitted when a factory is removed.
+- **`MarketValidated`:** Emitted when a market is dynamically validated.
+
+---
+
+## Examples
+
+### Build a Position
+
+```solidity
+ShivaStructs.Build memory buildParams = ShivaStructs.Build({
+    ovMarket: IOverlayV1Market(0xMarketAddress),
+    brokerId: 0,
+    isLong: true,
+    collateral: 1e18, // 1 OVL
+    leverage: 5e18, // 5x leverage
+    priceLimit: 0
+});
+shiva.build(buildParams);
+```
+
+### Unwind a Position
+
+```solidity
+ShivaStructs.Unwind memory unwindParams = ShivaStructs.Unwind({
+    ovMarket: IOverlayV1Market(0xMarketAddress),
+    brokerId: 0,
+    positionId: 1,
+    fraction: 5e17, // Unwind 50% of the position
+    priceLimit: 0
+});
+shiva.unwind(unwindParams);
+```
+
+### Build a Position on Behalf of a User
+  
+```solidity
+ShivaStructs.Build memory buildParams = ShivaStructs.Build({
+    ovMarket: IOverlayV1Market(0xMarketAddress),
+    brokerId: 0,
+    isLong: true,
+    collateral: 1e18,
+    leverage: 5e18,
+    priceLimit: 0
+});
+ShivaStructs.OnBehalfOf memory onBehalfOfParams = ShivaStructs.OnBehalfOf({
+    owner: 0xUserAddress,
+    deadline: uint48(block.timestamp + 1 hours),
+    signature: 0xSignatureBytes
+});
+shiva.build(buildParams, onBehalfOfParams);
+```
+
+### Security Features
+
+- **Ownership Checks**: Ensures only position owners can unwind or withdraw positions.
+- **Signature Verification**: Uses EIP-712 for secure on-behalf-of operations.
+- **Market Validation**: Markets must be authorized through factories or explicitly validated.
+
+### Development Notes
+
+#### Dependencies
+
+- OpenZeppelin contracts for cryptographic utilities and upgradeable functionality.
+- OverlayV1 contracts for market interaction.
+- Berachain contracts for staking and rewards.
