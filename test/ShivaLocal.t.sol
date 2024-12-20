@@ -163,7 +163,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
             , //bool isLong_,
             bool liquidated_,
             , //uint240 oiShares_,
-            //uint16 fractionRemaining_
+                //uint16 fractionRemaining_
         ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertTrue(liquidated_);
         // rewards balance should be 0 after the position is liquidated

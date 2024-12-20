@@ -84,12 +84,12 @@ library Utils {
         if (!isLong) {
             unchecked {
                 return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
-                        / SLIPPAGE_SCALE;
+                    / SLIPPAGE_SCALE;
             }
         } else {
             unchecked {
                 return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
-                        / SLIPPAGE_SCALE;
+                    / SLIPPAGE_SCALE;
             }
         }
     }
@@ -126,11 +126,11 @@ library Utils {
      * @param owner Address of the position owner.
      * @return isLong Boolean indicating if the position is long.
      */
-    function getPositionSide(IOverlayV1Market ovMarket, uint256 positionId, address owner)
-        external
-        view
-        returns (bool isLong)
-    {
+    function getPositionSide(
+        IOverlayV1Market ovMarket,
+        uint256 positionId,
+        address owner
+    ) external view returns (bool isLong) {
         (,,,, isLong,,,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
     }
 }

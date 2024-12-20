@@ -523,7 +523,8 @@ contract Shiva is
         uint256 totalCollateral = _params.collateral + ovToken.balanceOf(address(this));
         uint256 tradingFee = _getTradingFee(_params.ovMarket, totalCollateral, _params.leverage);
 
-        bool isLong = Utils.getPositionSide(_params.ovMarket, _params.previousPositionId, address(this));
+        bool isLong =
+            Utils.getPositionSide(_params.ovMarket, _params.previousPositionId, address(this));
 
         // transfer from OVL from user to this contract
         ovToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);

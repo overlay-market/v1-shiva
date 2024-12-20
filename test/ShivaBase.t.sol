@@ -343,7 +343,9 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 buildPriceLimit
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, unwindPriceLimit, buildPriceLimit, collateral, leverage, posId1)
+            ShivaStructs.BuildSingle(
+                ovMarket, BROKER_ID, unwindPriceLimit, buildPriceLimit, collateral, leverage, posId1
+            )
         );
     }
 

@@ -620,7 +620,9 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 buildPriceLimit =
             Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
-        buildSinglePosition(numberWithDecimals, numberWithDecimals, posId1, unwindPriceLimit, buildPriceLimit);
+        buildSinglePosition(
+            numberWithDecimals, numberWithDecimals, posId1, unwindPriceLimit, buildPriceLimit
+        );
         assertOVTokenBalanceIsZero(address(shiva));
 
         vm.startPrank(bob);
@@ -631,10 +633,11 @@ contract ShivaTest is Test, ShivaTestBase {
 
         unwindPriceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId3, address(shiva), ONE, BASIC_SLIPPAGE);
-        buildPriceLimit =
-            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+        buildPriceLimit = Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
-        buildSinglePosition(numberWithDecimals, numberWithDecimals, posId3, unwindPriceLimit, buildPriceLimit);
+        buildSinglePosition(
+            numberWithDecimals, numberWithDecimals, posId3, unwindPriceLimit, buildPriceLimit
+        );
         assertOVTokenBalanceIsZero(address(shiva));
     }
 
