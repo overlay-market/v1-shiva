@@ -12,4 +12,17 @@ abstract contract Properties is BaseSetup, ShivaTestBase, Asserts {
             result = true;
         }
     }
+
+    function property_staking_balance_matches_notional() public view returns (bool result) {
+        uint256 totalNotionalRemaining = _calculateTotalNotionalRemaining();
+        uint256 stakingBalance = shiva.stakingToken().balanceOf(address(shiva.rewardVault()));
+
+        if (stakingBalance == totalNotionalRemaining) {
+            result = true;
+        }
+    }
+
+    // Helper function to calculate total notional remaining
+    // We are override this method in TargetFunctions to get access to positionIds
+    function _calculateTotalNotionalRemaining() internal view virtual returns (uint256) {}
 }

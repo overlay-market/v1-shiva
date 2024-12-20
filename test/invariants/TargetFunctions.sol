@@ -2,13 +2,17 @@ pragma solidity ^0.8.10;
 
 import {Properties} from "./Properties.sol";
 import {BaseTargetFunctions} from "@chimera/BaseTargetFunctions.sol";
+import {Utils} from "../../src/utils/Utils.sol";
 
 abstract contract TargetFunctions is BaseTargetFunctions, Properties {
+    uint256[] public positionIds;
+
     function handler_build_and_unwind_position(
         uint256 collateral,
         uint256 leverage,
         uint16 slippage,
-        uint8 isLong
+        uint8 isLong,
+        uint256 unwindFracture
     ) external {
         collateral = between(collateral, 0, 1e21);
         leverage = between(leverage, ONE, 1e20);
@@ -19,6 +23,48 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
 
         vm.startPrank(alice);
         uint256 posId = buildPosition(collateral, leverage, slippage, isLong != 0);
+        positionIds.push(posId);
+
+        // Randomly unwind some positions
+        uint256 randomValue = slippage;
+        if (positionIds.length > 0 && randomValue % 2 == 0) {
+            uint256 randomPosIndex = between(randomValue, 0, positionIds.length - 1);
+            uint256 randomFraction = between(unwindFracture, 0.1e18, ONE);
+            unwindPosition(positionIds[randomPosIndex], randomFraction, slippage);
+        }
         vm.stopPrank();
+    }
+
+    function handler_build_single_position(
+        uint256 collateral,
+        uint256 leverage,
+        uint16 slippage
+    ) external {
+        if (positionIds.length == 0) return;
+
+        collateral = between(collateral, 0, 1e21);
+        leverage = between(leverage, ONE, 1e20);
+        slippage = uint16(between(uint256(slippage), 0, 10000));
+
+        uint256 randomValue = slippage;
+        uint256 randomPosIndex = between(randomValue, 0, positionIds.length - 1);
+        uint256 previousPosId = positionIds[randomPosIndex];
+
+        deal(address(ovToken), alice, collateral * 2);
+        vm.startPrank(alice);
+        uint256 newPosId = buildSinglePosition(collateral, leverage, previousPosId, slippage);
+
+        positionIds[randomPosIndex] = newPosId;
+        vm.stopPrank();
+    }
+
+    function _calculateTotalNotionalRemaining() internal view override returns (uint256) {
+        uint256 totalNotional;
+
+        for (uint256 i = 0; i < positionIds.length; i++) {
+            totalNotional += Utils.getNotionalRemaining(ovMarket, positionIds[i], address(shiva));
+        }
+
+        return totalNotional;
     }
 }

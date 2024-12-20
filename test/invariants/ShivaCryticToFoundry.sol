@@ -18,8 +18,9 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
         targetContract(address(this));
 
         // handler functions to target during invariant tests
-        bytes4[] memory selectors = new bytes4[](1);
+        bytes4[] memory selectors = new bytes4[](2);
         selectors[0] = this.handler_build_and_unwind_position.selector;
+        selectors[1] = this.handler_build_single_position.selector;
 
         targetSelector(FuzzSelector({addr: address(this), selectors: selectors}));
     }
@@ -29,5 +30,9 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
 
     // function invariant_shiva_dont_have_ov() public {
     //     assertTrue(property_shiva_dont_have_ov());
+    // }
+
+    // function invariant_staking_balance_matches_notional() public {
+    //     assertTrue(property_staking_balance_matches_notional());
     // }
 }
