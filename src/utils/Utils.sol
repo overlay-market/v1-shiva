@@ -72,7 +72,7 @@ library Utils {
         address owner,
         uint256 fraction,
         uint16 slippage
-    ) external view returns (uint256, bool) {
+    ) external view returns (uint256) {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>10000");
 
         // Fetch open interest shares for the position
@@ -83,19 +83,13 @@ library Utils {
         // Calculate adjusted unwind price based on slippage
         if (!isLong) {
             unchecked {
-                return (
-                    ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
-                        / SLIPPAGE_SCALE,
-                    isLong
-                );
+                return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
+                        / SLIPPAGE_SCALE;
             }
         } else {
             unchecked {
-                return (
-                    ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
-                        / SLIPPAGE_SCALE,
-                    isLong
-                );
+                return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
+                        / SLIPPAGE_SCALE;
             }
         }
     }
@@ -123,5 +117,20 @@ library Utils {
             uint16 fractionRemaining_
         ) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
         notionalRemaining = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
+    }
+
+    /**
+     * @notice Fetches the position side (long or short) for a given position.
+     * @param ovMarket The overlay market contract instance.
+     * @param positionId Identifier of the position.
+     * @param owner Address of the position owner.
+     * @return isLong Boolean indicating if the position is long.
+     */
+    function getPositionSide(IOverlayV1Market ovMarket, uint256 positionId, address owner)
+        external
+        view
+        returns (bool isLong)
+    {
+        (,,,, isLong,,,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
     }
 }
