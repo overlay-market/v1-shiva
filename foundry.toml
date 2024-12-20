@@ -9,6 +9,11 @@ extra_output = ["storageLayout"]
 ffi = true
 ast = true
 
+[invariant]
+runs = 10
+depth = 100
+fail_on_revert = false
+
 [fmt]
 multiline_func_header="params_first"
 line_length=100

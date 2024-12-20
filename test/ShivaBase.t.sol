@@ -4,6 +4,7 @@ pragma solidity <=0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {BaseSetup} from "@chimera/BaseSetup.sol";
 
 import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
@@ -32,7 +33,7 @@ import {OverlayV1State} from "v1-periphery/contracts/OverlayV1State.sol";
  * @title ShivaTestBase
  * @dev Base contract for Shiva tests, inherits from the Test contract.
  */
-contract ShivaTestBase is Test {
+contract ShivaTestBase is Test, BaseSetup {
     using ECDSA for bytes32;
 
     /// @notice Represents one unit in the system (1e18)
@@ -72,10 +73,7 @@ contract ShivaTestBase is Test {
     uint256 bobPk = 0x456;
     uint256 charliePk = 0x789;
 
-    /**
-     * @dev Sets up the initial state for the ShivaBase test contract.
-     */
-    function setUp() public virtual {
+    function setup() internal virtual override {
         // Creates a fork of the blockchain using the specified RPC and block number
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
 
@@ -119,6 +117,13 @@ contract ShivaTestBase is Test {
         labelAddresses();
         setInitialBalancesAndApprovals();
         addAuthorizedFactory();
+    }
+
+    /**
+     * @dev Sets up the initial state for the ShivaBase test contract.
+     */
+    function setUp() public virtual {
+        setup();
     }
 
     /**
