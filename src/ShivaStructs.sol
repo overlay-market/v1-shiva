@@ -30,7 +30,8 @@ library ShivaStructs {
      * @notice Represents the parameters to build a position through the Shiva contract
      * @param ovMarket The market interface
      * @param brokerId The ID of the broker; 0 in most cases
-     * @param slippage The allowed slippage
+     * @param unwindPriceLimit The price limit for the unwind
+     * @param buildPriceLimit The price limit for the position
      * @param collateral The amount of collateral
      * @param leverage The leverage applied
      * @param previousPositionId The ID of the previous position
@@ -38,7 +39,8 @@ library ShivaStructs {
     struct BuildSingle {
         IOverlayV1Market ovMarket;
         uint32 brokerId;
-        uint16 slippage;
+        uint256 unwindPriceLimit;
+        uint256 buildPriceLimit;
         uint256 collateral;
         uint256 leverage;
         uint256 previousPositionId;

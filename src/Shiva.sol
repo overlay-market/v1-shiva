@@ -284,6 +284,7 @@ contract Shiva is
     ) external whenNotPaused onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
         _unwindLogic(params, msg.sender);
     }
+
     /**
      * @notice Builds and keeps a single position in the ovMarket for a user
      * @dev If the user already has a position in the ovMarket, it will be unwound before building
@@ -292,7 +293,6 @@ contract Shiva is
      * ShivaStructs.BuildSingle struct
      * @return The ID of the newly created position
      */
-
     function buildSingle(
         ShivaStructs.BuildSingle calldata params
     )
@@ -512,20 +512,18 @@ contract Shiva is
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
-        (uint256 unwindPriceLimit, bool isLong) = Utils.getUnwindPrice(
-            ovState,
+        _onUnwindPosition(
             _params.ovMarket,
             _params.previousPositionId,
-            address(this),
             ONE,
-            _params.slippage
-        );
-        _onUnwindPosition(
-            _params.ovMarket, _params.previousPositionId, ONE, unwindPriceLimit, _params.brokerId
+            _params.unwindPriceLimit,
+            _params.brokerId
         );
 
         uint256 totalCollateral = _params.collateral + ovToken.balanceOf(address(this));
         uint256 tradingFee = _getTradingFee(_params.ovMarket, totalCollateral, _params.leverage);
+
+        bool isLong = Utils.getPositionSide(_params.ovMarket, _params.previousPositionId, address(this));
 
         // transfer from OVL from user to this contract
         ovToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
@@ -533,18 +531,13 @@ contract Shiva is
         // Approve the ovMarket contract to spend OV
         _approveMarket(_params.ovMarket);
 
-        // Build new position
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovState, _params.ovMarket, totalCollateral, _params.leverage, _params.slippage, isLong
-        );
-
         positionId = _onBuildPosition(
             _owner,
             _params.ovMarket,
             totalCollateral,
             _params.leverage,
             isLong,
-            buildPriceLimit,
+            _params.buildPriceLimit,
             _params.brokerId
         );
     }
