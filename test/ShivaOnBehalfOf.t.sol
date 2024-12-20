@@ -166,7 +166,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         // Alice unwinds her position through a signed message
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        (uint256 priceLimit,) =
+        uint256 priceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
@@ -192,7 +192,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         // Alice unwinds her position through a signed message
         uint48 deadline = uint48(block.timestamp - 1 hours);
-        (uint256 priceLimit,) =
+        uint256 priceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
@@ -216,7 +216,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         // Alice unwinds her position through a signed message
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        (uint256 priceLimit,) =
+        uint256 priceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
@@ -240,7 +240,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         // Alice unwinds her position through a signed message
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        (uint256 priceLimit,) =
+        uint256 priceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
@@ -266,7 +266,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         // Alice unwinds her position through a signed message
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        (uint256 priceLimit,) =
+        uint256 priceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
@@ -297,10 +297,15 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         bytes memory signature = getSignature(digest, alicePk);
 
+        uint256 unwindPriceLimit =
+            Utils.getUnwindPrice(ovState, ovMarket, posId1, address(shiva), ONE, BASIC_SLIPPAGE);
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovState, ovMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
         // execute `buildSingleOnBehalfOf` with `automator`
         vm.prank(automator);
         uint256 posId2 = buildSinglePositionOnBehalfOf(
-            ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice
+            ONE, ONE, posId1, unwindPriceLimit, buildPriceLimit, deadline, signature, alice
         );
 
         // the first position is successfully unwound
@@ -333,7 +338,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         vm.expectRevert(IShiva.ExpiredDeadline.selector);
         vm.prank(automator);
-        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, ONE, ONE, deadline, signature, alice);
     }
 
     /**
@@ -354,7 +359,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
-        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, ONE, ONE, deadline, signature, alice);
     }
 
     /**
@@ -377,7 +382,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
         // the position is attempted to be built on behalf of Alice
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
-        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, ONE, ONE, deadline, signature, alice);
     }
 
     /**
@@ -400,6 +405,6 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         vm.prank(automator);
         vm.expectRevert("Pausable: paused");
-        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, BASIC_SLIPPAGE, deadline, signature, alice);
+        buildSinglePositionOnBehalfOf(ONE, ONE, posId1, ONE, ONE, deadline, signature, alice);
     }
 }

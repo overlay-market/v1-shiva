@@ -147,7 +147,7 @@ contract ShivaTestBase is Test, BaseSetup {
     function setInitialBalancesAndApprovals() internal {
         // Deal tokens and set approvals
         deal(address(ovToken), alice, 1000e18);
-        deal(address(ovToken), bob, 1000e18);
+        deal(address(ovToken), bob, 100000e18);
         approveToken(alice);
         approveToken(bob);
     }
@@ -321,7 +321,7 @@ contract ShivaTestBase is Test, BaseSetup {
      * @param slippage The acceptable slippage for the unwind.
      */
     function unwindPosition(uint256 posId, uint256 fraction, uint16 slippage) public {
-        (uint256 priceLimit,) =
+        uint256 priceLimit =
             Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
         shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, fraction, priceLimit));
     }
@@ -331,17 +331,21 @@ contract ShivaTestBase is Test, BaseSetup {
      * @param collateral The amount of collateral to be used.
      * @param leverage The leverage to be applied.
      * @param posId1 The ID of the first position.
-     * @param slippage The acceptable slippage for the position.
+     * @param unwindPriceLimit The price limit for the unwind.
+     * @param buildPriceLimit The price limit for the position.
      * @return The ID of the newly created position.
      */
     function buildSinglePosition(
         uint256 collateral,
         uint256 leverage,
         uint256 posId1,
-        uint16 slippage
+        uint256 unwindPriceLimit,
+        uint256 buildPriceLimit
     ) public returns (uint256) {
         return shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovMarket, BROKER_ID, slippage, collateral, leverage, posId1)
+            ShivaStructs.BuildSingle(
+                ovMarket, BROKER_ID, unwindPriceLimit, buildPriceLimit, collateral, leverage, posId1
+            )
         );
     }
 
@@ -503,7 +507,8 @@ contract ShivaTestBase is Test, BaseSetup {
      * @param collateral The amount of collateral to be used.
      * @param leverage The leverage to be applied.
      * @param previousPositionId The ID of the previous position.
-     * @param slippage The acceptable slippage for the position.
+     * @param unwindPriceLimit The price limit for the unwind.
+     * @param buildPriceLimit The price limit for the position.
      * @param deadline The deadline for the transaction.
      * @param signature The signature of the owner authorizing the transaction.
      * @param owner The address of the owner on whose behalf the position is being built.
@@ -513,14 +518,21 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 collateral,
         uint256 leverage,
         uint256 previousPositionId,
-        uint16 slippage,
+        uint256 unwindPriceLimit,
+        uint256 buildPriceLimit,
         uint48 deadline,
         bytes memory signature,
         address owner
     ) public returns (uint256) {
         return shiva.buildSingle(
             ShivaStructs.BuildSingle(
-                ovMarket, BROKER_ID, slippage, collateral, leverage, previousPositionId
+                ovMarket,
+                BROKER_ID,
+                unwindPriceLimit,
+                buildPriceLimit,
+                collateral,
+                leverage,
+                previousPositionId
             ),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
