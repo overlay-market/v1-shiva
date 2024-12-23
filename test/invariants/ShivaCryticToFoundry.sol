@@ -18,9 +18,14 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
         targetContract(address(this));
 
         // handler functions to target during invariant tests
-        bytes4[] memory selectors = new bytes4[](2);
+        bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = this.handler_build_and_unwind_position.selector;
         selectors[1] = this.handler_build_single_position.selector;
+        selectors[2] = this.handler_liquidate_position.selector;
+        selectors[3] = this.handler_emergency_withdraw.selector;
+        selectors[4] = this.handler_pause_unpause.selector;
+        selectors[5] = this.handler_add_remove_factory.selector;
+        selectors[6] = this.handler_build_with_signature.selector;
 
         targetSelector(FuzzSelector({addr: address(this), selectors: selectors}));
     }
