@@ -121,9 +121,7 @@ interface IShiva {
      * @param params Parameters to build the position.
      * @return positionId Unique ID of the built position.
      */
-    function build(
-        ShivaStructs.Build calldata params
-    ) external returns (uint256 positionId);
+    function build(ShivaStructs.Build calldata params) external returns (uint256 positionId);
 
     /**
      * @notice Builds a new position on behalf of an owner.
@@ -141,9 +139,9 @@ interface IShiva {
      * @param params Parameters to build the position.
      * @return positionId Unique ID of the built position.
      */
-    function buildSingle(
-        ShivaStructs.BuildSingle calldata params
-    ) external returns (uint256 positionId);
+    function buildSingle(ShivaStructs.BuildSingle calldata params)
+        external
+        returns (uint256 positionId);
 
     /**
      * @notice Builds a new position with a single transaction on behalf of an owner.
@@ -160,9 +158,7 @@ interface IShiva {
      * @notice Unwinds a position.
      * @param params Parameters to unwind the position.
      */
-    function unwind(
-        ShivaStructs.Unwind calldata params
-    ) external;
+    function unwind(ShivaStructs.Unwind calldata params) external;
 
     /**
      * @notice Unwinds a position on behalf of an owner.
