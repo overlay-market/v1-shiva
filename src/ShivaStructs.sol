@@ -10,7 +10,7 @@ import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.so
 library ShivaStructs {
     /**
      * @notice Represents the parameters to build a position through the Shiva contract
-     * @param ovMarket The market interface
+     * @param ovlMarket The market interface
      * @param brokerId The ID of the broker; 0 in most cases
      * @param isLong Indicates if the position is long
      * @param collateral The amount of collateral
@@ -18,7 +18,7 @@ library ShivaStructs {
      * @param priceLimit The price limit for the position
      */
     struct Build {
-        IOverlayV1Market ovMarket;
+        IOverlayV1Market ovlMarket;
         uint32 brokerId;
         bool isLong;
         uint256 collateral;
@@ -28,7 +28,7 @@ library ShivaStructs {
 
     /**
      * @notice Represents the parameters to build a position through the Shiva contract
-     * @param ovMarket The market interface
+     * @param ovlMarket The market interface
      * @param brokerId The ID of the broker; 0 in most cases
      * @param unwindPriceLimit The price limit for the unwind
      * @param buildPriceLimit The price limit for the position
@@ -37,7 +37,7 @@ library ShivaStructs {
      * @param previousPositionId The ID of the previous position
      */
     struct BuildSingle {
-        IOverlayV1Market ovMarket;
+        IOverlayV1Market ovlMarket;
         uint32 brokerId;
         uint256 unwindPriceLimit;
         uint256 buildPriceLimit;
@@ -48,14 +48,14 @@ library ShivaStructs {
 
     /**
      * @notice Represents the parameters to unwind a position through the Shiva contract
-     * @param ovMarket The market interface
+     * @param ovlMarket The market interface
      * @param brokerId The ID of the broker; 0 in most cases
      * @param positionId The ID of the position to unwind
      * @param fraction The fraction of the position to unwind
      * @param priceLimit The price limit for the unwind
      */
     struct Unwind {
-        IOverlayV1Market ovMarket;
+        IOverlayV1Market ovlMarket;
         uint32 brokerId;
         uint256 positionId;
         uint256 fraction;

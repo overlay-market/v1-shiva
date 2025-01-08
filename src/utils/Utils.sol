@@ -20,8 +20,8 @@ library Utils {
 
     /**
      * @notice Calculates the estimated price with slippage for a given market position.
-     * @param ovState The overlay state contract instance.
-     * @param ovMarket The overlay market contract instance.
+     * @param ovlState The overlay state contract instance.
+     * @param ovlMarket The overlay market contract instance.
      * @param collateral Amount of collateral used.
      * @param leverage Multiplier for the position leverage.
      * @param slippage Acceptable slippage, expressed in percentage (0 - 100) with 2 decimal places.
@@ -29,8 +29,8 @@ library Utils {
      * @return Estimated price after applying slippage.
      */
     function getEstimatedPrice(
-        IOverlayV1State ovState,
-        IOverlayV1Market ovMarket,
+        IOverlayV1State ovlState,
+        IOverlayV1Market ovlMarket,
         uint256 collateral,
         uint256 leverage,
         uint16 slippage,
@@ -38,18 +38,18 @@ library Utils {
     ) external view returns (uint256) {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>10000");
 
-        uint256 oiEstimated = ovState.oiEstimate(ovMarket, collateral, leverage, isLong);
-        uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, oiEstimated);
+        uint256 oiEstimated = ovlState.oiEstimate(ovlMarket, collateral, leverage, isLong);
+        uint256 fractionOfCapOi = ovlState.fractionOfCapOi(ovlMarket, oiEstimated);
 
         // Calculate adjusted price based on slippage
         if (isLong) {
             unchecked {
-                return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
+                return ovlState.ask(ovlMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
                     / SLIPPAGE_SCALE;
             }
         } else {
             unchecked {
-                return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
+                return ovlState.bid(ovlMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
                     / SLIPPAGE_SCALE;
             }
         }
@@ -57,8 +57,8 @@ library Utils {
 
     /**
      * @notice Calculates the unwind price for a given fraction of an open position.
-     * @param ovState The overlay state contract instance.
-     * @param ovMarket The overlay market contract instance.
+     * @param ovlState The overlay state contract instance.
+     * @param ovlMarket The overlay market contract instance.
      * @param positionId Identifier of the position to unwind.
      * @param owner Address of the position owner.
      * @param fraction Fraction of the position to unwind (ONE represents 100%).
@@ -66,8 +66,8 @@ library Utils {
      * @return Unwind price after applying slippage.
      */
     function getUnwindPrice(
-        IOverlayV1State ovState,
-        IOverlayV1Market ovMarket,
+        IOverlayV1State ovlState,
+        IOverlayV1Market ovlMarket,
         uint256 positionId,
         address owner,
         uint256 fraction,
@@ -76,19 +76,19 @@ library Utils {
         require(slippage <= SLIPPAGE_SCALE, "Shiva:slp>10000");
 
         // Fetch open interest shares for the position
-        (,,,, bool isLong,,,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
-        uint256 currentOi = ovState.oi(ovMarket, owner, positionId);
-        uint256 fractionOfCapOi = ovState.fractionOfCapOi(ovMarket, currentOi * fraction / ONE);
+        (,,,, bool isLong,,,) = ovlMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        uint256 currentOi = ovlState.oi(ovlMarket, owner, positionId);
+        uint256 fractionOfCapOi = ovlState.fractionOfCapOi(ovlMarket, currentOi * fraction / ONE);
 
         // Calculate adjusted unwind price based on slippage
         if (!isLong) {
             unchecked {
-                return ovState.ask(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
+                return ovlState.ask(ovlMarket, fractionOfCapOi) * (SLIPPAGE_SCALE + slippage)
                     / SLIPPAGE_SCALE;
             }
         } else {
             unchecked {
-                return ovState.bid(ovMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
+                return ovlState.bid(ovlMarket, fractionOfCapOi) * (SLIPPAGE_SCALE - slippage)
                     / SLIPPAGE_SCALE;
             }
         }
@@ -96,13 +96,13 @@ library Utils {
 
     /**
      * @notice Calculates the notional remaining for a given position.
-     * @param ovMarket The overlay market contract instance.
+     * @param ovlMarket The overlay market contract instance.
      * @param positionId Identifier of the position to unwind.
      * @param owner Address of the position owner.
      * @return notionalRemaining Notional remaining for the position.
      */
     function getNotionalRemaining(
-        IOverlayV1Market ovMarket,
+        IOverlayV1Market ovlMarket,
         uint256 positionId,
         address owner
     ) external view returns (uint256 notionalRemaining) {
@@ -115,22 +115,22 @@ library Utils {
             , // bool liquidated_,
             , // uint240 oiShares_,
             uint16 fractionRemaining_
-        ) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        ) = ovlMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
         notionalRemaining = uint256(notionalInitial_).mulUp(fractionRemaining_.toUint256Fixed());
     }
 
     /**
      * @notice Fetches the position side (long or short) for a given position.
-     * @param ovMarket The overlay market contract instance.
+     * @param ovlMarket The overlay market contract instance.
      * @param positionId Identifier of the position.
      * @param owner Address of the position owner.
      * @return isLong Boolean indicating if the position is long.
      */
     function getPositionSide(
-        IOverlayV1Market ovMarket,
+        IOverlayV1Market ovlMarket,
         uint256 positionId,
         address owner
     ) external view returns (bool isLong) {
-        (,,,, isLong,,,) = ovMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+        (,,,, isLong,,,) = ovlMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
     }
 }

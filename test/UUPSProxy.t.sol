@@ -16,9 +16,7 @@ contract ShivaV1 is Shiva {
         return "V1";
     }
 
-    function setMagicNumber(
-        uint256 newMagicNumber
-    ) public {
+    function setMagicNumber(uint256 newMagicNumber) public {
         magicNumber = newMagicNumber;
     }
 }
@@ -31,9 +29,7 @@ contract ShivaV2 is ShivaV1 {
         return "V2";
     }
 
-    function setMagicString(
-        string memory newMagicString
-    ) public {
+    function setMagicString(string memory newMagicString) public {
         magicString = newMagicString;
     }
 }
@@ -41,8 +37,8 @@ contract ShivaV2 is ShivaV1 {
 contract ImplementationV1Test is Test {
     ShivaV1 shivaV1;
     ERC1967Proxy proxy;
-    address token = Constants.getOVTokenAddress();
-    address state = Constants.getOVStateAddress();
+    address token = Constants.getOVLTokenAddress();
+    address state = Constants.getOVLStateAddress();
     address vaultFactory = Constants.getVaultFactoryAddress();
 
     function setUp() public {
@@ -64,11 +60,11 @@ contract ImplementationV1Test is Test {
     }
 
     function testInitialized() public {
-        (, bytes memory returnedData) = address(proxy).call(abi.encodeWithSignature("ovToken()"));
-        address ovToken = abi.decode(returnedData, (address));
+        (, bytes memory returnedData) = address(proxy).call(abi.encodeWithSignature("ovlToken()"));
+        address ovlToken = abi.decode(returnedData, (address));
 
-        // ovToken should be this contract
-        assertEq(ovToken, Constants.getOVTokenAddress());
+        // ovlToken should be this contract
+        assertEq(ovlToken, Constants.getOVLTokenAddress());
     }
 }
 
@@ -76,8 +72,8 @@ contract ImplementationV2Test is Test {
     ShivaV1 shivaV1;
     ShivaV2 shivaV2;
     ERC1967Proxy proxy;
-    address token = Constants.getOVTokenAddress();
-    address state = Constants.getOVStateAddress();
+    address token = Constants.getOVLTokenAddress();
+    address state = Constants.getOVLStateAddress();
     address vaultFactory = Constants.getVaultFactoryAddress();
     address rewardVault;
 

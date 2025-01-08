@@ -9,7 +9,7 @@ import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.so
  * These addresses are used for tests that fork the Bartio Berachain network.
  */
 library Constants {
-    function getOVTokenAddress() external pure returns (address) {
+    function getOVLTokenAddress() external pure returns (address) {
         return 0x97576e088f0d05EF68cac2EEc63d017FE90952a0;
     }
 
@@ -17,7 +17,7 @@ library Constants {
         return 0x09E8641df1E963d0bB1267e51579fC2B4E3E60cd;
     }
 
-    function getOVStateAddress() external pure returns (address) {
+    function getOVLStateAddress() external pure returns (address) {
         return 0x4f69Dfb24958fCf69b70BcA73c3E74F2c82BB405;
     }
 

@@ -40,10 +40,10 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
 
         // deploy the contracts
         vm.startPrank(deployer);
-        ovToken = deployToken();
-        ovFactory = deployFactory(ovToken);
-        ovMarket = deployMarket(ovFactory, Constants.getEthdFeed());
-        ovState = deployPeriphery(ovFactory);
+        ovlToken = deployToken();
+        ovlFactory = deployFactory(ovlToken);
+        ovlMarket = deployMarket(ovlFactory, Constants.getEthdFeed());
+        ovlState = deployPeriphery(ovlFactory);
 
         // Set Vault Factory
         IBerachainRewardsVaultFactory vaultFactory =
@@ -53,7 +53,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         Shiva shivaImplementation = new Shiva();
         string memory functionName = "initialize(address,address,address)";
         bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovToken), address(ovState), address(vaultFactory)
+            functionName, address(ovlToken), address(ovlState), address(vaultFactory)
         );
 
         // Set up shiva contract and reward vault
@@ -61,7 +61,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         rewardVault = shiva.rewardVault();
 
         // configure liquidation callback role
-        ovToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
+        ovlToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
         vm.stopPrank();
 
         // Set up test addresses
@@ -94,7 +94,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         // submit a new round with price = prevPrice / 2 to make the posId liquidatable
         {
             IFluxAggregator aggregator =
-                IFluxAggregator(IOverlayV1ChainlinkFeed(ovMarket.feed()).aggregator());
+                IFluxAggregator(IOverlayV1ChainlinkFeed(ovlMarket.feed()).aggregator());
             address oracle = aggregator.getOracles()[0];
             int256 halfPrice = aggregator.latestAnswer() / 2;
 
@@ -104,11 +104,11 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
             aggregator.submit(aggregator.latestRound() + 1, halfPrice);
             vm.warp(block.timestamp + 60 * 60);
         }
-        assertTrue(ovState.liquidatable(ovMarket, address(shiva), posId));
+        assertTrue(ovlState.liquidatable(ovlMarket, address(shiva), posId));
 
         // liquidate alice's position
         vm.startPrank(bob);
-        ovMarket.liquidate(address(shiva), posId);
+        ovlMarket.liquidate(address(shiva), posId);
         (
             , //uint96 notionalInitial_,
             , //uint96 debtInitial_,
@@ -118,7 +118,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
             bool liquidated_,
             , //uint240 oiShares_,
                 //uint16 fractionRemaining_
-        ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        ) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertTrue(liquidated_);
 
         // rewards balance should be 0 after the position is liquidated
@@ -137,7 +137,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         // submit a new round with price = prevPrice / 2 to make the posId liquidatable
         {
             IFluxAggregator aggregator =
-                IFluxAggregator(IOverlayV1ChainlinkFeed(ovMarket.feed()).aggregator());
+                IFluxAggregator(IOverlayV1ChainlinkFeed(ovlMarket.feed()).aggregator());
             address oracle = aggregator.getOracles()[0];
             int256 halfPrice = aggregator.latestAnswer() / 2;
 
@@ -147,14 +147,14 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
             aggregator.submit(aggregator.latestRound() + 1, halfPrice);
             vm.warp(block.timestamp + 60 * 60);
         }
-        assertTrue(ovState.liquidatable(ovMarket, address(shiva), posId));
+        assertTrue(ovlState.liquidatable(ovlMarket, address(shiva), posId));
         vm.stopPrank();
 
         pauseShiva();
 
         // liquidate alice's position
         vm.startPrank(bob);
-        ovMarket.liquidate(address(shiva), posId);
+        ovlMarket.liquidate(address(shiva), posId);
         (
             , //uint96 notionalInitial_,
             , //uint96 debtInitial_,
@@ -164,7 +164,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
             bool liquidated_,
             , //uint240 oiShares_,
                 //uint16 fractionRemaining_
-        ) = ovMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        ) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertTrue(liquidated_);
         // rewards balance should be 0 after the position is liquidated
         assertEq(rewardVault.balanceOf(alice), 0);
