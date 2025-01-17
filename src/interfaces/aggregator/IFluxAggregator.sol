@@ -50,15 +50,9 @@ interface IFluxAggregator {
     function latestAnswer() external view returns (int256);
     function latestTimestamp() external view returns (uint256);
     function latestRound() external view returns (uint256);
-    function getAnswer(
-        uint256 _roundId
-    ) external view returns (int256);
-    function getTimestamp(
-        uint256 _roundId
-    ) external view returns (uint256);
-    function getRoundData(
-        uint80 _roundId
-    )
+    function getAnswer(uint256 _roundId) external view returns (int256);
+    function getTimestamp(uint256 _roundId) external view returns (uint256);
+    function getRoundData(uint80 _roundId)
         external
         view
         returns (
@@ -78,18 +72,12 @@ interface IFluxAggregator {
             uint256 updatedAt,
             uint80 answeredInRound
         );
-    function withdrawablePayment(
-        address _oracle
-    ) external view returns (uint256);
+    function withdrawablePayment(address _oracle) external view returns (uint256);
     function withdrawPayment(address _oracle, address _recipient, uint256 _amount) external;
     function withdrawFunds(address _recipient, uint256 _amount) external;
-    function getAdmin(
-        address _oracle
-    ) external view returns (address);
+    function getAdmin(address _oracle) external view returns (address);
     function transferAdmin(address _oracle, address _newAdmin) external;
-    function acceptAdmin(
-        address _oracle
-    ) external;
+    function acceptAdmin(address _oracle) external;
     function requestNewRound() external returns (uint80);
     function setRequesterPermissions(
         address _requester,
@@ -113,7 +101,5 @@ interface IFluxAggregator {
             uint8 _oracleCount,
             uint128 _paymentAmount
         );
-    function setValidator(
-        address _newValidator
-    ) external;
+    function setValidator(address _newValidator) external;
 }

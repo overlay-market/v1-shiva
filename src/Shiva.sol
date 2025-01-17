@@ -63,7 +63,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the build on behalf of parameters
      */
     bytes32 public constant BUILD_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "BuildOnBehalfOfParams(IOverlayV1Market ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 priceLimit,uint256 nonce)"
+        "BuildOnBehalfOfParams(IOverlayV1Market ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 priceLimit,uint256 nonce)"
     );
 
     /**
@@ -71,7 +71,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the unwind on behalf of parameters
      */
     bytes32 public constant UNWIND_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "UnwindOnBehalfOfParams(IOverlayV1Market ovMarket,uint48 deadline,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 nonce)"
+        "UnwindOnBehalfOfParams(IOverlayV1Market ovlMarket,uint48 deadline,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 nonce)"
     );
 
     /**
@@ -79,14 +79,14 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the build single on behalf of parameters
      */
     bytes32 public constant BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "BuildSingleOnBehalfOf(address ovMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
+        "BuildSingleOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
     );
 
     /// @notice The Overlay V1 Token contract
-    IOverlayV1Token public ovToken;
+    IOverlayV1Token public ovlToken;
 
     /// @notice The Overlay V1 State contract
-    IOverlayV1State public ovState;
+    IOverlayV1State public ovlState;
 
     /// @notice The StakingToken contract
     StakingToken public stakingToken;
@@ -104,7 +104,7 @@ contract Shiva is
     /// @notice Mapping from market and position ID to the address of the position owner
     mapping(IOverlayV1Market => mapping(uint256 => address)) public positionOwners;
 
-    /// @notice Mapping to check if a market is allowed to spend OV on behalf of this contract
+    /// @notice Mapping to check if a market is allowed to spend OVL on behalf of this contract
     mapping(IOverlayV1Market => bool) public marketAllowance;
 
     /// @notice Mapping from performer address to nonce
@@ -121,10 +121,8 @@ contract Shiva is
      * @notice Ensures the caller has the governor role
      * @param _msgSender The address of the caller
      */
-    modifier onlyGovernor(
-        address _msgSender
-    ) {
-        require(ovToken.hasRole(GOVERNOR_ROLE, _msgSender), "Shiva: !governor");
+    modifier onlyGovernor(address _msgSender) {
+        require(ovlToken.hasRole(GOVERNOR_ROLE, _msgSender), "Shiva: !governor");
         _;
     }
 
@@ -132,21 +130,19 @@ contract Shiva is
      * @notice Ensures the caller has the pauser role
      * @param _msgSender The address of the caller
      */
-    modifier onlyPauser(
-        address _msgSender
-    ) {
-        require(ovToken.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
+    modifier onlyPauser(address _msgSender) {
+        require(ovlToken.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
         _;
     }
 
     /**
      * @notice Ensures the caller is the owner of the specified position
-     * @param ovMarket The market of the position
+     * @param ovlMarket The market of the position
      * @param positionId The ID of the position
      * @param owner The address of the owner
      */
-    modifier onlyPositionOwner(IOverlayV1Market ovMarket, uint256 positionId, address owner) {
-        if (positionOwners[ovMarket][positionId] != owner) {
+    modifier onlyPositionOwner(IOverlayV1Market ovlMarket, uint256 positionId, address owner) {
+        if (positionOwners[ovlMarket][positionId] != owner) {
             revert NotPositionOwner();
         }
         _;
@@ -156,9 +152,7 @@ contract Shiva is
      * @notice Ensures the deadline has not expired
      * @param deadline The deadline timestamp
      */
-    modifier validDeadline(
-        uint48 deadline
-    ) {
+    modifier validDeadline(uint48 deadline) {
         if (block.timestamp > deadline) {
             revert ExpiredDeadline();
         }
@@ -169,9 +163,7 @@ contract Shiva is
      * @notice Ensures the market is valid
      * @param market The market to check
      */
-    modifier validMarket(
-        IOverlayV1Market market
-    ) {
+    modifier validMarket(IOverlayV1Market market) {
         if (!_checkIsValidMarket(address(market))) {
             revert MarketNotValid();
         }
@@ -185,20 +177,20 @@ contract Shiva is
 
     /**
      * @notice Initializes the Shiva contract
-     * @param _ovToken The address of the Overlay V1 Token contract
-     * @param _ovState The address of the Overlay V1 State contract
+     * @param _ovlToken The address of the Overlay V1 Token contract
+     * @param _ovlState The address of the Overlay V1 State contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
      */
     function initialize(
-        address _ovToken,
-        address _ovState,
+        address _ovlToken,
+        address _ovlState,
         address _vaultFactory
     ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
-        ovToken = IOverlayV1Token(_ovToken);
-        ovState = IOverlayV1State(_ovState);
+        ovlToken = IOverlayV1Token(_ovlToken);
+        ovlState = IOverlayV1State(_ovlState);
 
         // Create new staking token
         stakingToken = new StakingToken();
@@ -217,9 +209,7 @@ contract Shiva is
      * @notice Adds a new factory to the list of authorized factories
      * @param _factory The address of the factory to add
      */
-    function addFactory(
-        IOverlayV1Factory _factory
-    ) external onlyGovernor(msg.sender) {
+    function addFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
         authorizedFactories.push(_factory);
 
         emit FactoryAdded(address(_factory));
@@ -229,9 +219,7 @@ contract Shiva is
      * @notice Removes a factory from the list of authorized factories
      * @param _factory The address of the factory to remove
      */
-    function removeFactory(
-        IOverlayV1Factory _factory
-    ) external onlyGovernor(msg.sender) {
+    function removeFactory(IOverlayV1Factory _factory) external onlyGovernor(msg.sender) {
         for (uint256 i = 0; i < authorizedFactories.length; i++) {
             if (authorizedFactories[i] == _factory) {
                 authorizedFactories[i] = authorizedFactories[authorizedFactories.length - 1];
@@ -260,15 +248,18 @@ contract Shiva is
     }
 
     /**
-     * @notice Builds a position in the ovMarket for a user
+     * @notice Builds a position in the ovlMarket for a user
      * @param params The parameters for building the position based on the
      * ShivaStructs.Build struct
      * @return The ID of the newly created position
      * @dev Only callable when the contract is not paused and the market is valid
      */
-    function build(
-        ShivaStructs.Build calldata params
-    ) external whenNotPaused validMarket(params.ovMarket) returns (uint256) {
+    function build(ShivaStructs.Build calldata params)
+        external
+        whenNotPaused
+        validMarket(params.ovlMarket)
+        returns (uint256)
+    {
         return _buildLogic(params, msg.sender);
     }
 
@@ -279,26 +270,26 @@ contract Shiva is
      * @dev Only callable when the contract is not paused and the caller is the owner of
      * the position
      */
-    function unwind(
-        ShivaStructs.Unwind calldata params
-    ) external whenNotPaused onlyPositionOwner(params.ovMarket, params.positionId, msg.sender) {
+    function unwind(ShivaStructs.Unwind calldata params)
+        external
+        whenNotPaused
+        onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
+    {
         _unwindLogic(params, msg.sender);
     }
 
     /**
-     * @notice Builds and keeps a single position in the ovMarket for a user
-     * @dev If the user already has a position in the ovMarket, it will be unwound before building
+     * @notice Builds and keeps a single position in the ovlMarket for a user
+     * @dev If the user already has a position in the ovlMarket, it will be unwound before building
      * a new one and previous collateral and new collateral will be used to build the new position
      * @param params The parameters for building the single position based on the
      * ShivaStructs.BuildSingle struct
      * @return The ID of the newly created position
      */
-    function buildSingle(
-        ShivaStructs.BuildSingle calldata params
-    )
+    function buildSingle(ShivaStructs.BuildSingle calldata params)
         external
         whenNotPaused
-        onlyPositionOwner(params.ovMarket, params.previousPositionId, msg.sender)
+        onlyPositionOwner(params.ovlMarket, params.previousPositionId, msg.sender)
         returns (uint256)
     {
         return _buildSingleLogic(params, msg.sender);
@@ -332,7 +323,7 @@ contract Shiva is
     )
         external
         whenNotPaused
-        validMarket(params.ovMarket)
+        validMarket(params.ovlMarket)
         validDeadline(onBehalfOf.deadline)
         returns (uint256)
     {
@@ -340,7 +331,7 @@ contract Shiva is
         bytes32 structHash = keccak256(
             abi.encode(
                 BUILD_ON_BEHALF_OF_TYPEHASH,
-                params.ovMarket,
+                params.ovlMarket,
                 onBehalfOf.deadline,
                 params.collateral,
                 params.leverage,
@@ -370,13 +361,13 @@ contract Shiva is
         external
         whenNotPaused
         validDeadline(onBehalfOf.deadline)
-        onlyPositionOwner(params.ovMarket, params.positionId, onBehalfOf.owner)
+        onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
                 UNWIND_ON_BEHALF_OF_TYPEHASH,
-                params.ovMarket,
+                params.ovlMarket,
                 onBehalfOf.deadline,
                 params.positionId,
                 params.fraction,
@@ -406,14 +397,14 @@ contract Shiva is
         external
         whenNotPaused
         validDeadline(onBehalfOf.deadline)
-        onlyPositionOwner(params.ovMarket, params.previousPositionId, onBehalfOf.owner)
+        onlyPositionOwner(params.ovlMarket, params.previousPositionId, onBehalfOf.owner)
         returns (uint256)
     {
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
                 BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
-                params.ovMarket,
+                params.ovlMarket,
                 onBehalfOf.deadline,
                 params.collateral,
                 params.leverage,
@@ -431,9 +422,10 @@ contract Shiva is
      * @param positionId The ID of the position to liquidate
      * @dev Only callable by a valid market
      */
-    function overlayMarketLiquidateCallback(
-        uint256 positionId
-    ) external validMarket(IOverlayV1Market(msg.sender)) {
+    function overlayMarketLiquidateCallback(uint256 positionId)
+        external
+        validMarket(IOverlayV1Market(msg.sender))
+    {
         IOverlayV1Market market = IOverlayV1Market(msg.sender);
 
         // Calculate remaining of initialNotional of the position to unwind
@@ -447,9 +439,7 @@ contract Shiva is
      * @param structHash The hash of the struct
      * @return The digest of the typed data hash
      */
-    function getDigest(
-        bytes32 structHash
-    ) external view returns (bytes32) {
+    function getDigest(bytes32 structHash) external view returns (bytes32) {
         return _hashTypedDataV4(structHash);
     }
 
@@ -464,17 +454,17 @@ contract Shiva is
         address _owner
     ) internal returns (uint256) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
-        uint256 tradingFee = _getTradingFee(_params.ovMarket, _params.collateral, _params.leverage);
+        uint256 tradingFee = _getTradingFee(_params.ovlMarket, _params.collateral, _params.leverage);
 
-        // Transfer OV from user to this contract
-        ovToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
+        // Transfer OVL from user to this contract
+        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
 
-        // Approve the ovMarket contract to spend OV
-        _approveMarket(_params.ovMarket);
+        // Approve the ovlMarket contract to spend OVL
+        _approveMarket(_params.ovlMarket);
 
         return _onBuildPosition(
             _owner,
-            _params.ovMarket,
+            _params.ovlMarket,
             _params.collateral,
             _params.leverage,
             _params.isLong,
@@ -490,14 +480,14 @@ contract Shiva is
      */
     function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
         _onUnwindPosition(
-            _params.ovMarket,
+            _params.ovlMarket,
             _params.positionId,
             _params.fraction,
             _params.priceLimit,
             _params.brokerId
         );
 
-        ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
+        ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
     }
 
     /**
@@ -513,28 +503,28 @@ contract Shiva is
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
         _onUnwindPosition(
-            _params.ovMarket,
+            _params.ovlMarket,
             _params.previousPositionId,
             ONE,
             _params.unwindPriceLimit,
             _params.brokerId
         );
 
-        uint256 totalCollateral = _params.collateral + ovToken.balanceOf(address(this));
-        uint256 tradingFee = _getTradingFee(_params.ovMarket, totalCollateral, _params.leverage);
+        uint256 totalCollateral = _params.collateral + ovlToken.balanceOf(address(this));
+        uint256 tradingFee = _getTradingFee(_params.ovlMarket, totalCollateral, _params.leverage);
 
         bool isLong =
-            Utils.getPositionSide(_params.ovMarket, _params.previousPositionId, address(this));
+            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
         // transfer from OVL from user to this contract
-        ovToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
+        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
 
-        // Approve the ovMarket contract to spend OV
-        _approveMarket(_params.ovMarket);
+        // Approve the ovlMarket contract to spend OVL
+        _approveMarket(_params.ovlMarket);
 
         positionId = _onBuildPosition(
             _owner,
-            _params.ovMarket,
+            _params.ovlMarket,
             totalCollateral,
             _params.leverage,
             isLong,
@@ -562,7 +552,7 @@ contract Shiva is
 
         _onUnstake(positionOwners[_market][_positionId], intialNotionalFraction);
 
-        ovToken.transfer(_owner, ovToken.balanceOf(address(this)));
+        ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
 
         emit ShivaEmergencyWithdraw(_owner, address(_market), msg.sender, _positionId);
     }
@@ -678,30 +668,28 @@ contract Shiva is
 
     /**
      * @notice Calculates the trading fee for a position
-     * @param _ovMarket The market interface
+     * @param _ovlMarket The market interface
      * @param _collateral The amount of collateral
      * @param _leverage The leverage applied
      * @return The trading fee
      */
     function _getTradingFee(
-        IOverlayV1Market _ovMarket,
+        IOverlayV1Market _ovlMarket,
         uint256 _collateral,
         uint256 _leverage
     ) internal view returns (uint256) {
         uint256 notional = _collateral.mulUp(_leverage);
-        return notional.mulUp(_ovMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
+        return notional.mulUp(_ovlMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
     }
 
     /**
-     * @notice Approves the market contract to spend OV tokens
-     * @param _ovMarket The market interface
+     * @notice Approves the market contract to spend OVL tokens
+     * @param _ovlMarket The market interface
      */
-    function _approveMarket(
-        IOverlayV1Market _ovMarket
-    ) internal {
-        if (!marketAllowance[_ovMarket]) {
-            ovToken.approve(address(_ovMarket), type(uint256).max);
-            marketAllowance[_ovMarket] = true;
+    function _approveMarket(IOverlayV1Market _ovlMarket) internal {
+        if (!marketAllowance[_ovlMarket]) {
+            ovlToken.approve(address(_ovlMarket), type(uint256).max);
+            marketAllowance[_ovlMarket] = true;
         }
     }
 
@@ -732,9 +720,7 @@ contract Shiva is
      * @param _market The address of the market
      * @return True if the market is valid, false otherwise
      */
-    function _checkIsValidMarket(
-        address _market
-    ) internal returns (bool) {
+    function _checkIsValidMarket(address _market) internal returns (bool) {
         if (validMarkets[_market]) {
             return true;
         }
@@ -755,7 +741,5 @@ contract Shiva is
      * @notice Authorizes an upgrade to the contract
      * @dev Only callable by the governor
      */
-    function _authorizeUpgrade(
-        address
-    ) internal override onlyGovernor(msg.sender) {}
+    function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
 }

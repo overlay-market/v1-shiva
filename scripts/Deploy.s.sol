@@ -17,7 +17,7 @@ abstract contract DeployScript is Script {
     //     address transparentProxy = Upgrades.deployTransparentProxy(
     //         "Shiva.sol",
     //         msg.sender,
-    //         abi.encodeCall(Shiva.initialize, Constants.getOVTokenAddress(), Constants.getOVStateAddress(), Constants.getVaultFactoryAddress())
+    //         abi.encodeCall(Shiva.initialize, Constants.getOVLTokenAddress(), Constants.getOVLStateAddress(), Constants.getVaultFactoryAddress())
     //     );
     // }
 
@@ -26,7 +26,12 @@ abstract contract DeployScript is Script {
 
         /*Proxy initialize data*/
         string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, Constants.getOVTokenAddress(), Constants.getOVStateAddress(), Constants.getVaultFactoryAddress());
+        bytes memory data = abi.encodeWithSignature(
+            functionName,
+            Constants.getOVLTokenAddress(),
+            Constants.getOVLStateAddress(),
+            Constants.getVaultFactoryAddress()
+        );
 
         vm.startBroadcast(deployerPrivateKey);
         Shiva impl = new Shiva();

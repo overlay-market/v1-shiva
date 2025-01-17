@@ -49,10 +49,10 @@ contract ShivaTestBase is Test, BaseSetup {
      * @notice Shiva test contracts
      */
     Shiva shiva;
-    IOverlayV1Market ovMarket;
-    IOverlayV1State ovState;
-    OverlayV1Factory ovFactory;
-    IOverlayV1Token ovToken;
+    IOverlayV1Market ovlMarket;
+    IOverlayV1State ovlState;
+    OverlayV1Factory ovlFactory;
+    IOverlayV1Token ovlToken;
     IBerachainRewardsVault rewardVault;
 
     /**
@@ -73,21 +73,26 @@ contract ShivaTestBase is Test, BaseSetup {
     uint256 bobPk = 0x456;
     uint256 charliePk = 0x789;
 
+    /**
+     * @notice OVL token symbol differs between fork instance and local
+     */
+    bool isOV = true;
+
     function setup() internal virtual override {
         // Creates a fork of the blockchain using the specified RPC and block number
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
 
         // Initialize contract instances
-        ovToken = IOverlayV1Token(Constants.getOVTokenAddress());
-        ovMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
-        ovState = IOverlayV1State(Constants.getOVStateAddress());
-        ovFactory = OverlayV1Factory(ovMarket.factory());
+        ovlToken = IOverlayV1Token(Constants.getOVLTokenAddress());
+        ovlMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
+        ovlState = IOverlayV1State(Constants.getOVLStateAddress());
+        ovlFactory = OverlayV1Factory(ovlMarket.factory());
 
         // Grant roles to specified addresses
         vm.startPrank(Constants.getDeployerAddress());
-        ovToken.grantRole(GOVERNOR_ROLE, Constants.getGovernorAddress());
-        ovToken.grantRole(PAUSER_ROLE, Constants.getPauserAddress());
-        ovToken.grantRole(GUARDIAN_ROLE, Constants.getGuardianAddress());
+        ovlToken.grantRole(GOVERNOR_ROLE, Constants.getGovernorAddress());
+        ovlToken.grantRole(PAUSER_ROLE, Constants.getPauserAddress());
+        ovlToken.grantRole(GUARDIAN_ROLE, Constants.getGuardianAddress());
         vm.stopPrank();
 
         // Set Vault Factory
@@ -98,7 +103,7 @@ contract ShivaTestBase is Test, BaseSetup {
         Shiva shivaImplementation = new Shiva();
         string memory functionName = "initialize(address,address,address)";
         bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovToken), address(ovState), address(vaultFactory)
+            functionName, address(ovlToken), address(ovlState), address(vaultFactory)
         );
 
         // Set up shiva contract and reward vault
@@ -136,9 +141,9 @@ contract ShivaTestBase is Test, BaseSetup {
         vm.label(automator, "Automator");
         vm.label(guardian, "Guardian");
         vm.label(pauser, "Pauser");
-        vm.label(address(ovMarket), "Market");
+        vm.label(address(ovlMarket), "Market");
         vm.label(address(shiva), "Shiva");
-        vm.label(address(ovToken), "OVL");
+        vm.label(address(ovlToken), "OVL");
     }
 
     /**
@@ -146,39 +151,37 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function setInitialBalancesAndApprovals() internal {
         // Deal tokens and set approvals
-        deal(address(ovToken), alice, 1000e18);
-        deal(address(ovToken), bob, 100000e18);
+        deal(address(ovlToken), alice, 1000e18);
+        deal(address(ovlToken), bob, 100000e18);
         approveToken(alice);
         approveToken(bob);
     }
 
     /**
      * @dev Deploys a new OverlayV1Token contract and returns its interface.
-     * @return ovToken_ The deployed OverlayV1Token contract.
+     * @return ovlToken_ The deployed OverlayV1Token contract.
      */
-    function deployToken() public returns (IOverlayV1Token ovToken_) {
-        OverlayV1Token ovToken = new OverlayV1Token();
-        ovToken_ = IOverlayV1Token(address(ovToken));
+    function deployToken() public returns (IOverlayV1Token ovlToken_) {
+        OverlayV1Token ovlToken = new OverlayV1Token();
+        ovlToken_ = IOverlayV1Token(address(ovlToken));
     }
 
     /**
      * @dev Deploys a new OverlayV1Factory contract and returns its interface.
-     * @param _ovToken The OverlayV1Token contract to be used by the factory.
+     * @param _ovlToken The OverlayV1Token contract to be used by the factory.
      * @return factory_ The deployed OverlayV1Factory contract.
      */
-    function deployFactory(
-        IOverlayV1Token _ovToken
-    ) public returns (OverlayV1Factory factory_) {
+    function deployFactory(IOverlayV1Token _ovlToken) public returns (OverlayV1Factory factory_) {
         factory_ =
-            new OverlayV1Factory(address(_ovToken), deployer, Constants.getSequencer(), 1 hours);
+            new OverlayV1Factory(address(_ovlToken), deployer, Constants.getSequencer(), 1 hours);
 
         // Grant factory admin role so that it can grant minter + burner roles to markets
-        _ovToken.grantRole(0x00, address(factory_)); // admin role = 0x00
+        _ovlToken.grantRole(0x00, address(factory_)); // admin role = 0x00
         // Grant roles to deployer
-        _ovToken.grantRole(MINTER_ROLE, deployer);
-        _ovToken.grantRole(GOVERNOR_ROLE, deployer);
-        _ovToken.grantRole(GUARDIAN_ROLE, deployer);
-        _ovToken.grantRole(PAUSER_ROLE, deployer);
+        _ovlToken.grantRole(MINTER_ROLE, deployer);
+        _ovlToken.grantRole(GOVERNOR_ROLE, deployer);
+        _ovlToken.grantRole(GUARDIAN_ROLE, deployer);
+        _ovlToken.grantRole(PAUSER_ROLE, deployer);
 
         factory_.addFeedFactory(Constants.getFeedFactory());
     }
@@ -187,12 +190,12 @@ contract ShivaTestBase is Test, BaseSetup {
      * @dev Deploys a new OverlayV1Market contract and returns its interface.
      * @param _factory The OverlayV1Factory contract to be used for deploying the market.
      * @param _feed The address of the feed to be used by the market.
-     * @return ovMarket_ The deployed OverlayV1Market contract.
+     * @return ovlMarket_ The deployed OverlayV1Market contract.
      */
     function deployMarket(
         IOverlayV1Factory _factory,
         address _feed
-    ) public returns (IOverlayV1Market ovMarket_) {
+    ) public returns (IOverlayV1Market ovlMarket_) {
         uint256[15] memory MARKET_PARAMS = [
             uint256(122000000000), // k
             500000000000000000, // lmbda
@@ -210,7 +213,7 @@ contract ShivaTestBase is Test, BaseSetup {
             25000000000000, // priceDriftUpperLimit
             250 // averageBlockTime
         ];
-        ovMarket_ = IOverlayV1Market(
+        ovlMarket_ = IOverlayV1Market(
             _factory.deployMarket(Constants.getFeedFactory(), _feed, MARKET_PARAMS)
         );
     }
@@ -218,12 +221,13 @@ contract ShivaTestBase is Test, BaseSetup {
     /**
      * @dev Deploys a new OverlayV1State contract and returns its interface.
      * @param _factory The OverlayV1Factory contract to be used by the state.
-     * @return ovState_ The deployed OverlayV1State contract.
+     * @return ovlState_ The deployed OverlayV1State contract.
      */
-    function deployPeriphery(
-        IOverlayV1Factory _factory
-    ) public returns (IOverlayV1State ovState_) {
-        ovState_ = new OverlayV1State(_factory);
+    function deployPeriphery(IOverlayV1Factory _factory)
+        public
+        returns (IOverlayV1State ovlState_)
+    {
+        ovlState_ = new OverlayV1State(_factory);
     }
 
     /**
@@ -231,7 +235,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function addAuthorizedFactory() internal {
         vm.startPrank(guardian);
-        shiva.addFactory(IOverlayV1Factory(address(ovFactory)));
+        shiva.addFactory(IOverlayV1Factory(address(ovlFactory)));
         vm.stopPrank();
     }
 
@@ -240,7 +244,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function removeAuthorizedFactory() internal {
         vm.startPrank(guardian);
-        shiva.removeFactory(IOverlayV1Factory(address(ovFactory)));
+        shiva.removeFactory(IOverlayV1Factory(address(ovlFactory)));
         vm.stopPrank();
     }
 
@@ -266,11 +270,9 @@ contract ShivaTestBase is Test, BaseSetup {
      * @dev Approves the Shiva contract to spend the maximum amount of tokens on behalf of the user.
      * @param user The address of the user who is approving the token transfer.
      */
-    function approveToken(
-        address user
-    ) internal {
+    function approveToken(address user) internal {
         vm.prank(user);
-        ovToken.approve(address(shiva), type(uint256).max);
+        ovlToken.approve(address(shiva), type(uint256).max);
     }
 
     /**
@@ -279,9 +281,9 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function shutDownMarket() internal {
         vm.startPrank(guardian);
-        ovFactory.shutdown(ovMarket.feed());
+        ovlFactory.shutdown(ovlMarket.feed());
         vm.stopPrank();
-        assertEq(ovMarket.isShutdown(), true, "Market should be shutdown");
+        assertEq(ovlMarket.isShutdown(), true, "Market should be shutdown");
     }
 
     /**
@@ -308,9 +310,9 @@ contract ShivaTestBase is Test, BaseSetup {
         bool isLong
     ) public returns (uint256) {
         uint256 priceLimit =
-            Utils.getEstimatedPrice(ovState, ovMarket, collateral, leverage, slippage, isLong);
+            Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, slippage, isLong);
         return shiva.build(
-            ShivaStructs.Build(ovMarket, BROKER_ID, isLong, collateral, leverage, priceLimit)
+            ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit)
         );
     }
 
@@ -322,8 +324,8 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function unwindPosition(uint256 posId, uint256 fraction, uint16 slippage) public {
         uint256 priceLimit =
-            Utils.getUnwindPrice(ovState, ovMarket, posId, address(shiva), fraction, slippage);
-        shiva.unwind(ShivaStructs.Unwind(ovMarket, BROKER_ID, posId, fraction, priceLimit));
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), fraction, slippage);
+        shiva.unwind(ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, fraction, priceLimit));
     }
 
     /**
@@ -344,7 +346,13 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public returns (uint256) {
         return shiva.buildSingle(
             ShivaStructs.BuildSingle(
-                ovMarket, BROKER_ID, unwindPriceLimit, buildPriceLimit, collateral, leverage, posId1
+                ovlMarket,
+                BROKER_ID,
+                unwindPriceLimit,
+                buildPriceLimit,
+                collateral,
+                leverage,
+                posId1
             )
         );
     }
@@ -370,7 +378,7 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes32 structHash = keccak256(
             abi.encode(
                 shiva.BUILD_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
+                ovlMarket,
                 deadline,
                 collateral,
                 leverage,
@@ -401,7 +409,7 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes32 structHash = keccak256(
             abi.encode(
                 shiva.UNWIND_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
+                ovlMarket,
                 deadline,
                 posId,
                 fraction,
@@ -431,7 +439,7 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes32 structHash = keccak256(
             abi.encode(
                 shiva.BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH(),
-                ovMarket,
+                ovlMarket,
                 deadline,
                 collateral,
                 leverage,
@@ -474,7 +482,7 @@ contract ShivaTestBase is Test, BaseSetup {
         address owner
     ) public returns (uint256) {
         return shiva.build(
-            ShivaStructs.Build(ovMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
+            ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
@@ -497,7 +505,7 @@ contract ShivaTestBase is Test, BaseSetup {
         address owner
     ) public {
         shiva.unwind(
-            ShivaStructs.Unwind(ovMarket, BROKER_ID, positionId, fraction, priceLimit),
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, fraction, priceLimit),
             ShivaStructs.OnBehalfOf(owner, deadline, signature)
         );
     }
@@ -526,7 +534,7 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public returns (uint256) {
         return shiva.buildSingle(
             ShivaStructs.BuildSingle(
-                ovMarket,
+                ovlMarket,
                 BROKER_ID,
                 unwindPriceLimit,
                 buildPriceLimit,
@@ -551,7 +559,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function assertFractionRemainingIsZero(address user, uint256 posId) public view {
         (,,,,,,, uint16 fractionRemaining) =
-            ovMarket.positions(keccak256(abi.encodePacked(user, posId)));
+            ovlMarket.positions(keccak256(abi.encodePacked(user, posId)));
         assertEq(fractionRemaining, 0);
     }
 
@@ -562,7 +570,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function assertFractionRemainingIsGreaterThanZero(address user, uint256 posId) public view {
         (,,,,,,, uint16 fractionRemaining) =
-            ovMarket.positions(keccak256(abi.encodePacked(user, posId)));
+            ovlMarket.positions(keccak256(abi.encodePacked(user, posId)));
         assertGt(fractionRemaining, 0);
     }
 
@@ -574,18 +582,16 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function assertFractionRemaining(address user, uint256 posId, uint16 expected) public view {
         (,,,,,,, uint16 fractionRemaining) =
-            ovMarket.positions(keccak256(abi.encodePacked(user, posId)));
+            ovlMarket.positions(keccak256(abi.encodePacked(user, posId)));
         assertEq(fractionRemaining, expected);
     }
 
     /**
-     * @dev Asserts that the OVToken balance of a user is zero.
+     * @dev Asserts that the OVLToken balance of a user is zero.
      * @param user The address of the user.
      */
-    function assertOVTokenBalanceIsZero(
-        address user
-    ) public view {
-        assertEq(ovToken.balanceOf(user), 0);
+    function assertOVLTokenBalanceIsZero(address user) public view {
+        assertEq(ovlToken.balanceOf(user), 0);
     }
 
     /**
@@ -594,6 +600,6 @@ contract ShivaTestBase is Test, BaseSetup {
      * @param posId The ID of the position.
      */
     function assertUserIsPositionOwnerInShiva(address user, uint256 posId) public view {
-        assertEq(shiva.positionOwners(ovMarket, posId), user);
+        assertEq(shiva.positionOwners(ovlMarket, posId), user);
     }
 }

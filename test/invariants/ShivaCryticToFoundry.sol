@@ -10,7 +10,7 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
         setup();
 
         vm.startPrank(alice);
-        ovToken.approve(address(shiva), type(uint256).max);
+        ovlToken.approve(address(shiva), type(uint256).max);
         vm.stopPrank();
 
         // target the fuzzer on this contract as it will
@@ -29,7 +29,7 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
     // to run only this test:  forge test --match-contract ShivaCryticToFoundry
 
     // function invariant_shiva_dont_have_ov() public {
-    //     assertTrue(property_shiva_dont_have_ov());
+    //     assertTrue(property_shiva_dont_have_ovl());
     // }
 
     // function invariant_staking_balance_matches_notional() public {

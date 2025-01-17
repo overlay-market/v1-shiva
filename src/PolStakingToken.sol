@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @notice ERC20 token used for staking in BerachainRewardsVault contract
  */
 contract StakingToken is ERC20, Ownable {
-    constructor() ERC20("OverlayStakingToken", "OvSTK") Ownable() {}
+    constructor() ERC20("OverlayStakingToken", "OvlSTK") Ownable() {}
 
     function mint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);

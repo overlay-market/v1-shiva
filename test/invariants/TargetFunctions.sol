@@ -19,7 +19,7 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
         slippage = uint16(between(uint256(slippage), 0, 10000));
         isLong = uint8(between(uint256(isLong), 0, 1));
 
-        deal(address(ovToken), alice, collateral * 2);
+        deal(address(ovlToken), alice, collateral * 2);
 
         vm.startPrank(alice);
         uint256 posId = buildPosition(collateral, leverage, slippage, isLong != 0);
@@ -50,9 +50,17 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
         uint256 randomPosIndex = between(randomValue, 0, positionIds.length - 1);
         uint256 previousPosId = positionIds[randomPosIndex];
 
-        deal(address(ovToken), alice, collateral * 2);
+        deal(address(ovlToken), alice, collateral * 2);
         vm.startPrank(alice);
-        uint256 newPosId = buildSinglePosition(collateral, leverage, previousPosId, slippage);
+
+        uint256 unwindPriceLimit = Utils.getUnwindPrice(
+            ovlState, ovlMarket, previousPosId, address(shiva), ONE, BASIC_SLIPPAGE
+        );
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+        uint256 newPosId = buildSinglePosition(
+            collateral, leverage, previousPosId, unwindPriceLimit, buildPriceLimit
+        );
 
         positionIds[randomPosIndex] = newPosId;
         vm.stopPrank();
@@ -62,7 +70,7 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
         uint256 totalNotional;
 
         for (uint256 i = 0; i < positionIds.length; i++) {
-            totalNotional += Utils.getNotionalRemaining(ovMarket, positionIds[i], address(shiva));
+            totalNotional += Utils.getNotionalRemaining(ovlMarket, positionIds[i], address(shiva));
         }
 
         return totalNotional;

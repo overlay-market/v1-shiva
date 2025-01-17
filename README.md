@@ -44,8 +44,8 @@ This contract is:
 
 ### Key Variables
 
-- **`ovToken`:** The OverlayV1 Token contract.
-- **`ovState`:** The OverlayV1 State contract.
+- **`ovlToken`:** The OverlayV1 Token contract.
+- **`ovlState`:** The OverlayV1 State contract.
 - **`stakingToken`:** The token used for staking in the rewards vault.
 - **`authorizedFactories`:** A list of authorized factories for market validation.
 - **`positionOwners`:** Tracks ownership of positions in markets.
@@ -69,7 +69,7 @@ This contract is:
 
 ```solidity
 ShivaStructs.Build memory buildParams = ShivaStructs.Build({
-    ovMarket: IOverlayV1Market(0xMarketAddress),
+    ovlMarket: IOverlayV1Market(0xMarketAddress),
     brokerId: 0,
     isLong: true,
     collateral: 1e18, // 1 OVL
@@ -83,7 +83,7 @@ shiva.build(buildParams);
 
 ```solidity
 ShivaStructs.Unwind memory unwindParams = ShivaStructs.Unwind({
-    ovMarket: IOverlayV1Market(0xMarketAddress),
+    ovlMarket: IOverlayV1Market(0xMarketAddress),
     brokerId: 0,
     positionId: 1,
     fraction: 5e17, // Unwind 50% of the position
@@ -96,7 +96,7 @@ shiva.unwind(unwindParams);
   
 ```solidity
 ShivaStructs.Build memory buildParams = ShivaStructs.Build({
-    ovMarket: IOverlayV1Market(0xMarketAddress),
+    ovlMarket: IOverlayV1Market(0xMarketAddress),
     brokerId: 0,
     isLong: true,
     collateral: 1e18,
