@@ -9,6 +9,11 @@ extra_output = ["storageLayout"]
 ffi = true
 ast = true
 
+[rpc_endpoints]
+arbitrum-sepolia = "${ARBITRUM_SEPOLIA_RPC}"
+bartio = "${BARTIO_RPC}"
+imola = "${IMOLA_RPC}"
+
 [invariant]
 runs = 10
 depth = 100
