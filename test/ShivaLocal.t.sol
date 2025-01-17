@@ -72,6 +72,9 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         guardian = Constants.getGuardianAddress();
         pauser = Constants.getPauserAddress();
 
+        // Change the token name
+        isOV = false;
+
         // Call helper functions
         labelAddresses();
         setInitialBalancesAndApprovals();

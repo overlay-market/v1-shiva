@@ -73,6 +73,11 @@ contract ShivaTestBase is Test, BaseSetup {
     uint256 bobPk = 0x456;
     uint256 charliePk = 0x789;
 
+    /**
+     * @notice OVL token symbol differs between fork instance and local
+     */
+    bool isOV = true;
+
     function setup() internal virtual override {
         // Creates a fork of the blockchain using the specified RPC and block number
         vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
