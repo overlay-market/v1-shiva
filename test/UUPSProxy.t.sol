@@ -38,7 +38,6 @@ contract ImplementationV1Test is Test {
     ShivaV1 shivaV1;
     ERC1967Proxy proxy;
     address token = Constants.getOVLTokenAddress();
-    address state = Constants.getOVLStateAddress();
     address vaultFactory = Constants.getVaultFactoryAddress();
 
     function setUp() public {
@@ -50,13 +49,13 @@ contract ImplementationV1Test is Test {
         shivaV1 = new ShivaV1();
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, token, state, vaultFactory);
+        string memory functionName = "initialize(address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, token, vaultFactory);
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(token, state, vaultFactory);
+        shivaV1.initialize(token, vaultFactory);
     }
 
     function testInitialized() public {
@@ -73,7 +72,6 @@ contract ImplementationV2Test is Test {
     ShivaV2 shivaV2;
     ERC1967Proxy proxy;
     address token = Constants.getOVLTokenAddress();
-    address state = Constants.getOVLStateAddress();
     address vaultFactory = Constants.getVaultFactoryAddress();
     address rewardVault;
 
@@ -86,8 +84,8 @@ contract ImplementationV2Test is Test {
         shivaV1 = new ShivaV1();
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, token, state, vaultFactory);
+        string memory functionName = "initialize(address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, token, vaultFactory);
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
@@ -99,13 +97,13 @@ contract ImplementationV2Test is Test {
         address(proxy).call(abi.encodeWithSignature("setMagicNumber(uint256)", 42));
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(token, state, vaultFactory);
+        shivaV1.initialize(token, vaultFactory);
 
         // deploy new logic contract
         shivaV2 = new ShivaV2();
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV2.initialize(token, state, vaultFactory);
+        shivaV2.initialize(token, vaultFactory);
 
         vm.startPrank(address(0x123));
 
