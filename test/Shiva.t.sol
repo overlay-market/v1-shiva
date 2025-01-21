@@ -667,7 +667,7 @@ contract ShivaTest is Test, ShivaTestBase {
         if (isOV) {
             vm.expectRevert("OVV1:slippage>max");
         } else {
-            vm.expectRevert("OVV1:slippage>max");
+            vm.expectRevert("OVLV1:slippage>max");
         }
 
         buildSinglePosition(ONE, ONE, posId1, unwindPriceLimit, buildPriceLimit);
