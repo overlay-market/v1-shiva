@@ -85,9 +85,6 @@ contract Shiva is
     /// @notice The Overlay V1 Token contract
     IOverlayV1Token public ovlToken;
 
-    /// @notice The Overlay V1 State contract
-    IOverlayV1State public ovlState;
-
     /// @notice The StakingToken contract
     StakingToken public stakingToken;
 
@@ -178,19 +175,16 @@ contract Shiva is
     /**
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
-     * @param _ovlState The address of the Overlay V1 State contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
      */
     function initialize(
         address _ovlToken,
-        address _ovlState,
         address _vaultFactory
     ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
         ovlToken = IOverlayV1Token(_ovlToken);
-        ovlState = IOverlayV1State(_ovlState);
 
         // Create new staking token
         stakingToken = new StakingToken();
