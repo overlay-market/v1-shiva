@@ -63,7 +63,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the build on behalf of parameters
      */
     bytes32 public constant BUILD_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "BuildOnBehalfOfParams(IOverlayV1Market ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 priceLimit,uint256 nonce)"
+        "BuildOnBehalfOfParams(IOverlayV1Market ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 priceLimit,uint256 nonce,uint32 brokerId)"
     );
 
     /**
@@ -71,7 +71,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the unwind on behalf of parameters
      */
     bytes32 public constant UNWIND_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "UnwindOnBehalfOfParams(IOverlayV1Market ovlMarket,uint48 deadline,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 nonce)"
+        "UnwindOnBehalfOfParams(IOverlayV1Market ovlMarket,uint48 deadline,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 nonce,uint32 brokerId)"
     );
 
     /**
@@ -79,7 +79,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the build single on behalf of parameters
      */
     bytes32 public constant BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "BuildSingleOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 unwindPriceLimit,uint256 buildPriceLimit,uint256 nonce)"
+        "BuildSingleOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 unwindPriceLimit,uint256 buildPriceLimit,uint256 nonce,uint32 brokerId)"
     );
 
     /// @notice The Overlay V1 Token contract
@@ -331,7 +331,8 @@ contract Shiva is
                 params.leverage,
                 params.isLong,
                 params.priceLimit,
-                nonces[onBehalfOf.owner]
+                nonces[onBehalfOf.owner],
+                params.brokerId
             )
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
@@ -366,7 +367,8 @@ contract Shiva is
                 params.positionId,
                 params.fraction,
                 params.priceLimit,
-                nonces[onBehalfOf.owner]
+                nonces[onBehalfOf.owner],
+                params.brokerId
             )
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
@@ -534,7 +536,8 @@ contract Shiva is
                 params.previousPositionId,
                 params.unwindPriceLimit,
                 params.buildPriceLimit,
-                nonces[onBehalfOf.owner]
+                nonces[onBehalfOf.owner],
+                params.brokerId
             )
         );
     }

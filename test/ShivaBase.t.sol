@@ -375,7 +375,8 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 priceLimit,
         uint256 nonce,
         uint48 deadline,
-        bool isLong
+        bool isLong,
+        uint32 brokerId
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
@@ -386,7 +387,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 leverage,
                 isLong,
                 priceLimit,
-                nonce
+                nonce,
+                brokerId
             )
         );
         return shiva.getDigest(structHash);
@@ -406,7 +408,8 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 fraction,
         uint256 priceLimit,
         uint256 nonce,
-        uint48 deadline
+        uint48 deadline,
+        uint32 brokerId
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
@@ -416,7 +419,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 posId,
                 fraction,
                 priceLimit,
-                nonce
+                nonce,
+                brokerId
             )
         );
         return shiva.getDigest(structHash);
@@ -438,7 +442,8 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 nonce,
         uint256 unwindPriceLimit,
         uint256 buildPriceLimit,
-        uint48 deadline
+        uint48 deadline,
+        uint32 brokerId
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
@@ -450,7 +455,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 previousPositionId,
                 unwindPriceLimit,
                 buildPriceLimit,
-                nonce
+                nonce,
+                brokerId
             )
         );
         return shiva.getDigest(structHash);

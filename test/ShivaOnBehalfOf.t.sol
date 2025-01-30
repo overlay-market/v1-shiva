@@ -31,7 +31,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -65,7 +65,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -89,7 +89,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -118,6 +118,14 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
         vm.prank(automator);
         buildPositionOnBehalfOf(ONE, ONE, priceLimit, deadline, false, signature, alice);
 
+        // the broker ID is different from the one used in the signature
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        shiva.build(
+            ShivaStructs.Build(ovlMarket, BROKER_ID + 1, true, ONE, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, signature)
+        );
+
         // the market is different from the one used in the signature
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
@@ -136,7 +144,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -155,7 +163,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
 
         // nonce is incremented by 1 to make the signature invalid
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice) + 1, deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice) + 1, deadline, true, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -173,7 +181,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true, BROKER_ID);
 
         // sign the message as Bob instead of Alice
         bytes memory signature = getSignature(digest, bobPk);
@@ -193,7 +201,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest =
-            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true);
+            getBuildOnBehalfOfDigest(ONE, ONE, priceLimit, shiva.nonces(alice), deadline, true, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -219,7 +227,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline);
+            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -247,7 +255,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline);
+            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -270,6 +278,14 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
         vm.expectRevert(IShiva.InvalidSignature.selector);
         vm.prank(automator);
         unwindPositionOnBehalfOf(otherPosId, ONE, priceLimit, deadline, signature, alice);
+
+        // the broker ID is different from the one used in the signature
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID + 1, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, signature)
+        );
 
         // the market is different from the one used in the signature
         /// @dev This test fails with NotPositionOwner instead InvalidSignature because Shiva
@@ -297,7 +313,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline);
+            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -321,7 +337,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice) + 1, deadline);
+            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice) + 1, deadline, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -345,7 +361,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline);
+            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline, BROKER_ID);
 
         // sign the message as Bob instead of Alice
         bytes memory signature = getSignature(digest, bobPk);
@@ -371,7 +387,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline);
+            getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, shiva.nonces(alice), deadline, BROKER_ID);
 
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -399,7 +415,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline
+            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline, BROKER_ID
         );
 
         bytes memory signature = getSignature(digest, alicePk);
@@ -441,7 +457,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline
+            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline, BROKER_ID
         );
 
         bytes memory signature = getSignature(digest, alicePk);
@@ -488,6 +504,16 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             ONE, ONE, posId1, unwindPriceLimit, buildPriceLimit, deadline + 1, signature, alice
         );
 
+        // the broker ID is different from the one used in the signature
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        vm.prank(automator);
+        shiva.buildSingle(
+            ShivaStructs.BuildSingle(
+                ovlMarket, BROKER_ID + 1, unwindPriceLimit, buildPriceLimit, ONE, ONE, posId1
+            ),
+            ShivaStructs.OnBehalfOf(alice, deadline, signature)
+        );
+
         // the market is different from the one used in the signature
         /// @dev This test fails with NotPositionOwner instead InvalidSignature because Shiva
         ///      checks if the position is owned by the caller before checking the signature
@@ -518,7 +544,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline
+            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline, BROKER_ID
         );
 
         bytes memory signature = getSignature(digest, alicePk);
@@ -545,7 +571,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice) + 1, unwindPriceLimit, buildPriceLimit, deadline
+            ONE, ONE, posId1, shiva.nonces(alice) + 1, unwindPriceLimit, buildPriceLimit, deadline, BROKER_ID
         );
 
         bytes memory signature = getSignature(digest, alicePk);
@@ -572,7 +598,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline
+            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline, BROKER_ID
         );
 
         // sign the message as Bob
@@ -601,7 +627,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
 
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline
+            ONE, ONE, posId1, shiva.nonces(alice), unwindPriceLimit, buildPriceLimit, deadline, BROKER_ID
         );
 
         bytes memory signature = getSignature(digest, alicePk);
