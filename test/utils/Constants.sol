@@ -17,6 +17,10 @@ library Constants {
         return 0x09E8641df1E963d0bB1267e51579fC2B4E3E60cd;
     }
 
+    function getBTCDominanceMarketAddress() external pure returns (address) {
+        return 0xd9b217fa8A9E8Ef1c8558128029564e9A50F284D;
+    }
+
     function getOVLStateAddress() external pure returns (address) {
         return 0x4f69Dfb24958fCf69b70BcA73c3E74F2c82BB405;
     }

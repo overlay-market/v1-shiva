@@ -50,6 +50,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     Shiva shiva;
     IOverlayV1Market ovlMarket;
+    IOverlayV1Market otherOvlMarket;
     IOverlayV1State ovlState;
     OverlayV1Factory ovlFactory;
     IOverlayV1Token ovlToken;
@@ -85,6 +86,7 @@ contract ShivaTestBase is Test, BaseSetup {
         // Initialize contract instances
         ovlToken = IOverlayV1Token(Constants.getOVLTokenAddress());
         ovlMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
+        otherOvlMarket = IOverlayV1Market(Constants.getBTCDominanceMarketAddress());
         ovlState = IOverlayV1State(Constants.getOVLStateAddress());
         ovlFactory = OverlayV1Factory(ovlMarket.factory());
 
@@ -434,6 +436,8 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 leverage,
         uint256 previousPositionId,
         uint256 nonce,
+        uint256 unwindPriceLimit,
+        uint256 buildPriceLimit,
         uint48 deadline
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
@@ -444,6 +448,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 collateral,
                 leverage,
                 previousPositionId,
+                unwindPriceLimit,
+                buildPriceLimit,
                 nonce
             )
         );
