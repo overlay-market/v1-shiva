@@ -79,7 +79,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the build single on behalf of parameters
      */
     bytes32 public constant BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "BuildSingleOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 nonce)"
+        "BuildSingleOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 unwindPriceLimit,uint256 buildPriceLimit,uint256 nonce)"
     );
 
     /// @notice The Overlay V1 Token contract
@@ -395,17 +395,7 @@ contract Shiva is
         returns (uint256)
     {
         // build typed data hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
-                params.ovlMarket,
-                onBehalfOf.deadline,
-                params.collateral,
-                params.leverage,
-                params.previousPositionId,
-                nonces[onBehalfOf.owner]
-            )
-        );
+        bytes32 structHash = _computeBuildSingleTypedDataHash(params, onBehalfOf);
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
 
         return _buildSingleLogic(params, onBehalfOf.owner);
@@ -524,6 +514,28 @@ contract Shiva is
             isLong,
             _params.buildPriceLimit,
             _params.brokerId
+        );
+    }
+
+    /**
+    * @dev Computes the struct hash for signature verification.
+    */
+    function _computeBuildSingleTypedDataHash(
+        ShivaStructs.BuildSingle calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) private view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                onBehalfOf.deadline,
+                params.collateral,
+                params.leverage,
+                params.previousPositionId,
+                params.unwindPriceLimit,
+                params.buildPriceLimit,
+                nonces[onBehalfOf.owner]
+            )
         );
     }
 
