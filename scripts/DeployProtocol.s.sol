@@ -34,13 +34,18 @@ abstract contract DeployProtocolScript is Script {
     }
 
     function _deployState(OverlayV1Factory _factory) internal returns (OverlayV1State state) {
+        address deployer = vm.addr(deployerPrivateKey);
+        vm.startBroadcast(deployerPrivateKey);
+
         state = new OverlayV1State(_factory);
+
+        vm.stopBroadcast();
     }
 
-    function _deployShiva(address _ovl, address _state, address _vaultFactory) internal returns (Shiva shivaProxy) {
+    function _deployShiva(address _ovl, address _vaultFactory) internal returns (Shiva shivaProxy) {
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, _ovl, _state, _vaultFactory);
+        string memory functionName = "initialize(address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, _ovl, _vaultFactory);
 
         vm.startBroadcast(deployerPrivateKey);
         Shiva impl = new Shiva();
@@ -92,7 +97,7 @@ contract DeployProtocol is DeployProtocolScript {
 
         OverlayV1Factory factory_ = _deployFactory(_ovl, _sequencerOracle);
         OverlayV1State state_ = _deployState(factory_);
-        Shiva shiva_ = _deployShiva(_ovl, address(state_), _vaultFactory);
+        Shiva shiva_ = _deployShiva(_ovl, _vaultFactory);
         _setupShiva(shiva_, factory_);
 
         console2.log("factory: ", address(factory_));
