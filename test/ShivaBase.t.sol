@@ -50,6 +50,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     Shiva shiva;
     IOverlayV1Market ovlMarket;
+    IOverlayV1Market otherOvlMarket;
     IOverlayV1State ovlState;
     OverlayV1Factory ovlFactory;
     IOverlayV1Token ovlToken;
@@ -85,6 +86,7 @@ contract ShivaTestBase is Test, BaseSetup {
         // Initialize contract instances
         ovlToken = IOverlayV1Token(Constants.getOVLTokenAddress());
         ovlMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
+        otherOvlMarket = IOverlayV1Market(Constants.getBTCDominanceMarketAddress());
         ovlState = IOverlayV1State(Constants.getOVLStateAddress());
         ovlFactory = OverlayV1Factory(ovlMarket.factory());
 
@@ -373,7 +375,8 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 priceLimit,
         uint256 nonce,
         uint48 deadline,
-        bool isLong
+        bool isLong,
+        uint32 brokerId
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
@@ -384,7 +387,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 leverage,
                 isLong,
                 priceLimit,
-                nonce
+                nonce,
+                brokerId
             )
         );
         return shiva.getDigest(structHash);
@@ -404,7 +408,8 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 fraction,
         uint256 priceLimit,
         uint256 nonce,
-        uint48 deadline
+        uint48 deadline,
+        uint32 brokerId
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
@@ -414,7 +419,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 posId,
                 fraction,
                 priceLimit,
-                nonce
+                nonce,
+                brokerId
             )
         );
         return shiva.getDigest(structHash);
@@ -434,7 +440,10 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 leverage,
         uint256 previousPositionId,
         uint256 nonce,
-        uint48 deadline
+        uint256 unwindPriceLimit,
+        uint256 buildPriceLimit,
+        uint48 deadline,
+        uint32 brokerId
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
@@ -444,7 +453,10 @@ contract ShivaTestBase is Test, BaseSetup {
                 collateral,
                 leverage,
                 previousPositionId,
-                nonce
+                unwindPriceLimit,
+                buildPriceLimit,
+                nonce,
+                brokerId
             )
         );
         return shiva.getDigest(structHash);
