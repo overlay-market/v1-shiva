@@ -123,14 +123,14 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
         positionIds.pop();
     }
 
-    function handler_pause_unpause(bool shouldPause) external {
     function handler_pause_unpause() external {
-        vm.prank(pauser);
+        vm.startPrank(pauser);
         if (shiva.paused()) {
             shiva.unpause();
         } else {
             shiva.pause();
         }
+        vm.stopPrank();
     }
 
     function handler_add_remove_factory(address factory, bool shouldAdd) external {
@@ -174,5 +174,9 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
             totalNotional += Utils.getNotionalRemaining(ovMarket, positionIds[i], address(shiva));
         }
         return totalNotional;
+    }
+
+    function _getPositionIds() internal view override returns (uint256[] memory) {
+        return positionIds;
     }
 }

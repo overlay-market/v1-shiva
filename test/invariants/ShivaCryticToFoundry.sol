@@ -40,4 +40,12 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
     // function invariant_staking_balance_matches_notional() public {
     //     assertTrue(property_staking_balance_matches_notional());
     // }
+
+    // function invariant_position_always_has_owner() public {
+    //     assertTrue(property_position_always_has_owner());
+    // }
+
+    // function invariant_position_doesnt_change_owner() public {
+    //     assertTrue(property_position_doesnt_change_owner());
+    // }
 }
