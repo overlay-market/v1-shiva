@@ -731,4 +731,112 @@ contract ShivaTest is Test, ShivaTestBase {
 
         assertEq(rewardVault.balanceOf(alice), 0);
     }
+
+    /**
+     * @notice Tests that donating OVL tokens to Shiva does not affect buildSingle operations
+     */
+    function test_buildSingle_with_donation() public {
+        // Alice builds initial position
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        uint256 posId1 = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        
+        // Bob donates tokens to Shiva contract to try to manipulate fees
+        uint256 donationAmount = 10e18;
+        vm.startPrank(bob);
+        ovlToken.transfer(address(shiva), donationAmount);
+        vm.stopPrank();
+        
+        // Get price limits for buildSingle
+        uint256 unwindPriceLimit = Utils.getUnwindPrice(
+            ovlState, 
+            ovlMarket, 
+            posId1, 
+            address(shiva), 
+            ONE, 
+            BASIC_SLIPPAGE
+        );
+        
+        uint256 buildPriceLimit = Utils.getEstimatedPrice(
+            ovlState,
+            ovlMarket,
+            collateral,
+            leverage,
+            BASIC_SLIPPAGE,
+            true
+        );
+        
+        vm.startPrank(alice);
+        uint256 posId2 = buildSinglePosition(
+            collateral,
+            leverage,
+            posId1,
+            unwindPriceLimit,
+            buildPriceLimit
+        );
+        vm.stopPrank();
+
+        // Verify that the new position was created correctly
+        assertFractionRemainingIsZero(alice, posId1);
+        assertFractionRemainingIsGreaterThanZero(address(shiva), posId2);
+        assertUserIsPositionOwnerInShiva(alice, posId2);
+        
+        // Verify that Shiva should have the donated tokens
+        assertEq(ovlToken.balanceOf(address(shiva)), donationAmount);
+    }
+
+    /**
+     * @notice Tests that buildSingle works even with large donations
+     * This test verifies our fix prevents fee manipulation
+     */
+    function test_buildSingle_with_large_donation() public {
+        // Alice builds initial position
+        vm.startPrank(alice);
+        uint256 collateral = ONE;
+        uint256 leverage = 2e18;
+        uint256 posId1 = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        
+        // Bob donates a large amount of tokens to Shiva to try to manipulate fees
+        uint256 largeAmount = 1000e18;
+        vm.startPrank(bob);
+        ovlToken.transfer(address(shiva), largeAmount);
+        vm.stopPrank();
+        
+        uint256 unwindPriceLimit = Utils.getUnwindPrice(
+            ovlState, 
+            ovlMarket, 
+            posId1, 
+            address(shiva), 
+            ONE, 
+            BASIC_SLIPPAGE
+        );
+        
+        uint256 buildPriceLimit = Utils.getEstimatedPrice(
+            ovlState,
+            ovlMarket,
+            collateral,
+            leverage,
+            BASIC_SLIPPAGE,
+            true
+        );
+
+        vm.startPrank(alice);
+        uint256 posId2 = buildSinglePosition(
+            collateral,
+            leverage,
+            posId1,
+            unwindPriceLimit,
+            buildPriceLimit
+        );
+        vm.stopPrank();
+
+        // Verify that the new position was created correctly
+        assertFractionRemainingIsZero(alice, posId1);
+        assertFractionRemainingIsGreaterThanZero(address(shiva), posId2);
+        assertUserIsPositionOwnerInShiva(alice, posId2);
+        
+        // Verify that Shiva should have the donated tokens
+        assertEq(ovlToken.balanceOf(address(shiva)), largeAmount);
+    }
 }
