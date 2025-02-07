@@ -108,7 +108,7 @@ contract Shiva is
     mapping(address => uint256) public nonces;
 
     /// @notice Mapping to check if an address is a valid market
-    mapping(address => bool) public validMarkets;
+    mapping(address => bool) private validMarkets;
 
     /**
      * @dev Modifiers section
