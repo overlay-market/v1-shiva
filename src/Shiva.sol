@@ -191,7 +191,7 @@ contract Shiva is
 
         // Create vault for newly created token
         address vaultAddress =
-            IBerachainRewardsVaultFactory(_vaultFactory).createRewardsVault(address(stakingToken));
+            IBerachainRewardsVaultFactory(_vaultFactory).createRewardVault(address(stakingToken));
 
         rewardVault = IBerachainRewardsVault(vaultAddress);
 

@@ -11,11 +11,11 @@ interface IBerachainRewardsVault {
 
     function getTotalDelegateStaked(address account) external view returns (uint256);
 
-    function balanceOf(address account) external returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
 
     function withdraw(uint256 amount) external;
 
-    function exit() external;
+    function exit(address recipient) external;
 }
 
 /**
@@ -23,5 +23,5 @@ interface IBerachainRewardsVault {
  * @notice Interface for the BerachainRewardsVaultFactory contract
  */
 interface IBerachainRewardsVaultFactory {
-    function createRewardsVault(address stakingToken) external returns (address);
+    function createRewardVault(address stakingToken) external returns (address);
 }
