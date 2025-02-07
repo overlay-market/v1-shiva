@@ -66,11 +66,13 @@ library ShivaStructs {
      * @notice Represents the parameters to perform operations on behalf of an owner
      * @param owner The address of the owner
      * @param deadline The deadline for the action
+     * @param nonce The nonce used in the signature
      * @param signature The signature of the owner
      */
     struct OnBehalfOf {
         address owner;
         uint48 deadline;
+        uint256 nonce;
         bytes signature;
     }
 }

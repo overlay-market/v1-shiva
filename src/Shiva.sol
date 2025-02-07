@@ -104,8 +104,8 @@ contract Shiva is
     /// @notice Mapping to check if a market is allowed to spend OVL on behalf of this contract
     mapping(IOverlayV1Market => bool) public marketAllowance;
 
-    /// @notice Mapping from performer address to nonce
-    mapping(address => uint256) public nonces;
+    /// @notice Mapping from performer address and nonce to boolean indicating if it's used
+    mapping(address => mapping(uint256 => bool)) public usedNonces;
 
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) public validMarkets;
@@ -331,11 +331,11 @@ contract Shiva is
                 params.leverage,
                 params.isLong,
                 params.priceLimit,
-                nonces[onBehalfOf.owner],
+                onBehalfOf.nonce,
                 params.brokerId
             )
         );
-        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
         return _buildLogic(params, onBehalfOf.owner);
     }
@@ -367,11 +367,11 @@ contract Shiva is
                 params.positionId,
                 params.fraction,
                 params.priceLimit,
-                nonces[onBehalfOf.owner],
+                onBehalfOf.nonce,
                 params.brokerId
             )
         );
-        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
         _unwindLogic(params, onBehalfOf.owner);
     }
@@ -398,7 +398,7 @@ contract Shiva is
     {
         // build typed data hash
         bytes32 structHash = _computeBuildSingleTypedDataHash(params, onBehalfOf);
-        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner);
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
         return _buildSingleLogic(params, onBehalfOf.owner);
     }
@@ -536,7 +536,7 @@ contract Shiva is
                 params.previousPositionId,
                 params.unwindPriceLimit,
                 params.buildPriceLimit,
-                nonces[onBehalfOf.owner],
+                onBehalfOf.nonce,
                 params.brokerId
             )
         );
@@ -703,16 +703,17 @@ contract Shiva is
     }
 
     /**
-     * @notice Checks if the signature is valid
+     * @notice Checks if the signature is valid and marks the nonce as used
      * @param _structHash The hash of the struct
      * @param _signature The signature to verify
      * @param _owner The address of the owner
-     * @dev Increments the nonce if the signature is valid
+     * @param _nonce The nonce used in the signature
      */
     function _checkIsValidSignature(
         bytes32 _structHash,
         bytes calldata _signature,
-        address _owner
+        address _owner,
+        uint256 _nonce
     ) internal {
         bytes32 digest = _hashTypedDataV4(_structHash);
         address signer = digest.recover(_signature);
@@ -721,7 +722,11 @@ contract Shiva is
             revert InvalidSignature();
         }
 
-        nonces[_owner]++;
+        if (usedNonces[_owner][_nonce]) {
+            revert InvalidNonce();
+        }
+
+        usedNonces[_owner][_nonce] = true;
     }
 
     /**
@@ -751,4 +756,13 @@ contract Shiva is
      * @dev Only callable by the governor
      */
     function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
+
+    /**
+     * @notice Cancels a specific nonce for the caller
+     * @param nonce The nonce to cancel
+     */
+    function cancelNonce(uint256 nonce) external {
+        usedNonces[msg.sender][nonce] = true;
+        emit NonceCancelled(msg.sender, nonce);
+    }
 }

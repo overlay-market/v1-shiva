@@ -93,6 +93,13 @@ interface IShiva {
     event MarketValidated(address indexed market);
 
     /**
+     * @notice Emitted when a nonce is cancelled.
+     * @param owner Address of the owner of the nonce.
+     * @param nonce The nonce that was cancelled.
+     */
+    event NonceCancelled(address indexed owner, uint256 nonce);
+
+    /**
      * @notice Error emitted when the caller is not the owner of the position.
      */
     error NotPositionOwner();
@@ -111,6 +118,11 @@ interface IShiva {
      * @notice Error emitted when the market is not valid.
      */
     error MarketNotValid();
+
+    /**
+     * @notice Error emitted when the nonce is invalid.
+     */
+    error InvalidNonce();
 
     /**
      * @dev Functions that Shiva should implement.
