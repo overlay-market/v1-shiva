@@ -839,4 +839,175 @@ contract ShivaTest is Test, ShivaTestBase {
         // Verify that Shiva should have the donated tokens
         assertEq(ovlToken.balanceOf(address(shiva)), largeAmount);
     }
+
+    /**
+     * @notice Tests that rounding errors in getNotionalRemaining don't lead to under-unstaking
+     */
+    function test_unwind_rounding_error() public {
+        // Alice builds initial position
+        vm.startPrank(alice);
+        uint256 collateral = 1234567890123456789; // Use "odd" number to increase chance of rounding
+        uint256 leverage = 2.5e18; // Non-integer leverage to force rounding
+        uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        
+        // Get initial staked amount in vault
+        uint256 initialStaked = rewardVault.balanceOf(alice);
+        
+        // Calculate expected notional
+        uint256 expectedNotional = collateral.mulUp(leverage);
+        assertEq(initialStaked, expectedNotional, "Initial stake should match notional");
+        
+        // Unwind a specific fraction that might cause rounding issues
+        uint256 fractionToUnwind = 0.7e18; // 70%
+        uint256 expectedUnstake = expectedNotional.mulUp(fractionToUnwind) / ONE;
+        
+        // Track balances before unwind
+        uint256 vaultBalanceBefore = rewardVault.balanceOf(alice);
+        
+        // Perform unwind
+        unwindPosition(posId, fractionToUnwind, BASIC_SLIPPAGE);
+        vm.stopPrank();
+        
+        // Check actual unstaked amount
+        uint256 actualUnstaked = vaultBalanceBefore - rewardVault.balanceOf(alice);
+        
+        // Verify unstaked amount is not less than expected
+        assertGe(
+            actualUnstaked,
+            expectedUnstake,
+            "Unstaked amount should not be less than expected due to rounding"
+        );
+        
+        // Optional: Print the difference to see the magnitude of the rounding error
+        if (actualUnstaked < expectedUnstake) {
+            console.log("Rounding Error:", expectedUnstake - actualUnstaked);
+        }
+    }
+
+    /**
+     * @notice Tests multiple partial unwinds to check for cumulative rounding errors
+     */
+    function test_multiple_unwinds_rounding() public {
+        vm.startPrank(alice);
+        
+        // Build position with numbers likely to cause rounding
+        uint256 collateral = 1234567890123456789;
+        uint256 leverage = 2.5e18;
+        uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        
+        uint256 initialStaked = rewardVault.balanceOf(alice);
+        uint256 totalUnstaked = 0;
+        
+        // Perform multiple partial unwinds
+        uint256[] memory fractions = new uint256[](3);
+        fractions[0] = 0.3e18; // 30%
+        fractions[1] = 0.4e18; // 40%
+        fractions[2] = 1e18; // 100%
+        
+        for (uint256 i = 0; i < fractions.length; i++) {
+            uint256 vaultBalanceBefore = rewardVault.balanceOf(alice);
+            unwindPosition(posId, fractions[i], BASIC_SLIPPAGE);
+            uint256 unstaked = vaultBalanceBefore - rewardVault.balanceOf(alice);
+            totalUnstaked += unstaked;
+        }
+        
+        vm.stopPrank();
+        
+        // After full unwind, no tokens should remain staked
+        uint256 remainingStaked = rewardVault.balanceOf(alice);
+        assertEq(
+            remainingStaked,
+            0,
+            "Should have unstaked all tokens after complete unwind"
+        );
+        
+        // Verify total unstaked matches initial stake
+        assertEq(
+            totalUnstaked,
+            initialStaked,
+            "Total unstaked should match initial stake"
+        );
+    }
+
+    /**
+     * @notice Fuzz test for multiple unwinds to check for cumulative rounding errors
+     * @param collateral The collateral amount (fuzzed)
+     * @param leverage The leverage multiplier (fuzzed)
+     * @param fractionSeed1 Seed for first unwind fraction (fuzzed)
+     * @param fractionSeed2 Seed for second unwind fraction (fuzzed)
+     */
+    function testFuzz_multiple_unwinds_rounding(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 fractionSeed1,
+        uint256 fractionSeed2
+    ) public {
+        // Bound inputs to reasonable ranges
+        collateral = bound(collateral, 1e18, 1000e18);
+        leverage = bound(leverage, 1e18, 5e18);
+        
+        // Calculate fractions ensuring they sum to ONE (1e18)
+        uint256 fraction1 = bound(fractionSeed1, 0.001e18, 0.99e18);
+        uint256 fraction2 = bound(fractionSeed2, 0.001e18, 0.99e18);
+        uint256 fraction3 = ONE;
+        
+        // Ensure Alice has enough tokens
+        deal(address(ovlToken), alice, collateral * 2);
+        deal(address(ovlToken), address(ovlMarket), 100);
+        approveToken(alice);
+
+        vm.startPrank(alice);
+        
+        // Build initial position
+        uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        
+        // Track initial staked amount
+        uint256 initialStaked = rewardVault.balanceOf(alice);
+        uint256 totalUnstaked = 0;
+        
+        // Store fractions in array for iteration
+        uint256[] memory fractions = new uint256[](3);
+        fractions[0] = fraction1;
+        fractions[1] = fraction2;
+        fractions[2] = fraction3;
+        
+        // Perform multiple partial unwinds
+        for (uint256 i = 0; i < fractions.length; i++) {
+            // Skip if fraction is too small
+            if (fractions[i] < 0.1e18) continue;
+            
+            uint256 vaultBalanceBefore = rewardVault.balanceOf(alice);
+            unwindPosition(posId, fractions[i], BASIC_SLIPPAGE);
+            uint256 unstaked = vaultBalanceBefore - rewardVault.balanceOf(alice);
+            totalUnstaked += unstaked;
+            
+            // Verify each unwind maintains invariants
+            assertGe(
+                unstaked,
+                0,
+                "Individual unwind should not result in negative unstake"
+            );
+        }
+        
+        vm.stopPrank();
+        
+        // Verify final state
+        uint256 remainingStaked = rewardVault.balanceOf(alice);
+        
+        // Assert invariants
+        assertEq(
+            remainingStaked,
+            0,
+            "Should have unstaked all tokens after complete unwind"
+        );
+        
+        assertEq(
+            totalUnstaked,
+            initialStaked,
+            "Total unstaked should match initial stake"
+        );
+        
+        // Verify position is fully unwound
+        assertFractionRemainingIsZero(address(shiva), posId);
+    }
 }

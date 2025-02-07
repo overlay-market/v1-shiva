@@ -681,6 +681,10 @@ contract Shiva is
      * @param _amount The amount to unstake
      */
     function _onUnstake(address _owner, uint256 _amount) internal {
+        // Get current balance on rewardVault
+        uint256 currentBalance = rewardVault.balanceOf(_owner);
+        // set _amount to min(currentBalance, _amount)
+        _amount = currentBalance < _amount ? currentBalance : _amount;
         // Withdraw tokens from the RewardVault
         rewardVault.delegateWithdraw(_owner, _amount);
         // Burn the withdrawn StakingTokens
