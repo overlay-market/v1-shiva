@@ -242,15 +242,6 @@ contract Shiva is
     }
 
     /**
-     * @notice External function to check if a market is valid
-     * @param market The address of the market to check
-     * @return True if the market is valid, false otherwise
-     */
-    function isValidMarket(address market) external returns (bool) {
-        return _checkIsValidMarket(market);
-    }
-
-    /**
      * @notice Builds a position in the ovlMarket for a user
      * @param params The parameters for building the position based on the
      * ShivaStructs.Build struct
