@@ -493,9 +493,10 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes memory signature,
         address owner
     ) public returns (uint256) {
+        uint256 nonce = 12345; // For testing purposes we can use a fixed nonce
         return shiva.build(
             ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, nonce, signature)
         );
     }
 
@@ -516,9 +517,10 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes memory signature,
         address owner
     ) public {
+        uint256 nonce = 12345; // For testing purposes we can use a fixed nonce
         shiva.unwind(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, fraction, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, nonce, signature)
         );
     }
 
@@ -544,6 +546,7 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes memory signature,
         address owner
     ) public returns (uint256) {
+        uint256 nonce = 12345; // For testing purposes we can use a fixed nonce
         return shiva.buildSingle(
             ShivaStructs.BuildSingle(
                 ovlMarket,
@@ -554,7 +557,7 @@ contract ShivaTestBase is Test, BaseSetup {
                 leverage,
                 previousPositionId
             ),
-            ShivaStructs.OnBehalfOf(owner, deadline, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, nonce, signature)
         );
     }
 
