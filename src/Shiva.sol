@@ -108,7 +108,7 @@ contract Shiva is
     mapping(address => mapping(uint256 => bool)) public usedNonces;
 
     /// @notice Mapping to check if an address is a valid market
-    mapping(address => bool) public validMarkets;
+    mapping(address => bool) private validMarkets;
 
     /**
      * @dev Modifiers section
@@ -239,6 +239,15 @@ contract Shiva is
      */
     function unpause() external onlyPauser(msg.sender) {
         _unpause();
+    }
+
+    /**
+     * @notice External function to check if a market is valid
+     * @param market The address of the market to check
+     * @return True if the market is valid, false otherwise
+     */
+    function isValidMarket(address market) external returns (bool) {
+        return _checkIsValidMarket(market);
     }
 
     /**

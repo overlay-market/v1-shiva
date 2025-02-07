@@ -193,4 +193,11 @@ interface IShiva {
         uint256 positionId,
         address owner
     ) external;
+
+    /**
+     * @notice Checks if a market is valid
+     * @param market The address of the market to check
+     * @return True if the market is valid, false otherwise
+     */
+    function isValidMarket(address market) external returns (bool);
 }
