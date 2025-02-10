@@ -108,7 +108,7 @@ contract Shiva is
     mapping(address => uint256) public nonces;
 
     /// @notice Mapping to check if an address is a valid market
-    mapping(address => bool) public validMarkets;
+    mapping(address => bool) private validMarkets;
 
     /**
      * @dev Modifiers section
@@ -488,6 +488,9 @@ contract Shiva is
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
+        // Track balance before unwinding
+        uint256 balanceBefore = ovlToken.balanceOf(address(this));
+
         _onUnwindPosition(
             _params.ovlMarket,
             _params.previousPositionId,
@@ -496,13 +499,15 @@ contract Shiva is
             _params.brokerId
         );
 
-        uint256 totalCollateral = _params.collateral + ovlToken.balanceOf(address(this));
+        // Calculate actual unwound amount
+        uint256 unwindAmount = ovlToken.balanceOf(address(this)) - balanceBefore;
+        uint256 totalCollateral = _params.collateral + unwindAmount;
         uint256 tradingFee = _getTradingFee(_params.ovlMarket, totalCollateral, _params.leverage);
 
         bool isLong =
             Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
-        // transfer from OVL from user to this contract
+        // transfer OVL from user to this contract
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
 
         // Approve the ovlMarket contract to spend OVL
@@ -667,6 +672,10 @@ contract Shiva is
      * @param _amount The amount to unstake
      */
     function _onUnstake(address _owner, uint256 _amount) internal {
+        // Get current balance on rewardVault
+        uint256 currentBalance = rewardVault.balanceOf(_owner);
+        // set _amount to min(currentBalance, _amount)
+        _amount = currentBalance < _amount ? currentBalance : _amount;
         // Withdraw tokens from the RewardVault
         rewardVault.delegateWithdraw(_owner, _amount);
         // Burn the withdrawn StakingTokens
