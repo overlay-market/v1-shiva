@@ -42,6 +42,9 @@ contract ShivaTestBase is Test, BaseSetup {
     /// @notice Basic slippage percentage (1%)
     uint16 constant BASIC_SLIPPAGE = 100;
 
+    /// @notice For testing purposes we use fixed nonce
+    uint16 constant FIXED_NONCE = 12345;
+
     /// @notice Broker ID used in the system
     uint32 constant BROKER_ID = 0;
 
@@ -104,9 +107,8 @@ contract ShivaTestBase is Test, BaseSetup {
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
         string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovlToken), address(vaultFactory)
-        );
+        bytes memory data =
+            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -493,10 +495,9 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes memory signature,
         address owner
     ) public returns (uint256) {
-        uint256 nonce = 12345; // For testing purposes we can use a fixed nonce
         return shiva.build(
             ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, nonce, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 
@@ -517,10 +518,9 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes memory signature,
         address owner
     ) public {
-        uint256 nonce = 12345; // For testing purposes we can use a fixed nonce
         shiva.unwind(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, fraction, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, nonce, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 
@@ -546,7 +546,6 @@ contract ShivaTestBase is Test, BaseSetup {
         bytes memory signature,
         address owner
     ) public returns (uint256) {
-        uint256 nonce = 12345; // For testing purposes we can use a fixed nonce
         return shiva.buildSingle(
             ShivaStructs.BuildSingle(
                 ovlMarket,
@@ -557,7 +556,7 @@ contract ShivaTestBase is Test, BaseSetup {
                 leverage,
                 previousPositionId
             ),
-            ShivaStructs.OnBehalfOf(owner, deadline, nonce, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 
