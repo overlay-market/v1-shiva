@@ -33,8 +33,16 @@ library Constants {
         return "BARTIO_RPC";
     }
 
+    function getForkedMainnetNetworkRPC() external pure returns (string memory) {
+        return "BERACHAIN_MAINNET_RPC";
+    }
+
     function getForkBlock() external pure returns (uint256) {
         return 6319332;
+    }
+
+    function getForkMainnetBlock() external pure returns (uint256) {
+        return 803646;
     }
 
     function getSequencer() external pure returns (address) {
@@ -67,5 +75,11 @@ library Constants {
 
     function getVaultFactoryAddress() external pure returns (address) {
         return 0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B;
+    }
+
+    /// @notice The Vault Factory address on the mainnet
+    /// https://docs.berachain.com/developers/deployed-contracts
+    function getMainnetVaultFactoryAddress() external pure returns (address) {
+        return 0x94Ad6Ac84f6C6FbA8b8CCbD71d9f4f101def52a8;
     }
 }
