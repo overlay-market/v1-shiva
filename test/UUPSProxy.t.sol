@@ -17,7 +17,9 @@ contract ShivaV1 is Shiva {
         return "V1";
     }
 
-    function setMagicNumber(uint256 newMagicNumber) public {
+    function setMagicNumber(
+        uint256 newMagicNumber
+    ) public {
         magicNumber = newMagicNumber;
     }
 }
@@ -30,7 +32,9 @@ contract ShivaV2 is ShivaV1 {
         return "V2";
     }
 
-    function setMagicString(string memory newMagicString) public {
+    function setMagicString(
+        string memory newMagicString
+    ) public {
         magicString = newMagicString;
     }
 }
@@ -42,7 +46,8 @@ contract ImplementationV1Test is Test {
 
     function setUp() public {
         vm.createSelectFork(
-            vm.envString(TestConstants.getForkedMainnetNetworkRPC()), TestConstants.getForkMainnetBlock()
+            vm.envString(TestConstants.getForkedMainnetNetworkRPC()),
+            TestConstants.getForkMainnetBlock()
         );
 
         OverlayV1Token ovlToken = new OverlayV1Token();
@@ -79,7 +84,8 @@ contract ImplementationV2Test is Test {
 
     function setUp() public {
         vm.createSelectFork(
-            vm.envString(TestConstants.getForkedMainnetNetworkRPC()), TestConstants.getForkMainnetBlock()
+            vm.envString(TestConstants.getForkedMainnetNetworkRPC()),
+            TestConstants.getForkMainnetBlock()
         );
 
         OverlayV1Token ovlToken = new OverlayV1Token();

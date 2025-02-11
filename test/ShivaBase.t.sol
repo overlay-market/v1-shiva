@@ -96,68 +96,73 @@ contract ShivaTestBase is Test, BaseSetup {
     function setup() internal virtual override {
         /**
          * MAINNET FORKING SETUP
-        // Creates a fork of the blockchain using the specified RPC and block number
-        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
-
-        // Initialize contract instances
-        ovlToken = IOverlayV1Token(Constants.getOVLTokenAddress());
-        ovlMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
-        otherOvlMarket = IOverlayV1Market(Constants.getBTCDominanceMarketAddress());
-        ovlState = IOverlayV1State(Constants.getOVLStateAddress());
-        ovlFactory = OverlayV1Factory(ovlMarket.factory());
-
-        // Grant roles to specified addresses
-        vm.startPrank(Constants.getDeployerAddress());
-        ovlToken.grantRole(GOVERNOR_ROLE, Constants.getGovernorAddress());
-        ovlToken.grantRole(PAUSER_ROLE, Constants.getPauserAddress());
-        ovlToken.grantRole(GUARDIAN_ROLE, Constants.getGuardianAddress());
-        vm.stopPrank();
-
-        // Set Vault Factory
-        IBerachainRewardsVaultFactory vaultFactory =
-            IBerachainRewardsVaultFactory(Constants.getVaultFactoryAddress());
-
-        // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
-        Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address)";
-        bytes memory data =
-            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
-
-        // Set up shiva contract and reward vault
-        shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
-        rewardVault = shiva.rewardVault();
-        */
+         *     // Creates a fork of the blockchain using the specified RPC and block number
+         *     vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
+         *
+         *     // Initialize contract instances
+         *     ovlToken = IOverlayV1Token(Constants.getOVLTokenAddress());
+         *     ovlMarket = IOverlayV1Market(Constants.getETHDominanceMarketAddress());
+         *     otherOvlMarket = IOverlayV1Market(Constants.getBTCDominanceMarketAddress());
+         *     ovlState = IOverlayV1State(Constants.getOVLStateAddress());
+         *     ovlFactory = OverlayV1Factory(ovlMarket.factory());
+         *
+         *     // Grant roles to specified addresses
+         *     vm.startPrank(Constants.getDeployerAddress());
+         *     ovlToken.grantRole(GOVERNOR_ROLE, Constants.getGovernorAddress());
+         *     ovlToken.grantRole(PAUSER_ROLE, Constants.getPauserAddress());
+         *     ovlToken.grantRole(GUARDIAN_ROLE, Constants.getGuardianAddress());
+         *     vm.stopPrank();
+         *
+         *     // Set Vault Factory
+         *     IBerachainRewardsVaultFactory vaultFactory =
+         *         IBerachainRewardsVaultFactory(Constants.getVaultFactoryAddress());
+         *
+         *     // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
+         *     Shiva shivaImplementation = new Shiva();
+         *     string memory functionName = "initialize(address,address)";
+         *     bytes memory data =
+         *         abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
+         *
+         *     // Set up shiva contract and reward vault
+         *     shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
+         *     rewardVault = shiva.rewardVault();
+         */
 
         /**
          * MAINNET FORKING SETUP
          */
-        vm.createSelectFork(vm.envString(Constants.getForkedMainnetNetworkRPC()), Constants.getForkMainnetBlock());
+        vm.createSelectFork(
+            vm.envString(Constants.getForkedMainnetNetworkRPC()), Constants.getForkMainnetBlock()
+        );
 
         // Deploy the contracts
         vm.startPrank(deployer);
         ovlToken = deployToken();
-        
+
         // Deploy aggregator
         aggregator = deployAggregator();
-        
+
         // Deploy feed factory and feed
         feedFactory = new OverlayV1ChainlinkFeedFactory(
             address(ovlToken),
-            600,  // microWindow (10 minutes)
-            3600  // macroWindow (1 hour)
+            600, // microWindow (10 minutes)
+            3600 // macroWindow (1 hour)
         );
         feed = IOverlayV1ChainlinkFeed(
             feedFactory.deployFeed(address(aggregator), 172800) // 2 days window
         );
-    
+
         // Deploy factory
         ovlFactory = deployFactory();
-        
+
         ovlState = deployPeriphery(ovlFactory);
         ovlMarket = deployMarket(ovlFactory, address(feed));
-        otherOvlMarket = deployMarket(ovlFactory, address(
-            feedFactory.deployFeed(address(deployAggregator()), 172800) // 2 days window
-        ));
+        otherOvlMarket = deployMarket(
+            ovlFactory,
+            address(
+                feedFactory.deployFeed(address(deployAggregator()), 172800) // 2 days window
+            )
+        );
 
         // Set Vault Factory
         IBerachainRewardsVaultFactory vaultFactory =
@@ -166,9 +171,8 @@ contract ShivaTestBase is Test, BaseSetup {
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
         string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovlToken), address(vaultFactory)
-        );
+        bytes memory data =
+            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -232,7 +236,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function deployToken() public returns (IOverlayV1Token ovlToken_) {
         OverlayV1Token ovlToken = new OverlayV1Token();
-        
+
         ovlToken.grantRole(GOVERNOR_ROLE, deployer);
         ovlToken.grantRole(GUARDIAN_ROLE, deployer);
         ovlToken.grantRole(PAUSER_ROLE, deployer);
@@ -298,10 +302,9 @@ contract ShivaTestBase is Test, BaseSetup {
      * @param _factory The OverlayV1Factory contract to be used by the state.
      * @return ovlState_ The deployed OverlayV1State contract.
      */
-    function deployPeriphery(IOverlayV1Factory _factory)
-        public
-        returns (IOverlayV1State ovlState_)
-    {
+    function deployPeriphery(
+        IOverlayV1Factory _factory
+    ) public returns (IOverlayV1State ovlState_) {
         ovlState_ = new OverlayV1State(_factory);
     }
 
@@ -310,9 +313,9 @@ contract ShivaTestBase is Test, BaseSetup {
      * @return aggregator_ The deployed MockAggregator contract.
      */
     function deployAggregator() public returns (MockAggregator aggregator_) {
-       // Deploy MockAggregator with initial price
+        // Deploy MockAggregator with initial price
         aggregator_ = new MockAggregator();
-        
+
         // Set up initial rounds of price data
         vm.warp(block.timestamp + 60 * 60);
         aggregator_.submit(2, 979701714); // ~$9.79 with 8 decimals
@@ -362,7 +365,9 @@ contract ShivaTestBase is Test, BaseSetup {
      * @dev Approves the Shiva contract to spend the maximum amount of tokens on behalf of the user.
      * @param user The address of the user who is approving the token transfer.
      */
-    function approveToken(address user) internal {
+    function approveToken(
+        address user
+    ) internal {
         vm.prank(user);
         ovlToken.approve(address(shiva), type(uint256).max);
     }
@@ -692,7 +697,9 @@ contract ShivaTestBase is Test, BaseSetup {
      * @dev Asserts that the OVLToken balance of a user is zero.
      * @param user The address of the user.
      */
-    function assertOVLTokenBalanceIsZero(address user) public view {
+    function assertOVLTokenBalanceIsZero(
+        address user
+    ) public view {
         assertEq(ovlToken.balanceOf(user), 0);
     }
 

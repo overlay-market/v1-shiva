@@ -265,7 +265,9 @@ contract ShivaTest is Test, ShivaTestBase {
     /**
      * @notice Tests unwinding a position through Shiva fails due to the caller not being the owner of the position
      */
-    function test_unwind_notOwner(bool isLong) public {
+    function test_unwind_notOwner(
+        bool isLong
+    ) public {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, isLong);
@@ -750,32 +752,15 @@ contract ShivaTest is Test, ShivaTestBase {
         vm.stopPrank();
 
         // Get price limits for buildSingle
-        uint256 unwindPriceLimit = Utils.getUnwindPrice(
-            ovlState, 
-            ovlMarket, 
-            posId1, 
-            address(shiva), 
-            ONE, 
-            BASIC_SLIPPAGE
-        );
+        uint256 unwindPriceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId1, address(shiva), ONE, BASIC_SLIPPAGE);
 
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovlState,
-            ovlMarket,
-            collateral,
-            leverage,
-            BASIC_SLIPPAGE,
-            true
-        );
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, BASIC_SLIPPAGE, true);
 
         vm.startPrank(alice);
-        uint256 posId2 = buildSinglePosition(
-            collateral,
-            leverage,
-            posId1,
-            unwindPriceLimit,
-            buildPriceLimit
-        );
+        uint256 posId2 =
+            buildSinglePosition(collateral, leverage, posId1, unwindPriceLimit, buildPriceLimit);
         vm.stopPrank();
 
         // Verify that the new position was created correctly
@@ -804,32 +789,15 @@ contract ShivaTest is Test, ShivaTestBase {
         ovlToken.transfer(address(shiva), largeAmount);
         vm.stopPrank();
 
-        uint256 unwindPriceLimit = Utils.getUnwindPrice(
-            ovlState, 
-            ovlMarket, 
-            posId1, 
-            address(shiva), 
-            ONE, 
-            BASIC_SLIPPAGE
-        );
+        uint256 unwindPriceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId1, address(shiva), ONE, BASIC_SLIPPAGE);
 
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovlState,
-            ovlMarket,
-            collateral,
-            leverage,
-            BASIC_SLIPPAGE,
-            true
-        );
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, BASIC_SLIPPAGE, true);
 
         vm.startPrank(alice);
-        uint256 posId2 = buildSinglePosition(
-            collateral,
-            leverage,
-            posId1,
-            unwindPriceLimit,
-            buildPriceLimit
-        );
+        uint256 posId2 =
+            buildSinglePosition(collateral, leverage, posId1, unwindPriceLimit, buildPriceLimit);
         vm.stopPrank();
 
         // Verify that the new position was created correctly
@@ -916,18 +884,10 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // After full unwind, no tokens should remain staked
         uint256 remainingStaked = rewardVault.balanceOf(alice);
-        assertEq(
-            remainingStaked,
-            0,
-            "Should have unstaked all tokens after complete unwind"
-        );
+        assertEq(remainingStaked, 0, "Should have unstaked all tokens after complete unwind");
 
         // Verify total unstaked matches initial stake
-        assertEq(
-            totalUnstaked,
-            initialStaked,
-            "Total unstaked should match initial stake"
-        );
+        assertEq(totalUnstaked, initialStaked, "Total unstaked should match initial stake");
     }
 
     /**
@@ -983,11 +943,7 @@ contract ShivaTest is Test, ShivaTestBase {
             totalUnstaked += unstaked;
 
             // Verify each unwind maintains invariants
-            assertGe(
-                unstaked,
-                0,
-                "Individual unwind should not result in negative unstake"
-            );
+            assertGe(unstaked, 0, "Individual unwind should not result in negative unstake");
         }
 
         vm.stopPrank();
@@ -996,17 +952,9 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 remainingStaked = rewardVault.balanceOf(alice);
 
         // Assert invariants
-        assertEq(
-            remainingStaked,
-            0,
-            "Should have unstaked all tokens after complete unwind"
-        );
+        assertEq(remainingStaked, 0, "Should have unstaked all tokens after complete unwind");
 
-        assertEq(
-            totalUnstaked,
-            initialStaked,
-            "Total unstaked should match initial stake"
-        );
+        assertEq(totalUnstaked, initialStaked, "Total unstaked should match initial stake");
 
         // Verify position is fully unwound
         assertFractionRemainingIsZero(address(shiva), posId);
