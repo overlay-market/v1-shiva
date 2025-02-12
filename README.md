@@ -124,3 +124,11 @@ shiva.build(buildParams, onBehalfOfParams);
 - OpenZeppelin contracts for cryptographic utilities and upgradeable functionality.
 - OverlayV1 contracts for market interaction.
 - Berachain contracts for staking and rewards.
+
+## Testnet Deployments
+
+### Berachain Testnet
+
+- **Overlay Factory:** [0xF4DC8F0044a3646606f4A0F7497Dace3C5A20F82](https://bartio.beratrail.io/address/0xF4DC8F0044a3646606f4A0F7497Dace3C5A20F82)
+- **Overlay State:** [0xDb2759008e50d715b682314D53074a12C1d4ec5a](https://bartio.beratrail.io/address/0xDb2759008e50d715b682314D53074a12C1d4ec5a)
+- **Shiva:** [0x9BAAa882ba74ED42cb617c61908249Bd612B69bd](https://bartio.beratrail.io/address/0x9BAAa882ba74ED42cb617c61908249Bd612B69bd)
