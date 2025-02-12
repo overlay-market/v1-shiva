@@ -22,7 +22,9 @@ contract MarketImpersonator {
         );
     }
 
-    function positions(bytes32 key)
+    function positions(
+        bytes32 key
+    )
         external
         returns (
             uint96 notionalInitial_,

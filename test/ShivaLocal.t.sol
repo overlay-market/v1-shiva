@@ -4,6 +4,7 @@ pragma solidity <=0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {OverlayV1Factory} from "v1-core/contracts/OverlayV1Factory.sol";
 
 import {Constants} from "./utils/Constants.sol";
 import {MarketImpersonator} from "./utils/MarketImpersonator.sol";
@@ -18,9 +19,20 @@ import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IOverlayV1ChainlinkFeed} from
     "v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
-import {LIQUIDATE_CALLBACK_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {
+    LIQUIDATE_CALLBACK_ROLE,
+    GOVERNOR_ROLE,
+    PAUSER_ROLE,
+    GUARDIAN_ROLE
+} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1Token} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {IOverlayV1Factory} from "v1-core/contracts/interfaces/IOverlayV1Factory.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+
+import {MockAggregator} from "./mocks/MockAggregator.sol";
+import {OverlayV1ChainlinkFeedFactory} from
+    "v1-core/contracts/feeds/chainlink/OverlayV1ChainlinkFeedFactory.sol";
 
 /**
  * @title ShivaLocalTest
@@ -36,25 +48,42 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
      * @dev Overrides the setUp method in ShivaBase
      */
     function setUp() public override {
-        vm.createSelectFork(vm.envString(Constants.getForkedNetworkRPC()), Constants.getForkBlock());
+        vm.createSelectFork(
+            vm.envString(Constants.getForkedMainnetNetworkRPC()), Constants.getForkMainnetBlock()
+        );
 
-        // deploy the contracts
+        // Deploy the contracts
         vm.startPrank(deployer);
         ovlToken = deployToken();
-        ovlFactory = deployFactory(ovlToken);
-        ovlMarket = deployMarket(ovlFactory, Constants.getEthdFeed());
+
+        // Deploy aggregator
+        aggregator = deployAggregator();
+
+        // Deploy feed factory and feed
+        feedFactory = new OverlayV1ChainlinkFeedFactory(
+            address(ovlToken),
+            600, // microWindow (10 minutes)
+            3600 // macroWindow (1 hour)
+        );
+        feed = IOverlayV1ChainlinkFeed(
+            feedFactory.deployFeed(address(aggregator), 172800) // 2 days window
+        );
+
+        // Deploy factory
+        ovlFactory = deployFactory();
+
         ovlState = deployPeriphery(ovlFactory);
+        ovlMarket = deployMarket(ovlFactory, address(feed));
 
         // Set Vault Factory
         IBerachainRewardsVaultFactory vaultFactory =
-            IBerachainRewardsVaultFactory(Constants.getVaultFactoryAddress());
+            IBerachainRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
         string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovlToken), address(vaultFactory)
-        );
+        bytes memory data =
+            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -64,6 +93,9 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         ovlToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
         vm.stopPrank();
 
+        // Change the token name
+        isOV = false;
+
         // Set up test addresses
         alice = vm.addr(alicePk);
         bob = vm.addr(bobPk);
@@ -71,9 +103,6 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         automator = makeAddr("automator");
         guardian = Constants.getGuardianAddress();
         pauser = Constants.getPauserAddress();
-
-        // Change the token name
-        isOV = false;
 
         // Call helper functions
         labelAddresses();
