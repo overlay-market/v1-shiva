@@ -109,10 +109,6 @@ contract RewardVault is
     /*                         MODIFIERS                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    modifier onlyDistributor() {
-        _;
-    }
-
     modifier onlyOperatorOrUser(address account) {
         if (msg.sender != account) {
             if (msg.sender != _operators[account]) NotOperator.selector.revertWith();
@@ -135,7 +131,7 @@ contract RewardVault is
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @inheritdoc IRewardVault
-    function notifyRewardAmount(bytes calldata, uint256 reward) external onlyDistributor {
+    function notifyRewardAmount(bytes calldata, uint256 reward) external onlyFactoryOwner {
         _notifyRewardAmount(reward);
     }
 
