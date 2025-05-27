@@ -31,12 +31,6 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
     /// @notice The BGT token address.
     address public bgt;
 
-    /// @notice The distributor address.
-    address public distributor;
-
-    /// @notice The BeaconDeposit contract address.
-    address public beaconDepositContract;
-
     /// @notice Mapping of staking token to vault address.
     mapping(address stakingToken => address vault) public getVault;
 
@@ -54,8 +48,6 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
 
     function initialize(
         address _bgt,
-        address _distributor,
-        address _beaconDepositContract,
         address _governance,
         address _vaultImpl
     )
@@ -70,10 +62,6 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
         _setRoleAdmin(VAULT_PAUSER_ROLE, VAULT_MANAGER_ROLE);
         // slither-disable-next-line missing-zero-check
         bgt = _bgt;
-        // slither-disable-next-line missing-zero-check
-        distributor = _distributor;
-        // slither-disable-next-line missing-zero-check
-        beaconDepositContract = _beaconDepositContract;
 
         beacon = address(new UpgradeableBeacon(_governance, _vaultImpl));
     }
