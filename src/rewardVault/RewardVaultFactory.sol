@@ -117,7 +117,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
         emit VaultCreated(stakingToken, vault);
 
         // Initialize the vault.
-        RewardVault(vault).initialize(beaconDepositContract, bgt, distributor, stakingToken);
+        RewardVault(vault).initialize(bgt, stakingToken);
 
         return vault;
     }
