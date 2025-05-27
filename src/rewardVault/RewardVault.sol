@@ -8,13 +8,9 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
 import { Utils } from "berachain/src/libraries/Utils.sol";
-import { IBeaconDeposit } from "berachain/src/pol/interfaces/IBeaconDeposit.sol";
 import { IRewardVault } from "./IRewardVault.sol";
 import { FactoryOwnable } from "berachain/src/base/FactoryOwnable.sol";
 import { StakingRewards } from "berachain/src/base/StakingRewards.sol";
-import { IBeraChef } from "berachain/src/pol/interfaces/IBeraChef.sol";
-import { IDistributor } from "berachain/src/pol/interfaces/IDistributor.sol";
-import { IBGTIncentiveDistributor } from "berachain/src/pol/interfaces/IBGTIncentiveDistributor.sol";
 
 /// @title Rewards Vault
 /// @author Berachain Team
@@ -60,11 +56,6 @@ contract RewardVault is
 
     uint256 private constant MAX_INCENTIVE_RATE = 1e36; // for 18 decimal token, this will mean 1e18 incentiveTokens
         // per BGT emission.
-
-    // Safe gas limit for low level call operations to avoid griefing.
-    // This is mostly for low level call like approve, receiveIncentive (IBGTIncentiveDistributor which uses
-    // transferFrom).
-    uint256 private constant SAFE_GAS_LIMIT = 500_000;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          STORAGE                           */
