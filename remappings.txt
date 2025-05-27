@@ -4,3 +4,5 @@ forge-std/=lib/forge-std/src/
 v1-periphery/=lib/v1-periphery/
 v1-core/=lib/v1-periphery/lib/v1-core/
 @chimera/=lib/chimera/src/
+berachain/=lib/berachain-contracts/
+solady/=lib/berachain-contracts/lib/solady/
