@@ -31,10 +31,6 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
     /// @param operator The operator that has been set.
     event OperatorSet(address account, address operator);
 
-    /// @notice Emitted when the distributor is set.
-    /// @param distributor The address of the distributor.
-    event DistributorSet(address indexed distributor);
-
     /// @notice Emitted when the manager of an incentive token is changed.
     /// @param token The address of the incentive token.
     /// @param newManager The new manager of the incentive token.
@@ -90,10 +86,6 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
     /*                          GETTERS                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Get the address that is allowed to distribute rewards.
-    /// @return The address that is allowed to distribute rewards.
-    function distributor() external view returns (address);
-
     /// @notice Get the operator for an account.
     /// @param account The account to get the operator for.
     /// @return The operator for the account.
@@ -121,16 +113,10 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
 
     /**
      * @notice Initialize the vault, this is only callable once and by the factory since its the deployer.
-     * @param _berachef The address of the berachef.
      * @param _bgt The address of the BGT token.
-     * @param _distributor The address of the distributor.
      * @param _stakingToken The address of the staking token.
      */
-    function initialize(address _berachef, address _bgt, address _distributor, address _stakingToken) external;
-
-    /// @notice Allows the factory owner to set the contract that is allowed to distribute rewards.
-    /// @param _rewardDistribution The address that is allowed to distribute rewards.
-    function setDistributor(address _rewardDistribution) external;
+    function initialize(address _bgt, address _stakingToken) external;
 
     /// @notice Allows the distributor to notify the reward amount.
     /// @param pubkey The pubkey of the validator.

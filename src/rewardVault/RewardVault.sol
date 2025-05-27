@@ -73,9 +73,6 @@ contract RewardVault is
     /// @notice The maximum count of incentive tokens that can be stored.
     uint8 public maxIncentiveTokensCount;
 
-    /// @notice The address of the distributor contract.
-    address public distributor;
-
     mapping(address account => DelegateStake) internal _delegateStake;
 
     /// @notice The mapping of accounts to their operators.
@@ -95,7 +92,6 @@ contract RewardVault is
     /// @inheritdoc IRewardVault
     function initialize(
         address _bgt,
-        address _distributor,
         address _stakingToken
     )
         external
@@ -106,9 +102,6 @@ contract RewardVault is
         __ReentrancyGuard_init();
         __StakingRewards_init(_stakingToken, _bgt, 3 days);
         maxIncentiveTokensCount = 3;
-        // slither-disable-next-line missing-zero-check
-        distributor = _distributor;
-        emit DistributorSet(_distributor);
         emit MaxIncentiveTokensCountUpdated(maxIncentiveTokensCount);
     }
 
@@ -117,7 +110,6 @@ contract RewardVault is
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     modifier onlyDistributor() {
-        if (msg.sender != distributor) NotDistributor.selector.revertWith();
         _;
     }
 
@@ -141,13 +133,6 @@ contract RewardVault is
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       ADMIN FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @inheritdoc IRewardVault
-    function setDistributor(address _rewardDistribution) external onlyFactoryOwner {
-        if (_rewardDistribution == address(0)) ZeroAddress.selector.revertWith();
-        distributor = _rewardDistribution;
-        emit DistributorSet(_rewardDistribution);
-    }
 
     /// @inheritdoc IRewardVault
     function notifyRewardAmount(bytes calldata, uint256 reward) external onlyDistributor {
@@ -427,20 +412,6 @@ contract RewardVault is
             uint256 selfStaked = _accountInfo[account].balance - _delegateStake[account].delegateTotalStaked;
             if (selfStaked < amount) InsufficientSelfStake.selector.revertWith();
         }
-    }
-
-    /// @dev The Distributor grants this contract the allowance to transfer the BGT in its balance.
-    function _safeTransferRewardToken(address to, uint256 amount) internal override {
-        rewardToken.safeTransferFrom(distributor, to, amount);
-    }
-
-    // Ensure the provided reward amount is not more than the balance in the contract.
-    // This keeps the reward rate in the right range, preventing overflows due to
-    // very high values of rewardRate in the earned and rewardsPerToken functions;
-    // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
-    function _checkRewardSolvency() internal view override {
-        uint256 allowance = rewardToken.allowance(distributor, address(this));
-        if (undistributedRewards / PRECISION > allowance) InsolventReward.selector.revertWith();
     }
 
     function _deleteWhitelistedTokenFromList(address token) internal {
