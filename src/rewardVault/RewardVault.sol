@@ -9,7 +9,7 @@ import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
 import { Utils } from "berachain/src/libraries/Utils.sol";
 import { IBeaconDeposit } from "berachain/src/pol/interfaces/IBeaconDeposit.sol";
-import { IRewardVault } from "berachain/src/pol/interfaces/IRewardVault.sol";
+import { IRewardVault } from "./IRewardVault.sol";
 import { FactoryOwnable } from "berachain/src/base/FactoryOwnable.sol";
 import { StakingRewards } from "berachain/src/base/StakingRewards.sol";
 import { IBeraChef } from "berachain/src/pol/interfaces/IBeraChef.sol";
@@ -76,9 +76,6 @@ contract RewardVault is
     /// @notice The address of the distributor contract.
     address public distributor;
 
-    /// @notice The BeaconDeposit contract.
-    IBeaconDeposit public beaconDepositContract;
-
     mapping(address account => DelegateStake) internal _delegateStake;
 
     /// @notice The mapping of accounts to their operators.
@@ -97,7 +94,6 @@ contract RewardVault is
 
     /// @inheritdoc IRewardVault
     function initialize(
-        address _beaconDepositContract,
         address _bgt,
         address _distributor,
         address _stakingToken
@@ -112,7 +108,6 @@ contract RewardVault is
         maxIncentiveTokensCount = 3;
         // slither-disable-next-line missing-zero-check
         distributor = _distributor;
-        beaconDepositContract = IBeaconDeposit(_beaconDepositContract);
         emit DistributorSet(_distributor);
         emit MaxIncentiveTokensCountUpdated(maxIncentiveTokensCount);
     }
@@ -155,9 +150,8 @@ contract RewardVault is
     }
 
     /// @inheritdoc IRewardVault
-    function notifyRewardAmount(bytes calldata pubkey, uint256 reward) external onlyDistributor {
+    function notifyRewardAmount(bytes calldata, uint256 reward) external onlyDistributor {
         _notifyRewardAmount(reward);
-        _processIncentives(pubkey, reward);
     }
 
     /// @inheritdoc IRewardVault
@@ -447,78 +441,6 @@ contract RewardVault is
     function _checkRewardSolvency() internal view override {
         uint256 allowance = rewardToken.allowance(distributor, address(this));
         if (undistributedRewards / PRECISION > allowance) InsolventReward.selector.revertWith();
-    }
-
-    /// @notice process the incentives for a validator.
-    /// @notice If a token transfer consumes more than 500k gas units, the transfer alone will fail.
-    /// @param pubkey The pubkey of the validator to process the incentives for.
-    /// @param bgtEmitted The amount of BGT emitted by the validator.
-    function _processIncentives(bytes calldata pubkey, uint256 bgtEmitted) internal {
-        // Validator's operator corresponding to the pubkey receives the incentives.
-        // The pubkey -> operator relationship is maintained by the BeaconDeposit contract.
-        address _operator = beaconDepositContract.getOperator(pubkey);
-        IBeraChef beraChef = IDistributor(distributor).beraChef();
-        address bgtIncentiveDistributor = getBGTIncentiveDistributor();
-
-        uint256 whitelistedTokensCount = whitelistedTokens.length;
-        unchecked {
-            for (uint256 i; i < whitelistedTokensCount; ++i) {
-                address token = whitelistedTokens[i];
-                Incentive storage incentive = incentives[token];
-                uint256 amount = FixedPointMathLib.mulDiv(bgtEmitted, incentive.incentiveRate, PRECISION);
-                uint256 amountRemaining = incentive.amountRemaining;
-                amount = FixedPointMathLib.min(amount, amountRemaining);
-
-                uint256 validatorShare;
-                if (amount > 0) {
-                    validatorShare = beraChef.getValidatorIncentiveTokenShare(pubkey, amount);
-                    amount -= validatorShare;
-                }
-
-                if (validatorShare > 0) {
-                    // Transfer the validator share of the incentive to its operator address.
-                    // slither-disable-next-line arbitrary-send-erc20
-                    bool success = token.trySafeTransfer(_operator, validatorShare);
-                    if (success) {
-                        // Update the remaining amount only if tokens were transferred.
-                        amountRemaining -= validatorShare;
-                        emit IncentivesProcessed(pubkey, token, bgtEmitted, validatorShare);
-                    } else {
-                        emit IncentivesProcessFailed(pubkey, token, bgtEmitted, validatorShare);
-                    }
-                }
-
-                if (amount > 0) {
-                    // Transfer the remaining amount of the incentive to the bgtIncentiveDistributor contract for
-                    // distribution among BGT boosters.
-                    // give the bgtIncentiveDistributor the allowance to transfer the incentive token.
-                    bytes memory data = abi.encodeCall(IERC20.approve, (bgtIncentiveDistributor, amount));
-                    (bool success,) = token.call{ gas: SAFE_GAS_LIMIT }(data);
-                    if (success) {
-                        // reuse the already defined data variable to avoid stack too deep error.
-                        data = abi.encodeCall(IBGTIncentiveDistributor.receiveIncentive, (pubkey, token, amount));
-                        (success,) = bgtIncentiveDistributor.call{ gas: SAFE_GAS_LIMIT }(data);
-                        if (success) {
-                            amountRemaining -= amount;
-                            emit BGTBoosterIncentivesProcessed(pubkey, token, bgtEmitted, amount);
-                        } else {
-                            // If the transfer fails, set the allowance back to 0.
-                            // If we don't reset the allowance, the approved tokens remain unused, and future calls to
-                            // _processIncentives would revert for tokens like USDT that require allowance to be 0
-                            // before setting a new value, blocking the entire incentive distribution process.
-                            data = abi.encodeCall(IERC20.approve, (bgtIncentiveDistributor, 0));
-                            (success,) = token.call{ gas: SAFE_GAS_LIMIT }(data);
-                            emit BGTBoosterIncentivesProcessFailed(pubkey, token, bgtEmitted, amount);
-                        }
-                    }
-                    // if the approve fails, log the failure in sending the incentive to the bgtIncentiveDistributor.
-                    else {
-                        emit BGTBoosterIncentivesProcessFailed(pubkey, token, bgtEmitted, amount);
-                    }
-                }
-                incentive.amountRemaining = amountRemaining;
-            }
-        }
     }
 
     function _deleteWhitelistedTokenFromList(address token) internal {
