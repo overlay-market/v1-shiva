@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity 0.8.26;
+pragma solidity 0.8.10;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { LibClone } from "solady/src/utils/LibClone.sol";
 import { UpgradeableBeacon } from "solady/src/utils/UpgradeableBeacon.sol";
-import { Utils } from "berachain/src/libraries/Utils.sol";
-import { IRewardVaultFactory } from "berachain/src/pol/interfaces/IRewardVaultFactory.sol";
+import { Utils } from "./berachain/Utils.sol";
+import { IRewardVaultFactory } from "./berachain/IRewardVaultFactory.sol";
 import { RewardVault } from "./RewardVault.sol";
 
 /// @title RewardVaultFactory
@@ -32,7 +32,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
     address public bgt;
 
     /// @notice Mapping of staking token to vault address.
-    mapping(address stakingToken => address vault) public getVault;
+    mapping(address => address) public getVault;
 
     /// @notice Array of all vaults that have been created.
     address[] public allVaults;
@@ -93,7 +93,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
 
         // Use solady library to deploy deterministic clone of vaultImpl.
         bytes32 salt;
-        assembly ("memory-safe") {
+        assembly {
             mstore(0, stakingToken)
             salt := keccak256(0, 0x20)
         }
@@ -117,7 +117,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
     /// @inheritdoc IRewardVaultFactory
     function predictRewardVaultAddress(address stakingToken) external view returns (address) {
         bytes32 salt;
-        assembly ("memory-safe") {
+        assembly {
             mstore(0, stakingToken)
             salt := keccak256(0, 0x20)
         }

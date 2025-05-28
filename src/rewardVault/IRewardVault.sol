@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.10;
 
-import { IPOLErrors } from "berachain/src/pol/interfaces/IPOLErrors.sol";
-import { IStakingRewards } from "berachain/src/base/IStakingRewards.sol";
+import { IPOLErrors } from "./berachain/IPOLErrors.sol";
+import { IStakingRewards } from "./berachain/IStakingRewards.sol";
 
 interface IRewardVault is IPOLErrors, IStakingRewards {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

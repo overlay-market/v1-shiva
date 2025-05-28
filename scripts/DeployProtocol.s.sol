@@ -17,30 +17,10 @@ abstract contract DeployProtocolScript is Script {
 
     function setUp() public {}
 
-    function _deployFactory(address _ovl, address _sequencerOracle) internal returns (OverlayV1Factory factory) {
-        address deployer = vm.addr(deployerPrivateKey);
-        vm.startBroadcast(deployerPrivateKey);
-        factory = new OverlayV1Factory(
-            _ovl,
-            deployer, // fee recipient
-            _sequencerOracle,
-            1 hours // grace period
-        );
-
-        OverlayV1Token ovl = OverlayV1Token(_ovl);
-        ovl.grantRole(ADMIN_ROLE, address(factory));
-        
-        vm.stopBroadcast();
-    }
-
-    function _deployState(OverlayV1Factory _factory) internal returns (OverlayV1State state) {
-        state = new OverlayV1State(_factory);
-    }
-
-    function _deployShiva(address _ovl, address _state, address _vaultFactory) internal returns (Shiva shivaProxy) {
+    function _deployShiva(address _ovl, address _vaultFactory) internal returns (Shiva shivaProxy) {
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, _ovl, _state, _vaultFactory);
+        string memory functionName = "initialize(address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, _ovl, _vaultFactory);
 
         vm.startBroadcast(deployerPrivateKey);
         Shiva impl = new Shiva();
@@ -53,7 +33,7 @@ abstract contract DeployProtocolScript is Script {
         vm.stopBroadcast();
     }
 
-    function _setupShiva(Shiva shiva_, OverlayV1Factory factory_) internal {
+    function _setupShiva(Shiva shiva_, address factory_) internal {
         vm.startBroadcast(deployerPrivateKey);
         shiva_.addFactory(IOverlayV1Factory(address(factory_)));
         vm.stopBroadcast();
@@ -64,16 +44,17 @@ abstract contract DeployProtocolScript is Script {
 contract DeployProtocol is DeployProtocolScript {
     /* 
         source .env && forge script\
-        --rpc-url bartio\
+        --rpc-url bsc-testnet\
         scripts/DeployProtocol.s.sol:DeployProtocol\
-        bartio\
-        0x97576e088f0d05EF68cac2EEc63d017FE90952a0\
-        0xC35093f76fF3D31Af27A893CDcec585F1899eE54\
-        0x2B6e40f65D82A0cB98795bC7587a71bfa49fBB2B\
+        bsc-testnet\
+        0xb880E767739A82Eb716780BDfdbC1eD7b23BDB38\
+        0xB49a63B267515FC1D8232604d05Db4D8Daf00648\
+        0xF1e276bf93C2e743E74b58B3347344D9B2f0fdB6\
         --sig 'run(string,address,address,address)'\
+        --broadcast\
         -vvvv
     */
-    function run(string calldata _network, address _ovl, address _sequencerOracle, address _vaultFactory) external {
+    function run(string calldata _network, address _ovl, address _factory, address _vaultFactory) external {
         // NOTE: this should be the private key of the GOVERNOR
         uint256 DEPLOYER_PK;
         // Select the correct DEPLOYER_PK based on the network
@@ -85,18 +66,16 @@ contract DeployProtocol is DeployProtocolScript {
             DEPLOYER_PK = vm.envUint("DEPLOYER_PK_IMOLA");
         } else if (compareStrings(_network, "arbitrum-sepolia")) {
             DEPLOYER_PK = vm.envUint("DEPLOYER_PK_ARB_SEPOLIA");
+        } else if (compareStrings(_network, "bsc-testnet")) {
+            DEPLOYER_PK = vm.envUint("DEPLOYER_PK_BSC_TESTNET");
         } else {
             revert("Unsupported network");
         }
         deployerPrivateKey = DEPLOYER_PK;
 
-        OverlayV1Factory factory_ = _deployFactory(_ovl, _sequencerOracle);
-        OverlayV1State state_ = _deployState(factory_);
-        Shiva shiva_ = _deployShiva(_ovl, address(state_), _vaultFactory);
-        _setupShiva(shiva_, factory_);
+        Shiva shiva_ = _deployShiva(_ovl, _vaultFactory);
+        _setupShiva(shiva_, _factory);
 
-        console2.log("factory: ", address(factory_));
-        console2.log("state: ", address(state_));
         console2.log("shiva: ", address(shiva_));
     }
 
