@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.10;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {RewardVaultFactory} from "../src/rewardVault/RewardVaultFactory.sol";
@@ -45,6 +45,7 @@ contract DeployRewardVaultFactoryAndToken is DeployRewardVaultFactoryAndTokenScr
         scripts/DeployRewardVaultFactoryAndToken.s.sol:DeployRewardVaultFactoryAndToken\
         bsc-testnet\
         --sig 'run(string)'\
+        --broadcast\
         -vvvv
     */
     function run(string calldata _network) external {
