@@ -15,6 +15,9 @@ import {ShivaStructs} from "src/ShivaStructs.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {IBerachainRewardsVaultFactory} from "src/interfaces/berachain/IRewardVaults.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
+import {RewardVault} from "src/rewardVault/RewardVault.sol";
+import {RewardVaultFactory} from "src/rewardVault/RewardVaultFactory.sol";
+import {IRewardVault} from "src/rewardVault/IRewardVault.sol";
 
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IOverlayV1ChainlinkFeed} from
@@ -42,6 +45,8 @@ import {OverlayV1ChainlinkFeedFactory} from
  */
 contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
     using FixedPoint for uint256;
+
+    IOverlayV1Token public ovlTokenForBgt;
 
     /**
      * @dev Sets up the initial state for the ShivaBase test contract
@@ -76,8 +81,17 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         ovlMarket = deployMarket(ovlFactory, address(feed));
 
         // Set Vault Factory
+        ovlTokenForBgt = deployToken();
+        RewardVault rewardVaultImplementation = new RewardVault();
+        RewardVaultFactory rewardVaultFactoryImplementation = new RewardVaultFactory();
+        bytes memory rewardVaultFactoryData = abi.encodeWithSignature(
+            "initialize(address,address,address)",
+            address(ovlTokenForBgt),
+            deployer,
+            address(rewardVaultImplementation)
+        );
         IBerachainRewardsVaultFactory vaultFactory =
-            IBerachainRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
+            IBerachainRewardsVaultFactory(address(new ERC1967Proxy(address(rewardVaultFactoryImplementation), rewardVaultFactoryData)));
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
@@ -233,5 +247,105 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
             address(shiva), posId, uint96(leverage.mulDown(collateral))
         );
         assertEq(rewardVault.balanceOf(alice), leverage.mulUp(collateral));
+    }
+
+    /**
+     * @dev Group of tests for RewardVault balance validations
+     */
+
+    /**
+     * @notice Tests that building a position correctly updates the user's balance in RewardVault.
+     */
+    function test_build_updates_rewardVault_balance() public {
+        vm.startPrank(alice);
+        uint256 collateral = 10e18; // 10 OVL
+        uint256 leverage = 2.5e18; // 2.5x
+        uint256 expectedNotional = collateral.mulUp(leverage); // 25 OVL (staking token amount)
+
+        uint256 balanceBefore = rewardVault.balanceOf(alice);
+        buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        uint256 balanceAfter = rewardVault.balanceOf(alice);
+
+        assertEq(balanceAfter, balanceBefore + expectedNotional, "RewardVault balance should increase by notional");
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that fully unwinding a position sets the user's RewardVault balance to zero (or initial).
+     */
+    function test_unwind_full_updates_rewardVault_balance() public {
+        vm.startPrank(alice);
+        uint256 collateral = 10e18;
+        uint256 leverage = 2e18;
+        uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+        
+        uint256 balanceBeforeUnwind = rewardVault.balanceOf(alice);
+        uint256 expectedInitialNotional = collateral.mulUp(leverage);
+        assertEq(balanceBeforeUnwind, expectedInitialNotional, "Initial RewardVault balance incorrect");
+
+        unwindPosition(posId, ONE, BASIC_SLIPPAGE); // Unwind 100%
+        uint256 balanceAfterUnwind = rewardVault.balanceOf(alice);
+
+        assertEq(balanceAfterUnwind, 0, "RewardVault balance should be zero after full unwind");
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that partially unwinding a position correctly updates the user's RewardVault balance.
+     */
+    function test_unwind_partial_updates_rewardVault_balance() public {
+        vm.startPrank(alice);
+        uint256 collateral = 20e18;
+        uint256 leverage = 2e18; // Notional = 40
+        uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+
+        uint256 initialNotional = collateral.mulUp(leverage);
+        assertEq(rewardVault.balanceOf(alice), initialNotional, "Initial RewardVault balance incorrect");
+
+        uint256 fractionToUnwind = 0.25e18; // Unwind 25%
+        
+        // Rounding in _onUnwindPosition: _fraction -= _fraction % 1e14;
+        uint256 roundedFractionToUnwind = fractionToUnwind - (fractionToUnwind % 1e14);
+        uint256 actualNotionalUnstaked = initialNotional.mulDown(roundedFractionToUnwind);
+
+
+        unwindPosition(posId, fractionToUnwind, BASIC_SLIPPAGE);
+        uint256 balanceAfterPartialUnwind = rewardVault.balanceOf(alice);
+        
+        // The actual unstaked amount might differ due to internal rounding in Shiva's _onUnstake or _onUnwindPosition
+        // We need to check the logic in Shiva.sol:_onUnstake and how much is actually withdrawn.
+        // Shiva._onUnstake: _amount = currentBalance < _amount ? currentBalance : _amount;
+        // Shiva._onUnwindPosition: intialNotionalFraction = intialNotionalFractionBefore - Utils.getNotionalRemaining(...); _onUnstake(..., intialNotionalFraction);
+
+        // For simplicity here, we assume ideal math, but in reality, it might be slightly off.
+        // A more robust check would be to get the actual amount unstaked from events if possible, or recalculate as Shiva does.
+        // Based on current code, _onUnstake will use the difference in notional remaining.
+        // Let's assert the remaining balance is (initialNotional - actualNotionalUnstaked) which should be initialNotional * (1 - roundedFractionToUnwind)
+        uint256 expectedRemainingBalance = initialNotional - actualNotionalUnstaked;
+
+        assertApproxEqAbs(balanceAfterPartialUnwind, expectedRemainingBalance, 1, "RewardVault balance after partial unwind incorrect");
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that emergency withdrawing a position sets the user's RewardVault balance to zero.
+     */
+    function test_emergencyWithdraw_updates_rewardVault_balance() public {
+        vm.startPrank(alice);
+        uint256 collateral = 10e18;
+        uint256 leverage = 2e18; // Notional = 20
+        uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
+
+        assertEq(rewardVault.balanceOf(alice), collateral.mulUp(leverage), "Initial RewardVault balance incorrect");
+        vm.stopPrank();
+
+        shutDownMarket(); // Market is shut down
+
+        vm.startPrank(alice);
+        shiva.emergencyWithdraw(ovlMarket, posId, alice);
+        vm.stopPrank();
+
+        assertEq(rewardVault.balanceOf(alice), 0, "RewardVault balance should be zero after emergency withdraw");
     }
 }
