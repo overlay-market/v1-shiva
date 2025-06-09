@@ -273,12 +273,17 @@ contract RewardVault is
     }
 
     /// @inheritdoc IRewardVault
-    function withdraw(uint256 amount) external nonReentrant checkSelfStakedBalance(msg.sender, amount) {
+    function withdraw(uint256 amount)
+        external
+        nonReentrant
+        whenNotPaused
+        checkSelfStakedBalance(msg.sender, amount)
+    {
         _withdraw(msg.sender, amount);
     }
 
     /// @inheritdoc IRewardVault
-    function delegateWithdraw(address account, uint256 amount) external nonReentrant {
+    function delegateWithdraw(address account, uint256 amount) external nonReentrant whenNotPaused {
         if (msg.sender == account) NotDelegate.selector.revertWith();
 
         unchecked {
@@ -307,7 +312,7 @@ contract RewardVault is
     }
 
     /// @inheritdoc IRewardVault
-    function exit(address recipient) external nonReentrant {
+    function exit(address recipient) external nonReentrant whenNotPaused {
         // self-staked amount
         uint256 amount = _accountInfo[msg.sender].balance - _delegateStake[msg.sender].delegateTotalStaked;
         _withdraw(msg.sender, amount);

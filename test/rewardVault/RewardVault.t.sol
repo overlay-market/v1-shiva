@@ -24,6 +24,7 @@ contract RewardVaultTest is Test {
     address deployer;
     address alice;
     address bob;
+    address charlie;
 
     uint256 constant ONE = 1e18;
     uint256 constant PRECISION = 1e18;
@@ -32,10 +33,12 @@ contract RewardVaultTest is Test {
         deployer = makeAddr("deployer");
         alice = makeAddr("alice");
         bob = makeAddr("bob");
+        charlie = makeAddr("charlie");
 
         vm.label(deployer, "Deployer");
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
+        vm.label(charlie, "Charlie");
 
         vm.startPrank(deployer);
 
@@ -57,6 +60,11 @@ contract RewardVaultTest is Test {
         factory = RewardVaultFactory(
             address(new ERC1967Proxy(address(rewardVaultFactoryImplementation), rewardVaultFactoryData))
         );
+
+        // Grant pauser/manager roles to deployer for testing
+        // Manager role must be granted first as it's the admin for the pauser role.
+        factory.grantRole(factory.VAULT_MANAGER_ROLE(), deployer);
+        factory.grantRole(factory.VAULT_PAUSER_ROLE(), deployer);
 
         // Create a vault
         address vaultAddress = factory.createRewardVault(address(stakingToken));
@@ -371,5 +379,191 @@ contract RewardVaultTest is Test {
         vm.expectRevert(IPOLErrors.InsufficientSelfStake.selector);
         rewardVault.withdraw(delegateStakeAmount);
         vm.stopPrank();
+    }
+
+    /// @notice Tests that exit() correctly withdraws self-stake and claims rewards, leaving delegate stake.
+    function test_exit_withdraws_self_stake_and_claims_rewards() public {
+        uint256 aliceSelfStake = 100 * ONE;
+        uint256 bobDelegateStake = 200 * ONE;
+        uint256 rewardAmount = 500 * ONE;
+
+        // 1. Staking from self and delegate
+        vm.prank(alice);
+        rewardVault.stake(aliceSelfStake);
+        vm.prank(bob);
+        rewardVault.delegateStake(alice, bobDelegateStake);
+
+        // 2. Add rewards and wait
+        vm.startPrank(deployer);
+        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
+        vm.stopPrank();
+
+        uint256 rewardsDuration = rewardVault.rewardsDuration();
+        vm.warp(block.timestamp + rewardsDuration);
+
+        // 3. Alice exits
+        vm.startPrank(alice);
+        uint256 initialAliceStakingBalance = stakingToken.balanceOf(alice);
+        uint256 initialAliceBgtBalance = bgt.balanceOf(alice);
+        uint256 totalAliceStakeBefore = rewardVault.balanceOf(alice);
+
+        uint256 expectedRewards = rewardVault.earned(alice);
+        
+        rewardVault.exit(alice); // Withdraws and claims to herself
+
+        // 4. Assert balances and state
+        // Alice should have her self-staked amount back
+        assertEq(
+            stakingToken.balanceOf(alice),
+            initialAliceStakingBalance + aliceSelfStake,
+            "Alice should receive her self-staked tokens"
+        );
+        // Alice should have her rewards
+        assertApproxEqAbs(
+            bgt.balanceOf(alice),
+            initialAliceBgtBalance + expectedRewards,
+            1e16,
+            "Alice should receive her earned rewards"
+        );
+
+        // Vault internal state for Alice
+        assertEq(
+            rewardVault.balanceOf(alice),
+            bobDelegateStake,
+            "Alice's internal balance should equal remaining delegate stake"
+        );
+        assertEq(
+            rewardVault.getTotalDelegateStaked(alice),
+            bobDelegateStake,
+            "Total delegate stake for Alice should be unchanged"
+        );
+        assertEq(rewardVault.rewards(alice), 0, "Alice should have no pending rewards");
+
+        vm.stopPrank();
+    }
+
+    /// @notice Tests that a user can successfully set an operator.
+    function test_setOperator() public {
+        vm.prank(alice);
+        rewardVault.setOperator(bob);
+        assertEq(rewardVault.operator(alice), bob, "Operator should be set to Bob");
+    }
+
+    /// @notice Tests that a designated operator can claim rewards on behalf of a user.
+    function test_operator_can_claim_rewards() public {
+        // 1. Alice stakes and earns rewards
+        vm.prank(alice);
+        rewardVault.stake(100 * ONE);
+
+        vm.startPrank(deployer);
+        bgt.transfer(address(rewardVault), 500 * ONE);
+        rewardVault.notifyRewardAmount(bytes(""), 500 * ONE);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + rewardVault.rewardsDuration());
+
+        // 2. Alice sets Bob as her operator
+        vm.prank(alice);
+        rewardVault.setOperator(bob);
+
+        // 3. Bob claims rewards for Alice, sending them to himself
+        vm.startPrank(bob);
+        uint256 expectedRewards = rewardVault.earned(alice);
+        uint256 initialBobBgtBalance = bgt.balanceOf(bob);
+
+        uint256 claimed = rewardVault.getReward(alice, bob);
+
+        // 4. Assertions
+        assertGt(claimed, 0, "Should have claimed some rewards");
+        assertApproxEqAbs(claimed, expectedRewards, 1e16, "Claimed amount should match earned");
+        assertEq(bgt.balanceOf(bob), initialBobBgtBalance + claimed, "Bob's BGT balance should increase");
+        assertEq(rewardVault.rewards(alice), 0, "Alice's pending rewards should be zero");
+        vm.stopPrank();
+    }
+
+    /// @notice Tests that a non-operator cannot claim rewards.
+    function test_revert_non_operator_cannot_claim_rewards() public {
+        // 1. Alice stakes and earns rewards
+        vm.prank(alice);
+        rewardVault.stake(100 * ONE);
+
+        vm.startPrank(deployer);
+        bgt.transfer(address(rewardVault), 500 * ONE);
+        rewardVault.notifyRewardAmount(bytes(""), 500 * ONE);
+        vm.stopPrank();
+        
+        vm.warp(block.timestamp + rewardVault.rewardsDuration());
+
+        // 2. Charlie (not an operator) tries to claim rewards for Alice
+        vm.startPrank(charlie);
+        vm.expectRevert(IPOLErrors.NotOperator.selector);
+        rewardVault.getReward(alice, charlie);
+        vm.stopPrank();
+    }
+
+    /// @notice Tests the full pausable/unpausable flow.
+    function test_pausable_flow() public {
+        // Stake first so we can test withdraw/exit while paused
+        vm.prank(alice);
+        rewardVault.stake(5 * ONE);
+
+        // 1. Pause the contract
+        vm.startPrank(deployer);
+        rewardVault.pause();
+        assertTrue(rewardVault.paused(), "Contract should be paused");
+        vm.stopPrank();
+
+        // 2. Check that critical functions fail
+        vm.startPrank(alice);
+        vm.expectRevert("Pausable: paused");
+        rewardVault.stake(10 * ONE);
+
+        vm.expectRevert("Pausable: paused");
+        rewardVault.withdraw(1 * ONE);
+
+        vm.expectRevert("Pausable: paused");
+        rewardVault.exit(alice);
+        vm.stopPrank();
+
+        // 3. Unpause the contract
+        vm.startPrank(deployer);
+        rewardVault.unpause();
+        assertFalse(rewardVault.paused(), "Contract should be unpaused");
+        vm.stopPrank();
+
+        // 4. Check that functionality is restored
+        vm.startPrank(alice);
+        uint256 balanceBefore = stakingToken.balanceOf(alice);
+        rewardVault.withdraw(1 * ONE);
+        assertEq(stakingToken.balanceOf(alice), balanceBefore + 1 * ONE, "Withdraw should succeed after unpause");
+        vm.stopPrank();
+    }
+
+    /// @notice Tests administrative functions like setRewardsDuration and recoverERC20.
+    function test_admin_functions() public {
+        // --- setRewardsDuration ---
+        uint256 newDuration = 7 days;
+        vm.prank(deployer);
+        rewardVault.setRewardsDuration(newDuration);
+        assertEq(rewardVault.rewardsDuration(), newDuration, "Rewards duration should be updated");
+
+        // --- recoverERC20 ---
+        // Send some other token to the vault
+        MockERC20 otherToken = new MockERC20("Other Token", "OTH", 18);
+        otherToken.mint(address(rewardVault), 100 * ONE);
+        
+        uint256 initialDeployerOtherTokenBalance = otherToken.balanceOf(deployer);
+        vm.prank(deployer);
+        rewardVault.recoverERC20(address(otherToken), 100 * ONE);
+        assertEq(otherToken.balanceOf(deployer), initialDeployerOtherTokenBalance + 100 * ONE, "Owner should recover other tokens");
+
+        // Should not be able to recover the staking token as there are no "excess" tokens
+        vm.prank(alice);
+        rewardVault.stake(10 * ONE); // Make sure totalSupply > 0
+        
+        vm.prank(deployer);
+        vm.expectRevert(IPOLErrors.NotEnoughBalance.selector);
+        rewardVault.recoverERC20(address(stakingToken), 1 * ONE);
     }
 } 
