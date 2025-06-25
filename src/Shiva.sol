@@ -640,8 +640,7 @@ contract Shiva is
         bool isLong =
             Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
-        uint256 notional = totalCollateral.mulUp(_params.leverage);
-        uint256 relayerFee = _getRelayerFee(notional);
+        uint256 relayerFee = _getRelayerFee(totalCollateral.mulUp(_params.leverage));
 
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee + relayerFee);
 
