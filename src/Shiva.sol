@@ -110,6 +110,9 @@ contract Shiva is
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
 
+    /// @notice The fee charged by the relayer for executing a transaction (in basis points, 10000 = 100%)
+    uint256 public relayerFee;
+
     /**
      * @dev Modifiers section
      */
@@ -765,6 +768,15 @@ contract Shiva is
      * @dev Only callable by the governor
      */
     function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
+
+    /**
+     * @notice Sets the relayer fee
+     * @param _newFee The new relayer fee in basis points (10000 = 100%)
+     */
+    function setRelayerFee(uint256 _newFee) external onlyGovernor(msg.sender) {
+        relayerFee = _newFee;
+        emit RelayerFeeUpdated(_newFee);
+    }
 
     /**
      * @notice Cancels a specific nonce for the caller

@@ -100,6 +100,12 @@ interface IShiva {
     event NonceCancelled(address indexed owner, uint256 nonce);
 
     /**
+     * @notice Emitted when the relayer fee is updated.
+     * @param newFee The new relayer fee in basis points.
+     */
+    event RelayerFeeUpdated(uint256 newFee);
+
+    /**
      * @notice Error emitted when the caller is not the owner of the position.
      */
     error NotPositionOwner();
@@ -193,4 +199,10 @@ interface IShiva {
         uint256 positionId,
         address owner
     ) external;
+
+    /**
+     * @notice Sets the relayer fee.
+     * @param newFee The new relayer fee in basis points (10000 = 100%).
+     */
+    function setRelayerFee(uint256 newFee) external;
 }
