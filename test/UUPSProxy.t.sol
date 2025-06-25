@@ -56,13 +56,14 @@ contract ImplementationV1Test is Test {
         shivaV1 = new ShivaV1();
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), vaultFactory);
+        string memory functionName = "initialize(address,address,uint256)";
+        uint256 relayerFee = 100000000000000; // 0.01%
+        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), vaultFactory, relayerFee);
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(address(ovlToken), vaultFactory);
+        shivaV1.initialize(address(ovlToken), vaultFactory, relayerFee);
     }
 
     function testInitialized() public {
@@ -95,8 +96,9 @@ contract ImplementationV2Test is Test {
         shivaV1 = new ShivaV1();
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), vaultFactory);
+        string memory functionName = "initialize(address,address,uint256)";
+        uint256 relayerFee = 100000000000000; // 0.01%
+        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), vaultFactory, relayerFee);
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
@@ -108,13 +110,13 @@ contract ImplementationV2Test is Test {
         address(proxy).call(abi.encodeWithSignature("setMagicNumber(uint256)", 42));
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(address(ovlToken), vaultFactory);
+        shivaV1.initialize(address(ovlToken), vaultFactory, relayerFee);
 
         // deploy new logic contract
         shivaV2 = new ShivaV2();
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV2.initialize(address(ovlToken), vaultFactory);
+        shivaV2.initialize(address(ovlToken), vaultFactory, relayerFee);
 
         vm.startPrank(address(0x123));
 

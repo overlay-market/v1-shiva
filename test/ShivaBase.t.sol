@@ -170,9 +170,10 @@ contract ShivaTestBase is Test, BaseSetup {
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address)";
+        string memory functionName = "initialize(address,address,uint256)";
+        uint256 relayerFee = 100000000000000; // 0.01%
         bytes memory data =
-            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
+            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory), relayerFee);
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -590,7 +591,8 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public returns (uint256) {
         return shiva.build(
             ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
+            false // payRelayerFee - default to false for backward compatibility
         );
     }
 
@@ -613,7 +615,8 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public {
         shiva.unwind(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, fraction, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
+            false // payRelayerFee - default to false for backward compatibility
         );
     }
 
@@ -649,7 +652,8 @@ contract ShivaTestBase is Test, BaseSetup {
                 leverage,
                 previousPositionId
             ),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
+            false // payRelayerFee - default to false for backward compatibility
         );
     }
 

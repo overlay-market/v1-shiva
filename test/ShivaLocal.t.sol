@@ -81,9 +81,10 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address)";
+        string memory functionName = "initialize(address,address,uint256)";
+        uint256 relayerFee = 100000000000000; // 0.01%
         bytes memory data =
-            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
+            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory), relayerFee);
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
