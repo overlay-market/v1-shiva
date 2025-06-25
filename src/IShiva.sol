@@ -145,11 +145,13 @@ interface IShiva {
      * @notice Builds a new position on behalf of an owner.
      * @param params Parameters to build the position.
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
      * @return positionId Unique ID of the built position.
      */
     function build(
         ShivaStructs.Build calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
     ) external returns (uint256 positionId);
 
     /**
@@ -165,11 +167,13 @@ interface IShiva {
      * @notice Builds a new position with a single transaction on behalf of an owner.
      * @param params Parameters to build the position.
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
      * @return positionId Unique ID of the built position.
      */
     function buildSingle(
         ShivaStructs.BuildSingle calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
     ) external returns (uint256 positionId);
 
     /**
@@ -182,10 +186,12 @@ interface IShiva {
      * @notice Unwinds a position on behalf of an owner.
      * @param params Parameters to unwind the position.
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
      */
     function unwind(
         ShivaStructs.Unwind calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
     ) external;
 
     /**
