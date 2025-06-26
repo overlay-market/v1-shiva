@@ -101,7 +101,7 @@ interface IShiva {
 
     /**
      * @notice Emitted when the relayer fee is updated.
-     * @param newFee The new relayer fee in basis points.
+     * @param newFee The new fixed relayer fee.
      */
     event RelayerFeeUpdated(uint256 newFee);
 
@@ -129,6 +129,13 @@ interface IShiva {
      * @notice Error emitted when the nonce is invalid.
      */
     error InvalidNonce();
+
+    /**
+     * @notice Error emitted when the unwind amount is insufficient to pay the relayer fee.
+     * @param unwindAmount The amount unwound from the position.
+     * @param relayerFee The required fee for the relayer.
+     */
+    error InsufficientUnwindAmountForFee(uint256 unwindAmount, uint256 relayerFee);
 
     /**
      * @dev Functions that Shiva should implement.
@@ -208,7 +215,7 @@ interface IShiva {
 
     /**
      * @notice Sets the relayer fee.
-     * @param newFee The new relayer fee in basis points (10000 = 100%).
+     * @param newFee The new fixed relayer fee.
      */
     function setRelayerFee(uint256 newFee) external;
 }

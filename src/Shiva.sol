@@ -110,7 +110,7 @@ contract Shiva is
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
 
-    /// @notice The fee charged by the relayer for executing a transaction (in basis points, 10000 = 100%)
+    /// @notice The fixed fee charged by the relayer for executing a transaction (e.g. 1e18 for 1 OVL)
     uint256 public relayerFee;
 
     /**
@@ -179,7 +179,7 @@ contract Shiva is
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
-     * @param _relayerFee The initial relayer fee (e.g. 0.01% = 0.0001 ether = 100000000000000 wei)
+     * @param _relayerFee The initial relayer fee as a fixed amount (e.g. 1e18 for 1 OVL)
      */
     function initialize(
         address _ovlToken,
@@ -496,9 +496,6 @@ contract Shiva is
         require(_params.leverage >= ONE, "Shiva:lev<min");
         uint256 tradingFee = _getTradingFee(_params.ovlMarket, _params.collateral, _params.leverage);
 
-        uint256 notional = _params.collateral.mulUp(_params.leverage);
-        uint256 relayerFee = _getRelayerFee(notional);
-
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee + relayerFee);
 
         ovlToken.transfer(msg.sender, relayerFee);
@@ -553,11 +550,14 @@ contract Shiva is
 
         uint256 unwindAmount = ovlToken.balanceOf(address(this));
 
-        uint256 relayerFee = _getRelayerFee(unwindAmount);
+        if (unwindAmount < relayerFee) {
+            revert InsufficientUnwindAmountForFee(unwindAmount, relayerFee);
+        }
 
         // Transfer remaining amount to owner
         ovlToken.transfer(_owner, unwindAmount - relayerFee);
 
+        // Transfer fee to relayer
         ovlToken.transfer(msg.sender, relayerFee);
     }
 
@@ -639,8 +639,6 @@ contract Shiva is
 
         bool isLong =
             Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
-
-        uint256 relayerFee = _getRelayerFee(totalCollateral.mulUp(_params.leverage));
 
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee + relayerFee);
 
@@ -837,17 +835,6 @@ contract Shiva is
     }
 
     /**
-     * @notice Calculates the relayer fee for a position
-     * @param _amount The amount to calculate the fee from (collateral or notional depending on context)
-     * @return The relayer fee
-     */
-    function _getRelayerFee(
-        uint256 _amount
-    ) internal view returns (uint256) {
-        return _amount.mulUp(relayerFee);
-    }
-
-    /**
      * @notice Approves the market contract to spend OVL tokens
      * @param _ovlMarket The market interface
      */
@@ -915,7 +902,7 @@ contract Shiva is
 
     /**
      * @notice Sets the relayer fee
-     * @param _newFee The new relayer fee in basis points (10000 = 100%)
+     * @param _newFee The new relayer fee as a fixed amount (e.g. 1e18 for 1 OVL)
      */
     function setRelayerFee(uint256 _newFee) external onlyGovernor(msg.sender) {
         relayerFee = _newFee;
