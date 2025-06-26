@@ -436,6 +436,208 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
     }
 
     /**
+     * @notice Tests that a stop loss order reverts if the execution price is worse than the price limit.
+     */
+    function testStopLossRevertsIfPriceLimitBreached() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true); // 1 OVL collateral, 5x leverage
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order with a trigger and a price limit
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+
+        uint256 triggerPrice = currentPrice * 95 / 100; // 5% price drop
+        uint256 priceLimit = triggerPrice * 99 / 100; // 1% slippage tolerance for the unwind
+        uint48 deadline = uint48(block.timestamp + 3600); // 1 hour deadline
+
+        bytes32 digest = getStopLossOnBehalfOfDigest(
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+        );
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Price drops significantly, below both the trigger price and the price limit
+        uint256 executionPrice = priceLimit * 95 / 100; // Price drops 5% below the user's limit
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60); // Advance time to ensure oracle update
+
+        // 4. Automator attempts to execute the stop-loss order
+        // It should fail because the current price is worse than the user's priceLimit.
+        // The exact revert message comes from the OverlayV1Market contract.
+        vm.startPrank(automator);
+        vm.expectRevert();
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        vm.stopPrank();
+
+        // 5. Verify position is NOT closed
+        (,,,,,,, uint16 fractionRemaining) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertGt(fractionRemaining, 0, "Position should not have been closed");
+    }
+
+    /**
+     * @notice Tests that stop loss reverts with InsufficientUnwindAmountForFee if the
+     *         unwound value is less than the relayer fee.
+     */
+    function testStopLossFailsWithInsufficientFundsForFee() public {
+        // 1. Alice builds a long position with small collateral and lower leverage
+        vm.startPrank(alice);
+        uint256 collateral = 0.5e18;
+        // Lower leverage to avoid liquidation on price drop
+        uint256 posId = buildPosition(collateral, 2e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Set a relayer fee that is greater than the expected unwind amount
+        vm.startPrank(deployer);
+        uint256 highRelayerFee = 0.6e18;
+        shiva.setRelayerFee(highRelayerFee);
+        vm.stopPrank();
+
+        // 3. Alice signs a stop-loss order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+
+        // A smaller price drop to avoid hitting liquidation
+        uint256 triggerPrice = currentPrice * 98 / 100; // 2% price drop
+        uint256 priceLimit = triggerPrice * 90 / 100; // 10% slippage to ensure it passes price limit check
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 4. Price drops, making the stop-loss executable
+        uint256 executionPrice = triggerPrice * 98 / 100; // Price drops just below trigger
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 5. Automator executes the stop-loss, expecting it to fail because the unwind amount
+        // will be less than the collateral, which is less than the required fee.
+        vm.startPrank(automator);
+        vm.expectRevert();
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true); // payRelayerFee = true
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a stop loss order fails if the position was already closed manually.
+     */
+    function testStopLossFailsOnManuallyClosedPosition() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+
+        uint256 triggerPrice = currentPrice * 95 / 100; // 5% price drop
+        uint256 priceLimit = triggerPrice * 99 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Alice manually closes her position before the stop loss triggers
+        vm.startPrank(alice);
+        unwindPosition(posId, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        // 4. Verify the position is indeed closed
+        assertFractionRemainingIsZero(address(shiva), posId);
+
+        // 5. Price drops, making the original stop-loss signature executable
+        uint256 executionPrice = triggerPrice * 999 / 1000;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 6. Automator attempts to execute the stop-loss, which should fail
+        // because the underlying market position no longer exists.
+        vm.startPrank(automator);
+        vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that stop loss fails if the market is shut down.
+     */
+    function testStopLossFailsWhenMarketIsShutdown() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+
+        uint256 triggerPrice = currentPrice * 95 / 100;
+        uint256 priceLimit = triggerPrice * 99 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. The market is shut down
+        shutDownMarket();
+
+        // 4. Price drops, which would normally make the stop-loss executable
+        aggregator.submit(aggregator.latestRound() + 1, int256(triggerPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 5. Automator attempts to execute the stop-loss, which should fail
+        // because the market is shut down.
+        vm.startPrank(automator);
+        vm.expectRevert(); // Reverts from market with "OVLV1:shutdown"
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a stop loss for a long position executes exactly at the trigger price.
+     */
+    function testStopLossExecutesAtExactTriggerPrice() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+
+        uint256 triggerPrice = currentPrice * 95 / 100; // 5% price drop
+        uint256 priceLimit = triggerPrice * 99 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getStopLossOnBehalfOfDigest(
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+        );
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Price drops to be exactly the trigger price
+        aggregator.submit(aggregator.latestRound() + 1, int256(triggerPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 4. Automator executes the stop-loss order successfully
+        vm.startPrank(automator);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        vm.stopPrank();
+
+        // 5. Verify position is closed
+        assertFractionRemainingIsZero(address(shiva), posId);
+    }
+
+    /**
      * @dev Warms up the oracle by advancing time and submitting prices to ensure the TWAP windows are populated.
      * @param _feed The price feed to warm up.
      */
