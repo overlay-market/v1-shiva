@@ -75,4 +75,22 @@ library ShivaStructs {
         uint256 nonce;
         bytes signature;
     }
+
+    /**
+     * @notice Represents the parameters to perform a stop loss order
+     * @param ovlMarket The market interface
+     * @param brokerId The ID of the broker; 0 in most cases
+     * @param positionId The ID of the position to unwind
+     * @param fraction The fraction of the position to unwind
+     * @param triggerPrice The price at which the stop loss is triggered
+     * @param priceLimit The price limit for the unwind
+     */
+    struct StopLoss {
+        IOverlayV1Market ovlMarket;
+        uint32 brokerId;
+        uint256 positionId;
+        uint256 fraction;
+        uint256 triggerPrice;
+        uint256 priceLimit;
+    }
 }

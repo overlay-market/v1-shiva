@@ -20,6 +20,8 @@ import {
     PAUSER_ROLE
 } from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
+import {Oracle} from "v1-core/contracts/libraries/Oracle.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
@@ -112,6 +114,14 @@ contract Shiva is
 
     /// @notice The fixed fee charged by the relayer for executing a transaction (e.g. 1e18 for 1 OVL)
     uint256 public relayerFee;
+
+    /**
+     * @notice Typehash for the StopLossOnBehalfOfParams struct
+     * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
+     */
+    bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "StopLossOnBehalfOf(address ovlMarket,uint256 positionId,uint256 fraction,uint256 triggerPrice,uint256 priceLimit,uint48 deadline,uint256 nonce,uint32 brokerId)"
+    );
 
     /**
      * @dev Modifiers section
@@ -428,6 +438,108 @@ contract Shiva is
     }
 
     /**
+     * @notice Unwinds a position if the stop loss condition is met
+     * @param params The parameters for the stop loss order based on the
+     * ShivaStructs.StopLoss struct
+     * @param onBehalfOf The parameters for acting on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
+     * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
+     * is the owner of the position
+     */
+    function stopLoss(
+        ShivaStructs.StopLoss calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    )
+        external
+        whenNotPaused
+        validDeadline(onBehalfOf.deadline)
+        onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
+    {
+        // build typed data hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                STOP_LOSS_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                params.positionId,
+                params.fraction,
+                params.triggerPrice,
+                params.priceLimit,
+                onBehalfOf.deadline,
+                onBehalfOf.nonce,
+                params.brokerId
+            )
+        );
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+
+        _executeStopLoss(params, onBehalfOf, payRelayerFee);
+    }
+
+    /**
+     * @notice Internal logic for executing a stop loss order
+     * @param _params The parameters for the stop loss order
+     * @param _onBehalfOf The parameters for acting on behalf of a user
+     * @param _payRelayerFee Whether to pay a fee to the relayer
+     */
+    function _executeStopLoss(
+        ShivaStructs.StopLoss calldata _params,
+        ShivaStructs.OnBehalfOf calldata _onBehalfOf,
+        bool _payRelayerFee
+    ) internal {
+        // 1. Check if the trigger condition is met
+        bool triggerMet = _checkStopLossTrigger(
+            _params.ovlMarket, _params.positionId, _onBehalfOf.owner, _params.triggerPrice
+        );
+        if (!triggerMet) {
+            revert TriggerNotMet();
+        }
+
+        ShivaStructs.Unwind memory unwindParams = ShivaStructs.Unwind({
+            ovlMarket: _params.ovlMarket,
+            positionId: _params.positionId,
+            fraction: _params.fraction,
+            priceLimit: _params.priceLimit,
+            brokerId: _params.brokerId
+        });
+
+        if (_payRelayerFee) {
+            _unwindLogicWithRelayerFee(unwindParams, _onBehalfOf.owner);
+        } else {
+            _unwindLogic(unwindParams, _onBehalfOf.owner);
+        }
+    }
+
+    /**
+     * @notice Checks if the stop loss trigger condition is met
+     * @param _market The market interface
+     * @param _positionId The ID of the position
+     * @param _owner The address of the owner
+     * @param _triggerPrice The trigger price for the stop loss
+     * @return True if the trigger condition is met, false otherwise
+     */
+    function _checkStopLossTrigger(
+        IOverlayV1Market _market,
+        uint256 _positionId,
+        address _owner,
+        uint256 _triggerPrice
+    ) internal view returns (bool) {
+        bool isLong = Utils.getPositionSide(_market, _positionId, address(this));
+
+        IOverlayV1Feed feed = IOverlayV1Feed(_market.feed());
+        Oracle.Data memory data = feed.latest();
+
+        uint256 currentPrice =
+            isLong ? _market.bid(data, 0) : _market.ask(data, 0);
+
+        if (isLong) {
+            return currentPrice <= _triggerPrice;
+        } else {
+            return currentPrice >= _triggerPrice;
+        }
+    }
+
+    /**
      * @notice Callback function for market liquidation
      * @param positionId The ID of the position to liquidate
      * @dev Only callable by a valid market
@@ -519,7 +631,7 @@ contract Shiva is
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
      */
-    function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
+    function _unwindLogic(ShivaStructs.Unwind memory _params, address _owner) internal {
         _onUnwindPosition(
             _params.ovlMarket,
             _params.positionId,
@@ -537,7 +649,7 @@ contract Shiva is
      * @param _owner The address of the owner
      */
     function _unwindLogicWithRelayerFee(
-        ShivaStructs.Unwind calldata _params,
+        ShivaStructs.Unwind memory _params,
         address _owner
     ) internal {
         _onUnwindPosition(

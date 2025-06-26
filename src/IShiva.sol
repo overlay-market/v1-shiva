@@ -129,6 +129,11 @@ interface IShiva {
      * @notice Error emitted when the nonce is invalid.
      */
     error InvalidNonce();
+    
+    /**
+     * @notice Thrown when the trigger condition for a conditional order has not been met
+     */
+    error TriggerNotMet();
 
     /**
      * @notice Error emitted when the unwind amount is insufficient to pay the relayer fee.

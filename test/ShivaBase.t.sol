@@ -225,7 +225,7 @@ contract ShivaTestBase is Test, BaseSetup {
      */
     function setInitialBalancesAndApprovals() internal {
         // Deal tokens and set approvals
-        deal(address(ovlToken), alice, 1000e18);
+        deal(address(ovlToken), alice, 10000e18);
         deal(address(ovlToken), bob, 100000e18);
         approveToken(alice);
         approveToken(bob);
@@ -559,6 +559,41 @@ contract ShivaTestBase is Test, BaseSetup {
     }
 
     /**
+     * @dev Gets the digest for a stop loss order on behalf of another user.
+     * @param posId The ID of the position to be unwound.
+     * @param fraction The fraction of the position to be unwound.
+     * @param triggerPrice The price at which the stop loss is triggered.
+     * @param priceLimit The price limit for the unwind.
+     * @param deadline The deadline for the transaction.
+     * @param nonce The nonce for the transaction.
+     * @return The digest for the stop loss on behalf of transaction.
+     */
+    function getStopLossOnBehalfOfDigest(
+        uint256 posId,
+        uint256 fraction,
+        uint256 triggerPrice,
+        uint256 priceLimit,
+        uint48 deadline,
+        uint256 nonce,
+        uint32 brokerId
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.STOP_LOSS_ON_BEHALF_OF_TYPEHASH(),
+                ovlMarket,
+                posId,
+                fraction,
+                triggerPrice,
+                priceLimit,
+                deadline,
+                nonce,
+                brokerId
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
+    /**
      * @dev Gets the signature for a given digest using the user's private key.
      * @param digest The digest to be signed.
      * @param userPk The private key of the user.
@@ -654,6 +689,34 @@ contract ShivaTestBase is Test, BaseSetup {
             ),
             ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
             false // payRelayerFee - default to false for backward compatibility
+        );
+    }
+
+    /**
+     * @dev Executes a stop loss order on behalf of another user.
+     * @param positionId The ID of the position to be unwound.
+     * @param fraction The fraction of the position to be unwound.
+     * @param triggerPrice The price at which the stop loss is triggered.
+     * @param priceLimit The price limit for the unwind.
+     * @param deadline The deadline for the transaction.
+     * @param signature The signature of the owner authorizing the transaction.
+     * @param owner The address of the owner on whose behalf the position is being unwound.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
+     */
+    function stopLossOnBehalfOf(
+        uint256 positionId,
+        uint256 fraction,
+        uint256 triggerPrice,
+        uint256 priceLimit,
+        uint48 deadline,
+        bytes memory signature,
+        address owner,
+        bool payRelayerFee
+    ) public {
+        shiva.stopLoss(
+            ShivaStructs.StopLoss(ovlMarket, BROKER_ID, positionId, fraction, triggerPrice, priceLimit),
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
+            payRelayerFee
         );
     }
 
