@@ -207,6 +207,32 @@ interface IShiva {
     ) external;
 
     /**
+     * @notice Unwinds a position if the stop loss condition is met.
+     * @param params The parameters for the stop loss order based on the
+     * ShivaStructs.StopLoss struct.
+     * @param onBehalfOf The parameters for acting on behalf of a user.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
+     */
+    function stopLoss(
+        ShivaStructs.StopLoss calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    ) external;
+
+    /**
+     * @notice Executes a limit order to build a position on behalf of an owner.
+     * @param params Parameters for the limit order based on the ShivaStructs.LimitOrder struct.
+     * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
+     * @return positionId Unique ID of the built position.
+     */
+    function limitOrder(
+        ShivaStructs.LimitOrder calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    ) external returns (uint256 positionId);
+
+    /**
      * @notice Withdraws funds from a position in case of market is shutdown.
      * @param market Address of the market where the position was built.
      * @param positionId Unique ID of the position to withdraw funds from.

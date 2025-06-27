@@ -20,8 +20,6 @@ import {
     PAUSER_ROLE
 } from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
-import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
-import {Oracle} from "v1-core/contracts/libraries/Oracle.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
@@ -121,6 +119,14 @@ contract Shiva is
      */
     bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
         "StopLossOnBehalfOf(address ovlMarket,uint256 positionId,uint256 fraction,uint256 triggerPrice,uint256 priceLimit,uint48 deadline,uint256 nonce,uint32 brokerId)"
+    );
+
+    /**
+     * @notice Typehash for the LimitOrderOnBehalfOf struct
+     * @dev Used for EIP-712 encoding of the limit order on behalf of parameters
+     */
+    bytes32 public constant LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "LimitOrderOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 triggerPrice,uint256 priceLimit,uint256 nonce,uint32 brokerId)"
     );
 
     /**
@@ -477,6 +483,47 @@ contract Shiva is
     }
 
     /**
+     * @notice Executes a limit order to build a position if the trigger condition is met
+     * @param params The parameters for the limit order based on the
+     * ShivaStructs.LimitOrder struct
+     * @param onBehalfOf The parameters for acting on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
+     * @return The ID of the newly created position if the order is executed
+     * @dev Only callable when the contract is not paused and the deadline is valid.
+     */
+    function limitOrder(
+        ShivaStructs.LimitOrder calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    )
+        external
+        whenNotPaused
+        validMarket(params.ovlMarket)
+        validDeadline(onBehalfOf.deadline)
+        returns (uint256)
+    {
+        // build typed data hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                onBehalfOf.deadline,
+                params.collateral,
+                params.leverage,
+                params.isLong,
+                params.triggerPrice,
+                params.priceLimit,
+                onBehalfOf.nonce,
+                params.brokerId
+            )
+        );
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+
+        return _executeLimitOrder(params, onBehalfOf.owner, payRelayerFee);
+    }
+
+    /**
      * @notice Internal logic for executing a stop loss order
      * @param _params The parameters for the stop loss order
      * @param _onBehalfOf The parameters for acting on behalf of a user
@@ -488,10 +535,11 @@ contract Shiva is
         bool _payRelayerFee
     ) internal {
         // 1. Check if the trigger condition is met
-        bool triggerMet = _checkStopLossTrigger(
-            _params.ovlMarket, _params.positionId, _onBehalfOf.owner, _params.triggerPrice
-        );
-        if (!triggerMet) {
+        if (
+            !Utils.checkStopLossTrigger(
+                _params.ovlMarket, _params.positionId, address(this), _params.triggerPrice
+            )
+        ) {
             revert TriggerNotMet();
         }
 
@@ -511,32 +559,38 @@ contract Shiva is
     }
 
     /**
-     * @notice Checks if the stop loss trigger condition is met
-     * @param _market The market interface
-     * @param _positionId The ID of the position
-     * @param _owner The address of the owner
-     * @param _triggerPrice The trigger price for the stop loss
-     * @return True if the trigger condition is met, false otherwise
+     * @notice Internal logic for executing a limit order to build a position
+     * @param _params The parameters for the limit order
+     * @param _owner The address of the owner of the future position
+     * @param _payRelayerFee Whether to pay a fee to the relayer
+     * @return The ID of the newly created position
      */
-    function _checkStopLossTrigger(
-        IOverlayV1Market _market,
-        uint256 _positionId,
+    function _executeLimitOrder(
+        ShivaStructs.LimitOrder calldata _params,
         address _owner,
-        uint256 _triggerPrice
-    ) internal view returns (bool) {
-        bool isLong = Utils.getPositionSide(_market, _positionId, address(this));
-
-        IOverlayV1Feed feed = IOverlayV1Feed(_market.feed());
-        Oracle.Data memory data = feed.latest();
-
-        uint256 currentPrice =
-            isLong ? _market.bid(data, 0) : _market.ask(data, 0);
-
-        if (isLong) {
-            return currentPrice <= _triggerPrice;
-        } else {
-            return currentPrice >= _triggerPrice;
+        bool _payRelayerFee
+    ) internal returns (uint256) {
+        // 1. Check if the trigger condition is met
+        if (!Utils.checkLimitOrderTrigger(_params.ovlMarket, _params.isLong, _params.triggerPrice)) {
+            revert TriggerNotMet();
         }
+
+        // 2. Create a Build struct to pass to the build logic
+        ShivaStructs.Build memory buildParams = ShivaStructs.Build({
+            ovlMarket: _params.ovlMarket,
+            brokerId: _params.brokerId,
+            isLong: _params.isLong,
+            collateral: _params.collateral,
+            leverage: _params.leverage,
+            priceLimit: _params.priceLimit
+        });
+
+        // 3. Execute the build logic
+        if (_payRelayerFee) {
+            return _buildLogicWithRelayerFee(buildParams, _owner);
+        }
+
+        return _buildLogic(buildParams, _owner);
     }
 
     /**
@@ -572,7 +626,7 @@ contract Shiva is
      * @return The ID of the newly created position
      */
     function _buildLogic(
-        ShivaStructs.Build calldata _params,
+        ShivaStructs.Build memory _params,
         address _owner
     ) internal returns (uint256) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
@@ -602,7 +656,7 @@ contract Shiva is
      * @return The ID of the newly created position
      */
     function _buildLogicWithRelayerFee(
-        ShivaStructs.Build calldata _params,
+        ShivaStructs.Build memory _params,
         address _owner
     ) internal returns (uint256) {
         require(_params.leverage >= ONE, "Shiva:lev<min");

@@ -93,4 +93,24 @@ library ShivaStructs {
         uint256 triggerPrice;
         uint256 priceLimit;
     }
+
+    /**
+     * @notice Represents the parameters for a limit order to build a position
+     * @param ovlMarket The market interface
+     * @param brokerId The ID of the broker; 0 in most cases
+     * @param isLong Indicates if the position is long
+     * @param collateral The amount of collateral
+     * @param leverage The leverage applied
+     * @param triggerPrice The price at which the limit order is triggered
+     * @param priceLimit The price limit for the build execution (slippage control)
+     */
+    struct LimitOrder {
+        IOverlayV1Market ovlMarket;
+        uint32 brokerId;
+        bool isLong;
+        uint256 collateral;
+        uint256 leverage;
+        uint256 triggerPrice;
+        uint256 priceLimit;
+    }
 }
