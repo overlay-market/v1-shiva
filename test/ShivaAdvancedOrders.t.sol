@@ -638,6 +638,90 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
     }
 
     /**
+     * @notice Tests that a stop loss order for a short position reverts if the execution price is worse than the price limit.
+     */
+    function testStopLossRevertsIfPriceLimitBreachedShort() public {
+        // 1. Alice builds a short position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, false); // 1 OVL collateral, 5x leverage, short
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order with a trigger and a price limit
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.ask(data, 0);
+
+        uint256 triggerPrice = currentPrice * 105 / 100; // 5% price rise
+        uint256 priceLimit = triggerPrice * 101 / 100; // 1% slippage tolerance (higher is worse for shorts)
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getStopLossOnBehalfOfDigest(
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+        );
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Price rises significantly, above both the trigger price and the price limit
+        uint256 executionPrice = priceLimit * 105 / 100; // Price jumps 5% beyond the user's limit
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 4. Automator attempts to execute the stop-loss order
+        // It should fail because the current price is worse (higher) than the user's priceLimit.
+        vm.startPrank(automator);
+        vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        vm.stopPrank();
+
+        // 5. Verify position is NOT closed
+        (,,,,,,, uint16 fractionRemaining) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertGt(fractionRemaining, 0, "Position should not have been closed");
+    }
+
+    /**
+     * @notice Tests that stop loss for a short position reverts with InsufficientUnwindAmountForFee
+     *         if the unwound value is less than the relayer fee.
+     */
+    function testStopLossFailsWithInsufficientFundsForFeeShort() public {
+        // 1. Alice builds a short position with small collateral and lower leverage
+        vm.startPrank(alice);
+        uint256 collateral = 0.5e18;
+        uint256 posId = buildPosition(collateral, 2e18, BASIC_SLIPPAGE, false); // Lower leverage
+        vm.stopPrank();
+
+        // 2. Set a relayer fee that is greater than the expected unwind amount
+        vm.startPrank(deployer);
+        uint256 highRelayerFee = 0.6e18;
+        shiva.setRelayerFee(highRelayerFee);
+        vm.stopPrank();
+
+        // 3. Alice signs a stop-loss order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.ask(data, 0);
+
+        // A smaller price rise to avoid hitting liquidation
+        uint256 triggerPrice = currentPrice * 102 / 100; // 2% price rise
+        uint256 priceLimit = triggerPrice * 110 / 100; // 10% slippage to ensure it passes price limit check
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 4. Price rises, making the stop-loss executable
+        uint256 executionPrice = triggerPrice * 101 / 100; // Price rises just above trigger
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 5. Automator executes the stop-loss, expecting it to fail because the unwind amount
+        // will be less than the collateral, which is less than the required fee.
+        vm.startPrank(automator);
+        vm.expectRevert(); // Expect InsufficientUnwindAmountForFee
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true); // payRelayerFee = true
+        vm.stopPrank();
+    }
+
+    /**
      * @dev Warms up the oracle by advancing time and submitting prices to ensure the TWAP windows are populated.
      * @param _feed The price feed to warm up.
      */
