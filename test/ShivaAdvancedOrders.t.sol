@@ -14,6 +14,12 @@ import {Oracle} from "v1-core/contracts/libraries/Oracle.sol";
  * @notice Test suite for advanced order types in the Shiva contract
  */
 contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
+    // =================================================================
+    //
+    //                       SETUP
+    //
+    // =================================================================
+
     uint256 internal constant WARM_UP_PERIOD = 1 hours;
     uint256 internal constant NUM_WARM_UP_ROUNDS = 5;
 
@@ -26,6 +32,12 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // Warm up the oracle to ensure sufficient data for TWAP calculations
         _warmUpOracle(IOverlayV1Feed(ovlMarket.feed()));
     }
+
+    // =================================================================
+    //
+    //                       STOP-LOSS TESTS
+    //
+    // =================================================================
 
     /**
      * @notice Tests that stop loss on behalf of fails due to an expired deadline
@@ -718,6 +730,254 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         vm.startPrank(automator);
         vm.expectRevert(); // Expect InsufficientUnwindAmountForFee
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true); // payRelayerFee = true
+        vm.stopPrank();
+    }
+
+    // =================================================================
+    //
+    //                       TAKE-PROFIT TESTS
+    //
+    // =================================================================
+
+    /**
+     * @notice Tests that a take-profit order for a long position executes when the price rises.
+     *         The order is a standard unwind signed by the user with a favorable priceLimit.
+     */
+    function testTakeProfitOnBehalfOfLongPositionExecutes() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true); // 1 OVL collateral, 5x leverage
+        vm.stopPrank();
+
+        // 2. Alice signs a take-profit order (an unwind with a high price limit)
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0); // Use bid for unwinding a long
+
+        // Take profit if price increases by 5%. This is our price limit.
+        uint256 priceLimit = currentPrice * 105 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Automator tries to execute before price target is met. Should fail.
+        // The market will revert because the current execution price is less than the priceLimit.
+        vm.startPrank(automator);
+        vm.expectRevert(); // OVLV1:price<limit
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            true
+        );
+        vm.stopPrank();
+
+        // 4. Price rises, making the take-profit executable
+        uint256 executionPrice = priceLimit * 101 / 100; // Price rises above the limit
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60); // Advance time
+
+        // 5. Automator executes the take-profit order successfully and gets paid
+        vm.startPrank(automator);
+        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
+        uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
+
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            true // payRelayerFee = true
+        );
+
+        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
+        uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
+        vm.stopPrank();
+
+        // 6. Verify position is closed and balances are correct
+        assertFractionRemainingIsZero(address(shiva), posId);
+        assertGt(aliceBalanceAfter, aliceBalanceBefore, "Alice should have received her profits");
+        assertGt(automatorBalanceAfter, automatorBalanceBefore, "Relayer should have received a fee");
+    }
+
+    /**
+     * @notice Tests that a take-profit order for a short position executes when the price falls.
+     */
+    function testTakeProfitOnBehalfOfShortPositionExecutes() public {
+        // 1. Alice builds a short position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, false); // 1 OVL collateral, 5x leverage, short
+        vm.stopPrank();
+
+        // 2. Alice signs a take-profit order (an unwind with a low price limit)
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.ask(data, 0); // Use ask for unwinding a short
+
+        // Take profit if price decreases by 5%. This is our price limit.
+        uint256 priceLimit = currentPrice * 95 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Automator tries to execute before price target is met. Should fail.
+        // The market will revert because the current execution price is greater than the priceLimit.
+        vm.startPrank(automator);
+        vm.expectRevert(); // OVLV1:price>limit
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            false
+        );
+        vm.stopPrank();
+
+        // 4. Price falls, making the take-profit executable
+        uint256 executionPrice = priceLimit * 99 / 100; // Price falls below the limit
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 5. Automator executes the take-profit order successfully (no fee for this test)
+        vm.startPrank(automator);
+        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
+        uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
+
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            false // payRelayerFee = false
+        );
+
+        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
+        uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
+        vm.stopPrank();
+
+        // 6. Verify position is closed and balances are correct
+        assertFractionRemainingIsZero(address(shiva), posId);
+        assertGt(aliceBalanceAfter, aliceBalanceBefore, "Alice should have received her profits");
+        assertEq(automatorBalanceAfter, automatorBalanceBefore, "Relayer should not have received a fee");
+    }
+
+    /**
+     * @notice Tests that a partial take-profit order (50%) executes correctly.
+     */
+    function testPartialTakeProfitExecutes() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a partial take-profit order (50%)
+        uint256 fractionToUnwind = 0.5e18;
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+        uint256 priceLimit = currentPrice * 105 / 100; // 5% profit target
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, fractionToUnwind, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Price rises, making the take-profit executable
+        uint256 executionPrice = priceLimit * 101 / 100;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 4. Automator executes the partial take-profit
+        vm.startPrank(automator);
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, fractionToUnwind, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            false
+        );
+        vm.stopPrank();
+
+        // 5. Verify position is partially closed (approximately 50% remaining)
+        (,,,,,,, uint16 fractionRemaining) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertApproxEqAbs(fractionRemaining, 5000, 10); // 5000 is 50% in basis points
+    }
+
+    /**
+     * @notice Tests that a take-profit order fails if the position was already closed manually.
+     */
+    function testTakeProfitFailsOnManuallyClosedPosition() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a take-profit order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+        uint256 priceLimit = currentPrice * 105 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Alice manually closes her position before the take profit triggers
+        vm.startPrank(alice);
+        unwindPosition(posId, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        // 4. Verify the position is indeed closed
+        assertFractionRemainingIsZero(address(shiva), posId);
+
+        // 5. Price rises, making the original take-profit signature valid price-wise
+        uint256 executionPrice = priceLimit * 101 / 100;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 6. Automator attempts to execute the take-profit, which should fail
+        // because the underlying market position no longer exists.
+        vm.startPrank(automator);
+        vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            false
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a take-profit order fails if the nonce has already been used.
+     */
+    function testTakeProfitFailsWithUsedNonce() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a take-profit order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+        uint256 priceLimit = currentPrice * 105 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Price rises, making the take-profit executable
+        uint256 executionPrice = priceLimit * 101 / 100;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 4. Automator executes the order successfully
+        vm.startPrank(automator);
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            false
+        );
+
+        // 5. Automator tries to execute the same order again, should fail due to used nonce
+        vm.expectRevert(IShiva.InvalidNonce.selector);
+        shiva.unwind(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            false
+        );
         vm.stopPrank();
     }
 
