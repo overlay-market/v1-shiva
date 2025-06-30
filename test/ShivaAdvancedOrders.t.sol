@@ -654,6 +654,50 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
     }
 
     /**
+     * @notice Tests that a stop-loss executes at a price worse than trigger but within the price limit, due to a price gap.
+     */
+    function testStopLossExecutesWithSignificantSlippageWithinLimit() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+
+        uint256 triggerPrice = currentPrice * 95 / 100; // Trigger at 5% drop
+        uint256 priceLimit = triggerPrice * 98 / 100; // Allow up to 2% slippage from trigger
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Price gaps down to a level between the trigger and the limit
+        uint256 executionPrice = triggerPrice * 99 / 100; // 1% slippage, which is within the 2% limit
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 4. Automator executes the stop-loss order
+        vm.startPrank(automator);
+        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
+        vm.stopPrank();
+
+        // 5. Verify position is closed
+        assertFractionRemainingIsZero(address(shiva), posId);
+
+        // 6. Verify Alice received her funds back (minus the loss)
+        // This is a sanity check to ensure the unwind logic processed correctly, even with high slippage.
+        // A direct calculation of expected return is complex due to market dynamics,
+        // so we check that she received *something* back and the amount is positive.
+        assertGt(aliceBalanceAfter, aliceBalanceBefore, "Alice should have received the remaining collateral");
+    }
+
+    /**
      * @notice Tests that a stop loss order for a short position reverts if the execution price is worse than the price limit.
      */
     function testStopLossRevertsIfPriceLimitBreachedShort() public {
@@ -1479,5 +1523,110 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         vm.expectRevert();
         limitOrderOnBehalfOf(params, signature, alice, deadline, false);
         vm.stopPrank();
+    }
+
+    // =================================================================
+    //
+    //                       EDGE CASE TESTS
+    //
+    // =================================================================
+
+    /**
+     * @notice Tests that the execution of an order charges the relayer fee that is set at the time of execution, not signing.
+     */
+    function testExecutionChargesUpdatedRelayerFee() public {
+        uint256 initialFee = shiva.relayerFee();
+        assertTrue(initialFee > 0, "Initial fee should be greater than zero");
+
+        bytes memory signature;
+        ShivaStructs.LimitOrder memory params;
+        uint48 deadline;
+
+        // Scope the setup variables to reduce stack depth
+        {
+            IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+            Oracle.Data memory data = feed.latest();
+            uint256 currentPrice = ovlMarket.bid(data, 0);
+            uint256 triggerPrice = currentPrice * 105 / 100;
+            uint256 priceLimit = triggerPrice * 99 / 100;
+            deadline = uint48(block.timestamp + 1 hours);
+
+            bytes32 digest = getLimitOrderOnBehalfOfDigest(
+                ONE, 5e18, false, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            );
+            signature = getSignature(digest, alicePk);
+            params = ShivaStructs.LimitOrder({
+                ovlMarket: ovlMarket, brokerId: BROKER_ID, isLong: false, collateral: ONE,
+                leverage: 5e18, triggerPrice: triggerPrice, priceLimit: priceLimit
+            });
+
+            // Simulate price movement inside the scope as well
+            uint256 executionPrice = triggerPrice * 101 / 100;
+            aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+            vm.warp(block.timestamp + 1 hours);
+        }
+
+        // Before execution, the governor updates the relayer fee
+        uint256 newFee = initialFee * 2;
+        vm.prank(guardian);
+        shiva.setRelayerFee(newFee);
+        assertEq(shiva.relayerFee(), newFee, "Relayer fee was not updated correctly");
+
+        // Automator executes the order
+        vm.startPrank(automator);
+        uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
+        limitOrderOnBehalfOf(params, signature, alice, deadline, true);
+        uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
+        vm.stopPrank();
+
+        // Verify the automator received the NEW, updated fee
+        uint256 feeReceived = automatorBalanceAfter - automatorBalanceBefore;
+        assertEq(feeReceived, newFee, "Automator should have received the new, updated fee");
+        assertNotEq(feeReceived, initialFee, "Automator should not have received the old fee");
+    }
+
+    /**
+     * @notice Tests that a stop-loss order for 100% of a position correctly unwinds the remainder
+     *         if the user has already manually unwound a part of it.
+     */
+    function testStopLossExecutesOnPartiallyUnwoundPosition() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order for 100% of the position
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+        uint256 triggerPrice = currentPrice * 95 / 100;
+        uint256 priceLimit = triggerPrice * 98 / 100;
+        uint48 deadline = uint48(block.timestamp + 3600);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Before the stop-loss triggers, Alice manually unwinds 50% of the position
+        vm.startPrank(alice);
+        unwindPosition(posId, 0.5e18, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        // Verify that ~50% of the position remains
+        (,,,,,,, uint16 fractionRemaining) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        assertApproxEqAbs(fractionRemaining, 5000, 10);
+
+        // 4. Price drops, making the stop-loss executable
+        uint256 executionPrice = triggerPrice * 99 / 100;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+
+        // 5. Automator executes the stop-loss order. It should unwind the remaining part.
+        vm.startPrank(automator);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        vm.stopPrank();
+
+        // 6. Verify the position is now fully closed
+        assertFractionRemainingIsZero(address(shiva), posId);
     }
 } 
