@@ -276,7 +276,6 @@ contract RewardVault is
     function withdraw(uint256 amount)
         external
         nonReentrant
-        whenNotPaused
         checkSelfStakedBalance(msg.sender, amount)
     {
         _withdraw(msg.sender, amount);
@@ -312,7 +311,7 @@ contract RewardVault is
     }
 
     /// @inheritdoc IRewardVault
-    function exit(address recipient) external nonReentrant whenNotPaused {
+    function exit(address recipient) external nonReentrant {
         // self-staked amount
         uint256 amount = _accountInfo[msg.sender].balance - _delegateStake[msg.sender].delegateTotalStaked;
         _withdraw(msg.sender, amount);

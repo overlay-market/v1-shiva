@@ -514,16 +514,20 @@ contract RewardVaultTest is Test {
         assertTrue(rewardVault.paused(), "Contract should be paused");
         vm.stopPrank();
 
-        // 2. Check that critical functions fail
+        // 2. Check that entry functions fail but exit functions work
         vm.startPrank(alice);
         vm.expectRevert("Pausable: paused");
         rewardVault.stake(10 * ONE);
 
-        vm.expectRevert("Pausable: paused");
+        // Withdraw should work even when paused (emergency exit)
+        uint256 balanceBefore = stakingToken.balanceOf(alice);
         rewardVault.withdraw(1 * ONE);
+        assertEq(stakingToken.balanceOf(alice), balanceBefore + 1 * ONE, "Withdraw should succeed even when paused");
 
-        vm.expectRevert("Pausable: paused");
+        // Exit should work even when paused (emergency exit)
+        balanceBefore = stakingToken.balanceOf(alice);
         rewardVault.exit(alice);
+        assertEq(stakingToken.balanceOf(alice), balanceBefore + 4 * ONE, "Exit should succeed even when paused");
         vm.stopPrank();
 
         // 3. Unpause the contract
@@ -532,11 +536,44 @@ contract RewardVaultTest is Test {
         assertFalse(rewardVault.paused(), "Contract should be unpaused");
         vm.stopPrank();
 
-        // 4. Check that functionality is restored
+        // 4. Check that all functionality is restored
+        vm.startPrank(alice);
+        stakingToken.approve(address(rewardVault), type(uint256).max);
+        rewardVault.stake(10 * ONE);
+        assertEq(rewardVault.balanceOf(alice), 10 * ONE, "Stake should succeed after unpause");
+        vm.stopPrank();
+    }
+
+    /// @notice Tests that delegateWithdraw is still blocked when paused, but regular withdraw/exit work.
+    function test_delegate_withdraw_still_blocked_when_paused() public {
+        // Bob stakes for Alice
+        vm.prank(bob);
+        rewardVault.delegateStake(alice, 100 * ONE);
+
+        // Alice also stakes for herself
+        vm.prank(alice);
+        rewardVault.stake(50 * ONE);
+
+        // Pause the contract
+        vm.prank(deployer);
+        rewardVault.pause();
+
+        // Alice should be able to withdraw her own stake even when paused
         vm.startPrank(alice);
         uint256 balanceBefore = stakingToken.balanceOf(alice);
-        rewardVault.withdraw(1 * ONE);
-        assertEq(stakingToken.balanceOf(alice), balanceBefore + 1 * ONE, "Withdraw should succeed after unpause");
+        rewardVault.withdraw(25 * ONE);
+        assertEq(stakingToken.balanceOf(alice), balanceBefore + 25 * ONE, "Alice should be able to withdraw when paused");
+
+        // Alice should be able to exit even when paused
+        balanceBefore = stakingToken.balanceOf(alice);
+        rewardVault.exit(alice);
+        assertEq(stakingToken.balanceOf(alice), balanceBefore + 25 * ONE, "Alice should be able to exit when paused");
+        vm.stopPrank();
+
+        // Bob should NOT be able to delegateWithdraw when paused
+        vm.startPrank(bob);
+        vm.expectRevert("Pausable: paused");
+        rewardVault.delegateWithdraw(alice, 50 * ONE);
         vm.stopPrank();
     }
 
