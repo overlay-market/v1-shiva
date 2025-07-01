@@ -594,44 +594,6 @@ contract ShivaTestBase is Test, BaseSetup {
     }
 
     /**
-     * @dev Gets the digest for a limit order on behalf of another user.
-     * @param collateral The amount of collateral to be used.
-     * @param leverage The leverage to be applied.
-     * @param isLong Whether the position is long or short.
-     * @param triggerPrice The price at which the limit order is triggered.
-     * @param priceLimit The price limit for the build.
-     * @param deadline The deadline for the transaction.
-     * @param nonce The nonce for the transaction.
-     * @return The digest for the limit order on behalf of transaction.
-     */
-    function getLimitOrderOnBehalfOfDigest(
-        uint256 collateral,
-        uint256 leverage,
-        bool isLong,
-        uint256 triggerPrice,
-        uint256 priceLimit,
-        uint48 deadline,
-        uint256 nonce,
-        uint32 brokerId
-    ) public view returns (bytes32) {
-        bytes32 structHash = keccak256(
-            abi.encode(
-                shiva.LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH(),
-                ovlMarket,
-                deadline,
-                collateral,
-                leverage,
-                isLong,
-                triggerPrice,
-                priceLimit,
-                nonce,
-                brokerId
-            )
-        );
-        return shiva.getDigest(structHash);
-    }
-
-    /**
      * @dev Gets the signature for a given digest using the user's private key.
      * @param digest The digest to be signed.
      * @param userPk The private key of the user.
@@ -753,29 +715,6 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public {
         shiva.stopLoss(
             ShivaStructs.StopLoss(ovlMarket, BROKER_ID, positionId, fraction, triggerPrice, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
-            payRelayerFee
-        );
-    }
-
-    /**
-     * @dev Executes a limit order on behalf of another user.
-     * @param params The parameters for the limit order.
-     * @param signature The signature of the owner authorizing the transaction.
-     * @param owner The address of the owner on whose behalf the position is being built.
-     * @param deadline The deadline for the transaction.
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
-     * @return The ID of the newly created position.
-     */
-    function limitOrderOnBehalfOf(
-        ShivaStructs.LimitOrder memory params,
-        bytes memory signature,
-        address owner,
-        uint48 deadline,
-        bool payRelayerFee
-    ) public returns (uint256) {
-        return shiva.limitOrder(
-            params,
             ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
             payRelayerFee
         );

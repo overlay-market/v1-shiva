@@ -168,33 +168,4 @@ library Utils {
             return currentPrice >= triggerPrice;
         }
     }
-
-    /**
-     * @notice Checks if the limit order trigger condition is met.
-     * @param market The market interface.
-     * @param isLong Whether the desired position is long or short.
-     * @param triggerPrice The price at which the limit order should be triggered.
-     * @return True if the trigger condition is met, false otherwise.
-     */
-    function checkLimitOrderTrigger(
-        IOverlayV1Market market,
-        bool isLong,
-        uint256 triggerPrice
-    ) external view returns (bool) {
-        IOverlayV1Feed feed = IOverlayV1Feed(market.feed());
-        Oracle.Data memory data = feed.latest();
-
-        // For a limit order, we are building a position.
-        // For a long position, we buy, so we look at the ask price.
-        // For a short position, we sell, so we look at the bid price.
-        uint256 currentPrice = isLong ? market.ask(data, 0) : market.bid(data, 0);
-
-        if (isLong) {
-            // Trigger when the current market price is less than or equal to the desired trigger price
-            return currentPrice <= triggerPrice;
-        } else {
-            // Trigger when the current market price is greater than or equal to the desired trigger price
-            return currentPrice >= triggerPrice;
-        }
-    }
 }

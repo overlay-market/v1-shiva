@@ -120,15 +120,7 @@ contract Shiva is
     bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
         "StopLossOnBehalfOf(address ovlMarket,uint256 positionId,uint256 fraction,uint256 triggerPrice,uint256 priceLimit,uint48 deadline,uint256 nonce,uint32 brokerId)"
     );
-
-    /**
-     * @notice Typehash for the LimitOrderOnBehalfOf struct
-     * @dev Used for EIP-712 encoding of the limit order on behalf of parameters
-     */
-    bytes32 public constant LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "LimitOrderOnBehalfOf(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,bool isLong,uint256 triggerPrice,uint256 priceLimit,uint256 nonce,uint32 brokerId)"
-    );
-
+    
     /**
      * @dev Modifiers section
      */
@@ -483,47 +475,6 @@ contract Shiva is
     }
 
     /**
-     * @notice Executes a limit order to build a position if the trigger condition is met
-     * @param params The parameters for the limit order based on the
-     * ShivaStructs.LimitOrder struct
-     * @param onBehalfOf The parameters for acting on behalf of a user based on the
-     * ShivaStructs.OnBehalfOf struct
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
-     * @return The ID of the newly created position if the order is executed
-     * @dev Only callable when the contract is not paused and the deadline is valid.
-     */
-    function limitOrder(
-        ShivaStructs.LimitOrder calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
-    )
-        external
-        whenNotPaused
-        validMarket(params.ovlMarket)
-        validDeadline(onBehalfOf.deadline)
-        returns (uint256)
-    {
-        // build typed data hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH,
-                params.ovlMarket,
-                onBehalfOf.deadline,
-                params.collateral,
-                params.leverage,
-                params.isLong,
-                params.triggerPrice,
-                params.priceLimit,
-                onBehalfOf.nonce,
-                params.brokerId
-            )
-        );
-        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
-
-        return _executeLimitOrder(params, onBehalfOf.owner, payRelayerFee);
-    }
-
-    /**
      * @notice Internal logic for executing a stop loss order
      * @param _params The parameters for the stop loss order
      * @param _onBehalfOf The parameters for acting on behalf of a user
@@ -556,41 +507,6 @@ contract Shiva is
         } else {
             _unwindLogic(unwindParams, _onBehalfOf.owner);
         }
-    }
-
-    /**
-     * @notice Internal logic for executing a limit order to build a position
-     * @param _params The parameters for the limit order
-     * @param _owner The address of the owner of the future position
-     * @param _payRelayerFee Whether to pay a fee to the relayer
-     * @return The ID of the newly created position
-     */
-    function _executeLimitOrder(
-        ShivaStructs.LimitOrder calldata _params,
-        address _owner,
-        bool _payRelayerFee
-    ) internal returns (uint256) {
-        // 1. Check if the trigger condition is met
-        if (!Utils.checkLimitOrderTrigger(_params.ovlMarket, _params.isLong, _params.triggerPrice)) {
-            revert TriggerNotMet();
-        }
-
-        // 2. Create a Build struct to pass to the build logic
-        ShivaStructs.Build memory buildParams = ShivaStructs.Build({
-            ovlMarket: _params.ovlMarket,
-            brokerId: _params.brokerId,
-            isLong: _params.isLong,
-            collateral: _params.collateral,
-            leverage: _params.leverage,
-            priceLimit: _params.priceLimit
-        });
-
-        // 3. Execute the build logic
-        if (_payRelayerFee) {
-            return _buildLogicWithRelayerFee(buildParams, _owner);
-        }
-
-        return _buildLogic(buildParams, _owner);
     }
 
     /**
