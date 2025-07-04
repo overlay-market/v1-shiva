@@ -9,6 +9,9 @@ import {
 import {StakingToken} from "./PolStakingToken.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 import {Utils} from "./utils/Utils.sol";
+import {IOrderStore} from "./interfaces/shiva/IOrderStore.sol";
+import {IOrderVault} from "./interfaces/shiva/IOrderVault.sol";
+import {IKeeperHandler} from "./interfaces/shiva/IKeeperHandler.sol";
 
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayMarketLiquidateCallback} from
@@ -110,6 +113,15 @@ contract Shiva is
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
 
+    /// @notice The OrderStore contract for advanced orders
+    IOrderStore public orderStore;
+
+    /// @notice The OrderVault contract for execution fees
+    IOrderVault public orderVault;
+
+    /// @notice The KeeperHandler contract for executing orders
+    IKeeperHandler public keeperHandler;
+
     /**
      * @dev Modifiers section
      */
@@ -129,6 +141,14 @@ contract Shiva is
      */
     modifier onlyPauser(address _msgSender) {
         require(ovlToken.hasRole(PAUSER_ROLE, _msgSender), "Shiva: !pauser");
+        _;
+    }
+
+    /**
+     * @notice Ensures the caller is the authorized KeeperHandler contract.
+     */
+    modifier onlyKeeperHandler() {
+        require(msg.sender == address(keeperHandler), "Shiva: not keeper handler");
         _;
     }
 
@@ -176,15 +196,26 @@ contract Shiva is
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
+     * @param _orderStore The address of the OrderStore contract.
+     * @param _orderVault The address of the OrderVault contract.
+     * @param _keeperHandler The address of the KeeperHandler contract.
      */
     function initialize(
         address _ovlToken,
-        address _vaultFactory
+        address _vaultFactory,
+        address _orderStore,
+        address _orderVault,
+        address _keeperHandler
     ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
         ovlToken = IOverlayV1Token(_ovlToken);
+
+        // Set advanced order contracts
+        orderStore = IOrderStore(_orderStore);
+        orderVault = IOrderVault(_orderVault);
+        keeperHandler = IKeeperHandler(_keeperHandler);
 
         // Create new staking token
         stakingToken = new StakingToken();
@@ -464,7 +495,7 @@ contract Shiva is
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
      */
-    function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
+    function _unwindLogic(ShivaStructs.Unwind memory _params, address _owner) internal {
         _onUnwindPosition(
             _params.ovlMarket,
             _params.positionId,
@@ -773,5 +804,234 @@ contract Shiva is
     function cancelNonce(uint256 nonce) external {
         usedNonces[msg.sender][nonce] = true;
         emit NonceCancelled(msg.sender, nonce);
+    }
+
+    /**
+     * @notice Creates a request for a limit order to open a new position.
+     * @param params The parameters for the limit order.
+     * @return requestId The unique ID of the order request.
+     */
+    function createLimitOrder(ShivaStructs.CreateLimitOrderParams calldata params)
+        external
+        whenNotPaused
+        returns (uint256 requestId)
+    {
+        // 1. Transfer collateral and execution fee from the user to the vault.
+        uint256 totalAmount = params.collateral + params.executionFee;
+        ovlToken.transferFrom(msg.sender, address(orderVault), totalAmount);
+
+        // 2. Create the request in the OrderStore
+        requestId = orderStore.createRequest(
+            ShivaStructs.CreateRequestParams({
+                owner: msg.sender,
+                orderType: ShivaStructs.OrderType.LIMIT_OPEN,
+                market: params.market,
+                positionId: 0, // Not applicable for LimitOpen
+                collateral: params.collateral,
+                leverage: params.leverage,
+                isLong: params.isLong,
+                fraction: 0, // Not applicable for LimitOpen
+                triggerPrice: params.triggerPrice,
+                slippageToleranceBps: params.slippageToleranceBps,
+                executionFee: params.executionFee
+            })
+        );
+
+        emit AdvancedOrderCreated(msg.sender, ShivaStructs.OrderType.LIMIT_OPEN, requestId);
+    }
+
+    /**
+     * @notice Creates a request for a stop-loss order to close an existing position.
+     * @param params The parameters for the stop-loss order.
+     * @return requestId The unique ID of the order request.
+     */
+    function createStopLossOrder(ShivaStructs.CreateStopLossOrderParams calldata params)
+        external
+        whenNotPaused
+        onlyPositionOwner(params.market, params.positionId, msg.sender)
+        returns (uint256 requestId)
+    {
+        // 1. Transfer execution fee from the user to the vault.
+        ovlToken.transferFrom(msg.sender, address(orderVault), params.executionFee);
+
+        // 2. Create the request in the OrderStore
+        requestId = orderStore.createRequest(
+            ShivaStructs.CreateRequestParams({
+                owner: msg.sender,
+                orderType: ShivaStructs.OrderType.STOP_LOSS,
+                market: params.market,
+                positionId: params.positionId,
+                collateral: 0, // Not applicable for StopLoss
+                leverage: 0, // Not applicable for StopLoss
+                isLong: false, // Not applicable for StopLoss
+                fraction: params.fraction,
+                triggerPrice: params.triggerPrice,
+                slippageToleranceBps: params.slippageToleranceBps,
+                executionFee: params.executionFee
+            })
+        );
+
+        emit AdvancedOrderCreated(msg.sender, ShivaStructs.OrderType.STOP_LOSS, requestId);
+    }
+
+    /**
+     * @notice Creates a request for a take-profit order to close an existing position.
+     * @param params The parameters for the take-profit order.
+     * @return requestId The unique ID of the order request.
+     */
+    function createTakeProfitOrder(ShivaStructs.CreateTakeProfitOrderParams calldata params)
+        external
+        whenNotPaused
+        onlyPositionOwner(params.market, params.positionId, msg.sender)
+        returns (uint256 requestId)
+    {
+        // 1. Transfer execution fee from the user to the vault.
+        ovlToken.transferFrom(msg.sender, address(orderVault), params.executionFee);
+
+        // 2. Create the request in the OrderStore
+        requestId = orderStore.createRequest(
+            ShivaStructs.CreateRequestParams({
+                owner: msg.sender,
+                orderType: ShivaStructs.OrderType.TAKE_PROFIT,
+                market: params.market,
+                positionId: params.positionId,
+                collateral: 0, // Not applicable for TakeProfit
+                leverage: 0, // Not applicable for TakeProfit
+                isLong: false, // Not applicable for TakeProfit
+                fraction: params.fraction,
+                triggerPrice: params.triggerPrice,
+                slippageToleranceBps: params.slippageToleranceBps,
+                executionFee: params.executionFee
+            })
+        );
+
+        emit AdvancedOrderCreated(msg.sender, ShivaStructs.OrderType.TAKE_PROFIT, requestId);
+    }
+
+    /**
+     * @notice Cancels an advanced order that is currently in PENDING status.
+     * @dev Can only be called by the owner of the order. Reverts if the order is not pending or not owned by the caller.
+     *      Upon cancellation, the collateral (for limit orders) and execution fee are refunded to the user.
+     * @param requestId The unique ID of the order request to cancel.
+     */
+    function cancelOrder(uint256 requestId) external {
+        ShivaStructs.OrderRequest memory request = orderStore.getRequest(requestId);
+
+        // 1. Validate ownership and status
+        require(request.owner == msg.sender, "Shiva: not order owner");
+        if (request.status != ShivaStructs.OrderStatus.PENDING) {
+            revert InvalidOrderStatus(
+                requestId,
+                request.status,
+                ShivaStructs.OrderStatus.PENDING
+            );
+        }
+
+        // 2. Update status in the store
+        orderStore.updateRequestStatus(requestId, ShivaStructs.OrderStatus.CANCELLED);
+
+        // 3. Refund collateral and fees from the vault
+        uint256 refundAmount = request.executionFee;
+        if (request.orderType == ShivaStructs.OrderType.LIMIT_OPEN) {
+            refundAmount += request.collateral;
+        }
+        orderVault.pay(msg.sender, refundAmount);
+
+        emit AdvancedOrderCancelled(msg.sender, request.orderType, requestId);
+    }
+
+    /**
+     * @notice Executes an advanced order (Limit, SL, TP) that has been previously created.
+     * @dev This function is expected to be called only by the authorized KeeperHandler.
+     *      It performs the final on-chain actions like building or unwinding a position.
+     * @param requestId The unique ID of the order request to execute.
+     */
+    function executeAdvancedOrder(uint256 requestId) external onlyKeeperHandler {
+        // 1. Fetch request from OrderStore.
+        // The KeeperHandler has already verified that the status is PENDING.
+        ShivaStructs.OrderRequest memory request = orderStore.getRequest(requestId);
+
+        // 2. Dispatch to the appropriate internal execution function based on order type.
+        if (request.orderType == ShivaStructs.OrderType.LIMIT_OPEN) {
+            _executeLimitOpen(request);
+        } else {
+            // This covers both STOP_LOSS and TAKE_PROFIT orders.
+            _executeStopLossOrTakeProfit(request);
+        }
+
+        // 3. Emit an event to log the successful execution.
+        emit AdvancedOrderExecuted(request.owner, request.orderType, requestId);
+    }
+
+    /*********************************************************************************************
+     *                                  INTERNAL EXECUTION LOGIC                                 *
+     *********************************************************************************************/
+
+    /**
+     * @notice Internal logic for executing a limit open order.
+     * @dev Calculates the appropriate price limit based on slippage and calls the internal build logic.
+     * @param _request The order request data.
+     */
+    function _executeLimitOpen(ShivaStructs.OrderRequest memory _request) internal {
+        // For a buy (long), we accept a higher price: trigger * (1 + slippage)
+        // For a sell (short), we accept a lower price: trigger * (1 - slippage)
+        uint256 priceLimit;
+        uint256 slippageAmount =
+            _request.triggerPrice.mulUp((_request.slippageToleranceBps * ONE) / 10000);
+
+        if (_request.isLong) {
+            priceLimit = _request.triggerPrice + slippageAmount;
+        } else {
+            priceLimit = _request.triggerPrice - slippageAmount;
+        }
+
+        // 1. Pull collateral from the vault into this contract
+        orderVault.pay(address(this), _request.collateral);
+
+        // 2. Approve market to spend the collateral
+        _approveMarket(_request.market);
+
+        // 3. Call internal build logic, which now assumes collateral is present
+        _onBuildPosition(
+            _request.owner,
+            _request.market,
+            _request.collateral,
+            _request.leverage,
+            _request.isLong,
+            priceLimit,
+            0 // brokerId
+        );
+    }
+
+    /**
+     * @notice Internal logic for executing a stop-loss or take-profit order.
+     * @dev Calculates the appropriate price limit based on slippage and calls the internal unwind logic.
+     * @param _request The order request data.
+     */
+    function _executeStopLossOrTakeProfit(ShivaStructs.OrderRequest memory _request) internal {
+        // To close a long, we sell. We accept a price lower than trigger: priceLimit = trigger * (1 - slippage)
+        // To close a short, we buy. We accept a price higher than trigger: priceLimit = trigger * (1 + slippage)
+        bool isLong = Utils.getPositionSide(_request.market, _request.positionId, address(this));
+        uint256 priceLimit;
+        uint256 slippageAmount =
+            _request.triggerPrice.mulUp((_request.slippageToleranceBps * ONE) / 10000);
+
+        if (isLong) {
+            priceLimit = _request.triggerPrice - slippageAmount;
+        } else {
+            priceLimit = _request.triggerPrice + slippageAmount;
+        }
+
+        // Use _unwindLogic which handles unwinding and transferring proceeds back to the owner.
+        ShivaStructs.Unwind memory unwindParams = ShivaStructs.Unwind({
+            ovlMarket: _request.market,
+            positionId: _request.positionId,
+            fraction: _request.fraction,
+            priceLimit: priceLimit,
+            brokerId: 0 // Not used in this context
+        });
+
+        // The owner of the request is the owner of the position
+        _unwindLogic(unwindParams, _request.owner);
     }
 }

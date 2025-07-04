@@ -130,7 +130,7 @@ library Utils {
         IOverlayV1Market ovlMarket,
         uint256 positionId,
         address owner
-    ) external view returns (bool isLong) {
+    ) public view returns (bool isLong) {
         (,,,, isLong,,,) = ovlMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
     }
 }

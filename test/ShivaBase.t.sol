@@ -65,7 +65,7 @@ contract ShivaTestBase is Test, BaseSetup {
     IOverlayV1Token ovlToken;
     IBerachainRewardsVault rewardVault;
 
-    MockSequencerOracle sequencerOracle;
+    MockSequencerOracle public sequencerOracle;
     MockAggregator aggregator;
     OverlayV1ChainlinkFeedFactory feedFactory;
     IOverlayV1ChainlinkFeed feed;
@@ -170,9 +170,15 @@ contract ShivaTestBase is Test, BaseSetup {
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address)";
-        bytes memory data =
-            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
+        string memory functionName = "initialize(address,address,address,address,address)";
+        bytes memory data = abi.encodeWithSignature(
+            functionName,
+            address(ovlToken),
+            address(vaultFactory),
+            address(0),
+            address(0),
+            address(0)
+        );
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));

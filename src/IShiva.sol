@@ -100,6 +100,42 @@ interface IShiva {
     event NonceCancelled(address indexed owner, uint256 nonce);
 
     /**
+     * @notice Emitted when a new advanced order request is created.
+     * @param owner The user who initiated the request.
+     * @param orderType The type of the order.
+     * @param requestId The unique ID of the request in the OrderStore.
+     */
+    event AdvancedOrderCreated(
+        address indexed owner,
+        ShivaStructs.OrderType indexed orderType,
+        uint256 requestId
+    );
+
+    /**
+     * @notice Emitted when an advanced order request is executed.
+     * @param owner The user who initiated the request.
+     * @param orderType The type of the order.
+     * @param requestId The unique ID of the request in the OrderStore.
+     */
+    event AdvancedOrderExecuted(
+        address indexed owner,
+        ShivaStructs.OrderType indexed orderType,
+        uint256 requestId
+    );
+
+    /**
+     * @notice Emitted when an advanced order request is cancelled.
+     * @param owner The user who initiated the request.
+     * @param orderType The type of the order.
+     * @param requestId The unique ID of the request in the OrderStore.
+     */
+    event AdvancedOrderCancelled(
+        address indexed owner,
+        ShivaStructs.OrderType indexed orderType,
+        uint256 requestId
+    );
+
+    /**
      * @notice Error emitted when the caller is not the owner of the position.
      */
     error NotPositionOwner();
@@ -123,6 +159,26 @@ interface IShiva {
      * @notice Error emitted when the nonce is invalid.
      */
     error InvalidNonce();
+
+    /**
+     * @notice Error emitted when an operation is attempted on an order with an invalid status.
+     * @param requestId The ID of the order.
+     * @param currentStatus The actual status of the order.
+     * @param requiredStatus The required status for the operation.
+     */
+    error InvalidOrderStatus(
+        uint256 requestId,
+        ShivaStructs.OrderStatus currentStatus,
+        ShivaStructs.OrderStatus requiredStatus
+    );
+
+    /**
+     * @notice Error emitted when a keeper tries to execute an order whose trigger condition is not met.
+     * @param requestId The ID of the order.
+     * @param triggerPrice The price required to trigger the order.
+     * @param currentPrice The current market price.
+     */
+    error TriggerNotMet(uint256 requestId, uint256 triggerPrice, uint256 currentPrice);
 
     /**
      * @dev Functions that Shiva should implement.
@@ -193,4 +249,45 @@ interface IShiva {
         uint256 positionId,
         address owner
     ) external;
+
+    /**
+     * @notice Creates a request for a limit order to open a new position.
+     * @param params The parameters for the limit order.
+     * @return requestId The unique ID of the order request.
+     */
+    function createLimitOrder(ShivaStructs.CreateLimitOrderParams calldata params)
+        external
+        returns (uint256 requestId);
+
+    /**
+     * @notice Creates a request for a stop-loss order to close an existing position.
+     * @param params The parameters for the stop-loss order.
+     * @return requestId The unique ID of the order request.
+     */
+    function createStopLossOrder(ShivaStructs.CreateStopLossOrderParams calldata params)
+        external
+        returns (uint256 requestId);
+
+    /**
+     * @notice Creates a request for a take-profit order to close an existing position.
+     * @param params The parameters for the take-profit order.
+     * @return requestId The unique ID of the order request.
+     */
+    function createTakeProfitOrder(ShivaStructs.CreateTakeProfitOrderParams calldata params)
+        external
+        returns (uint256 requestId);
+
+    /**
+     * @notice Cancels an advanced order that is currently in PENDING status.
+     * @dev Can only be called by the owner of the order.
+     * @param requestId The unique ID of the order request to cancel.
+     */
+    function cancelOrder(uint256 requestId) external;
+
+    /**
+     * @notice Executes an advanced order (Limit, SL, TP) that has been previously created.
+     * @dev This function is expected to be called only by the authorized KeeperHandler.
+     * @param requestId The unique ID of the order request to execute.
+     */
+    function executeAdvancedOrder(uint256 requestId) external;
 }

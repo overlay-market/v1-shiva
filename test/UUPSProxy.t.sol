@@ -62,7 +62,7 @@ contract ImplementationV1Test is Test {
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(address(ovlToken), vaultFactory);
+        shivaV1.initialize(address(ovlToken), vaultFactory, address(0), address(0), address(0));
     }
 
     function testInitialized() public {
@@ -108,13 +108,13 @@ contract ImplementationV2Test is Test {
         address(proxy).call(abi.encodeWithSignature("setMagicNumber(uint256)", 42));
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(address(ovlToken), vaultFactory);
+        shivaV1.initialize(address(ovlToken), vaultFactory, address(0), address(0), address(0));
 
         // deploy new logic contract
         shivaV2 = new ShivaV2();
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV2.initialize(address(ovlToken), vaultFactory);
+        shivaV2.initialize(address(ovlToken), vaultFactory, address(0), address(0), address(0));
 
         vm.startPrank(address(0x123));
 
