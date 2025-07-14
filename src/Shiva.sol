@@ -272,34 +272,6 @@ contract Shiva is
     }
 
     /**
-     * @notice Builds a limit order position in the ovlMarket for a user
-     * @param params The parameters for building the position based on the
-     * ShivaStructs.Build struct
-     * @return The ID of the newly created position
-     * @dev Only callable when the contract is not paused and the market is valid
-     */
-    function limitOrderBuild(ShivaStructs.Build calldata params)
-        external
-        whenNotPaused
-        validMarket(params.ovlMarket)
-        returns (uint256)
-    {
-        uint256 positionId = _buildLogic(params, msg.sender);
-
-        emit LimitOrderExecuted(
-            msg.sender,
-            address(params.ovlMarket),
-            msg.sender,
-            positionId,
-            params.collateral,
-            params.leverage,
-            params.brokerId,
-            params.isLong
-        );
-        return positionId;
-    }
-
-    /**
      * @notice Unwinds a position for the user
      * @param params The parameters for unwinding the position based on the
      * ShivaStructs.Unwind struct
@@ -312,22 +284,7 @@ contract Shiva is
         onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
     {
         _unwindLogic(params, msg.sender);
-    }
-
-    /**
-     * @notice Unwinds a position to take profit for the user
-     * @param params The parameters for unwinding the position based on the
-     * ShivaStructs.Unwind struct
-     * @dev Only callable when the contract is not paused and the caller is the owner of
-     * the position
-     */
-    function takeProfit(ShivaStructs.Unwind calldata params)
-        external
-        whenNotPaused
-        onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
-    {
-        _unwindLogic(params, msg.sender);
-        emit TakeProfitExecuted(
+        emit ShivaUnwind(
             msg.sender,
             address(params.ovlMarket),
             msg.sender,
@@ -374,13 +331,11 @@ contract Shiva is
      * ShivaStructs.Build struct
      * @param onBehalfOf The parameters for building on behalf of a user based on the
      * ShivaStructs.OnBehalfOf struct
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
      * @return The ID of the newly created position
      */
     function build(
         ShivaStructs.Build calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
         whenNotPaused
@@ -403,10 +358,6 @@ contract Shiva is
             )
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
-
-        if (payRelayerFee) {
-            return _buildLogicWithRelayerFee(params, onBehalfOf.owner);
-        }
 
         return _buildLogic(params, onBehalfOf.owner);
     }
@@ -417,13 +368,11 @@ contract Shiva is
      * ShivaStructs.Build struct
      * @param onBehalfOf The parameters for building on behalf of a user based on the
      * ShivaStructs.OnBehalfOf struct
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
      * @return The ID of the newly created position
      */
     function limitOrderBuild(
         ShivaStructs.Build calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
         whenNotPaused
@@ -447,12 +396,7 @@ contract Shiva is
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        uint256 positionId;
-        if (payRelayerFee) {
-            positionId = _buildLogicWithRelayerFee(params, onBehalfOf.owner);
-        } else {
-            positionId = _buildLogic(params, onBehalfOf.owner);
-        }
+        uint256 positionId = _buildLogicWithRelayerFee(params, onBehalfOf.owner);
 
         emit LimitOrderExecuted(
             onBehalfOf.owner,
@@ -473,14 +417,12 @@ contract Shiva is
      * ShivaStructs.Unwind struct
      * @param onBehalfOf The parameters for unwinding on behalf of a user based on the
      * ShivaStructs.OnBehalfOf struct
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
      * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
      * is the owner of the position
      */
     function unwind(
         ShivaStructs.Unwind calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
         whenNotPaused
@@ -502,11 +444,7 @@ contract Shiva is
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        if (payRelayerFee) {
-            _unwindLogicWithRelayerFee(params, onBehalfOf.owner);
-        } else {
-            _unwindLogic(params, onBehalfOf.owner);
-        }
+        _unwindLogic(params, onBehalfOf.owner);
     }
 
     /**
@@ -515,14 +453,12 @@ contract Shiva is
      * ShivaStructs.Unwind struct
      * @param onBehalfOf The parameters for unwinding on behalf of a user based on the
      * ShivaStructs.OnBehalfOf struct
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
      * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
      * is the owner of the position
      */
     function takeProfit(
         ShivaStructs.Unwind calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
         whenNotPaused
@@ -544,11 +480,7 @@ contract Shiva is
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        if (payRelayerFee) {
-            _unwindLogicWithRelayerFee(params, onBehalfOf.owner);
-        } else {
-            _unwindLogic(params, onBehalfOf.owner);
-        }
+        _unwindLogicWithRelayerFee(params, onBehalfOf.owner);
 
         emit TakeProfitExecuted(
             onBehalfOf.owner,
