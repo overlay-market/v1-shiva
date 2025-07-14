@@ -272,6 +272,34 @@ contract Shiva is
     }
 
     /**
+     * @notice Builds a limit order position in the ovlMarket for a user
+     * @param params The parameters for building the position based on the
+     * ShivaStructs.Build struct
+     * @return The ID of the newly created position
+     * @dev Only callable when the contract is not paused and the market is valid
+     */
+    function limitOrderBuild(ShivaStructs.Build calldata params)
+        external
+        whenNotPaused
+        validMarket(params.ovlMarket)
+        returns (uint256)
+    {
+        uint256 positionId = _buildLogic(params, msg.sender);
+
+        emit LimitOrderExecuted(
+            msg.sender,
+            address(params.ovlMarket),
+            msg.sender,
+            positionId,
+            params.collateral,
+            params.leverage,
+            params.brokerId,
+            params.isLong
+        );
+        return positionId;
+    }
+
+    /**
      * @notice Unwinds a position for the user
      * @param params The parameters for unwinding the position based on the
      * ShivaStructs.Unwind struct
@@ -284,6 +312,29 @@ contract Shiva is
         onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
     {
         _unwindLogic(params, msg.sender);
+    }
+
+    /**
+     * @notice Unwinds a position to take profit for the user
+     * @param params The parameters for unwinding the position based on the
+     * ShivaStructs.Unwind struct
+     * @dev Only callable when the contract is not paused and the caller is the owner of
+     * the position
+     */
+    function takeProfit(ShivaStructs.Unwind calldata params)
+        external
+        whenNotPaused
+        onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
+    {
+        _unwindLogic(params, msg.sender);
+        emit TakeProfitExecuted(
+            msg.sender,
+            address(params.ovlMarket),
+            msg.sender,
+            params.positionId,
+            params.fraction,
+            params.brokerId
+        );
     }
 
     /**
@@ -361,6 +412,62 @@ contract Shiva is
     }
 
     /**
+     * @notice Builds a limit order position on behalf of a user (with signature verification)
+     * @param params The parameters for building the position based on the
+     * ShivaStructs.Build struct
+     * @param onBehalfOf The parameters for building on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
+     * @return The ID of the newly created position
+     */
+    function limitOrderBuild(
+        ShivaStructs.Build calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    )
+        external
+        whenNotPaused
+        validMarket(params.ovlMarket)
+        validDeadline(onBehalfOf.deadline)
+        returns (uint256)
+    {
+        // build typed data hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                BUILD_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                onBehalfOf.deadline,
+                params.collateral,
+                params.leverage,
+                params.isLong,
+                params.priceLimit,
+                onBehalfOf.nonce,
+                params.brokerId
+            )
+        );
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+
+        uint256 positionId;
+        if (payRelayerFee) {
+            positionId = _buildLogicWithRelayerFee(params, onBehalfOf.owner);
+        } else {
+            positionId = _buildLogic(params, onBehalfOf.owner);
+        }
+
+        emit LimitOrderExecuted(
+            onBehalfOf.owner,
+            address(params.ovlMarket),
+            msg.sender,
+            positionId,
+            params.collateral,
+            params.leverage,
+            params.brokerId,
+            params.isLong
+        );
+        return positionId;
+    }
+
+    /**
      * @notice Unwinds a position on behalf of a user (with signature verification)
      * @param params The parameters for unwinding the position based on the
      * ShivaStructs.Unwind struct
@@ -400,6 +507,57 @@ contract Shiva is
         } else {
             _unwindLogic(params, onBehalfOf.owner);
         }
+    }
+
+    /**
+     * @notice Unwinds a position to take profit on behalf of a user (with signature verification)
+     * @param params The parameters for unwinding the position based on the
+     * ShivaStructs.Unwind struct
+     * @param onBehalfOf The parameters for unwinding on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
+     * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
+     * is the owner of the position
+     */
+    function takeProfit(
+        ShivaStructs.Unwind calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    )
+        external
+        whenNotPaused
+        validDeadline(onBehalfOf.deadline)
+        onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
+    {
+        // build typed data hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                UNWIND_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                onBehalfOf.deadline,
+                params.positionId,
+                params.fraction,
+                params.priceLimit,
+                onBehalfOf.nonce,
+                params.brokerId
+            )
+        );
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+
+        if (payRelayerFee) {
+            _unwindLogicWithRelayerFee(params, onBehalfOf.owner);
+        } else {
+            _unwindLogic(params, onBehalfOf.owner);
+        }
+
+        emit TakeProfitExecuted(
+            onBehalfOf.owner,
+            address(params.ovlMarket),
+            msg.sender,
+            params.positionId,
+            params.fraction,
+            params.brokerId
+        );
     }
 
     /**
@@ -507,6 +665,16 @@ contract Shiva is
         } else {
             _unwindLogic(unwindParams, _onBehalfOf.owner);
         }
+
+        emit StopLossExecuted(
+            _onBehalfOf.owner,
+            address(_params.ovlMarket),
+            msg.sender,
+            _params.positionId,
+            _params.fraction,
+            _params.triggerPrice,
+            _params.brokerId
+        );
     }
 
     /**

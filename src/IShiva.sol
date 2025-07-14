@@ -50,6 +50,66 @@ interface IShiva {
     );
 
     /**
+     * @notice Emitted when a stop loss is executed through Shiva.
+     * @param owner Address of the position owner.
+     * @param market Address of the market where the position was unwound.
+     * @param performer Address of the account that called the unwind function.
+     * @param positionId Unique ID of the unwound position.
+     * @param fraction Fraction of the position unwound.
+     * @param triggerPrice The price at which the stop loss was triggered.
+     * @param brokerId ID of the broker used to unwind the position.
+     */
+    event StopLossExecuted(
+        address indexed owner,
+        address indexed market,
+        address performer,
+        uint256 positionId,
+        uint256 fraction,
+        uint256 triggerPrice,
+        uint32 brokerId
+    );
+
+    /**
+     * @notice Emitted when a take profit is executed through Shiva.
+     * @param owner Address of the position owner.
+     * @param market Address of the market where the position was unwound.
+     * @param performer Address of the account that called the unwind function.
+     * @param positionId Unique ID of the unwound position.
+     * @param fraction Fraction of the position unwound.
+     * @param brokerId ID of the broker used to unwind the position.
+     */
+    event TakeProfitExecuted(
+        address indexed owner,
+        address indexed market,
+        address performer,
+        uint256 positionId,
+        uint256 fraction,
+        uint32 brokerId
+    );
+
+    /**
+     * @notice Emitted when a limit order is executed through Shiva.
+     * @param owner Address of the position owner.
+     * @param market Address of the market where the position was built.
+     * @param performer Address of the account that called the build function.
+     * @param positionId Unique ID of the built position.
+     * @param collateral Amount of collateral used to build the position.
+     * @param leverage Leverage applied to the position.
+     * @param brokerId ID of the broker used to build the position.
+     * @param isLong Indicates whether the position is long or short.
+     */
+    event LimitOrderExecuted(
+        address indexed owner,
+        address indexed market,
+        address performer,
+        uint256 positionId,
+        uint256 collateral,
+        uint256 leverage,
+        uint32 brokerId,
+        bool isLong
+    );
+
+    /**
      * @notice Emitted when an emergency withdrawal is performed through Shiva.
      * @param owner Address of the position owner who performed the withdrawal.
      * @param market Address of the market from which funds were withdrawn.
@@ -154,6 +214,15 @@ interface IShiva {
     function build(ShivaStructs.Build calldata params) external returns (uint256 positionId);
 
     /**
+     * @notice Builds a new limit order position.
+     * @param params Parameters to build the position.
+     * @return positionId Unique ID of the built position.
+     */
+    function limitOrderBuild(ShivaStructs.Build calldata params)
+        external
+        returns (uint256 positionId);
+
+    /**
      * @notice Builds a new position on behalf of an owner.
      * @param params Parameters to build the position.
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
@@ -161,6 +230,19 @@ interface IShiva {
      * @return positionId Unique ID of the built position.
      */
     function build(
+        ShivaStructs.Build calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    ) external returns (uint256 positionId);
+
+    /**
+     * @notice Builds a new limit order position on behalf of an owner.
+     * @param params Parameters to build the position.
+     * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
+     * @return positionId Unique ID of the built position.
+     */
+    function limitOrderBuild(
         ShivaStructs.Build calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf,
         bool payRelayerFee
@@ -195,12 +277,30 @@ interface IShiva {
     function unwind(ShivaStructs.Unwind calldata params) external;
 
     /**
+     * @notice Unwinds a position to take profit.
+     * @param params Parameters to unwind the position.
+     */
+    function takeProfit(ShivaStructs.Unwind calldata params) external;
+
+    /**
      * @notice Unwinds a position on behalf of an owner.
      * @param params Parameters to unwind the position.
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
      * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
      */
     function unwind(
+        ShivaStructs.Unwind calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf,
+        bool payRelayerFee
+    ) external;
+
+    /**
+     * @notice Unwinds a position to take profit on behalf of an owner.
+     * @param params Parameters to unwind the position.
+     * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
+     */
+    function takeProfit(
         ShivaStructs.Unwind calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf,
         bool payRelayerFee
