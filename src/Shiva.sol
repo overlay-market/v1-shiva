@@ -20,6 +20,7 @@ import {
     PAUSER_ROLE
 } from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
@@ -110,9 +111,6 @@ contract Shiva is
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
 
-    /// @notice The fixed fee charged by the relayer for executing a transaction (e.g. 1e18 for 1 OVL)
-    uint256 public relayerFee;
-
     /**
      * @notice Typehash for the StopLossOnBehalfOfParams struct
      * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
@@ -120,6 +118,12 @@ contract Shiva is
     bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
         "StopLossOnBehalfOf(address ovlMarket,uint256 positionId,uint256 fraction,uint256 triggerPrice,uint256 priceLimit,uint48 deadline,uint256 nonce,uint32 brokerId)"
     );
+
+    /// @notice The oracle feed for the NATIVE/OVL price
+    IOverlayV1Feed public nativeOvlFeed;
+
+    /// @notice The incentive paid to keepers, expressed as a percentage (1e16 = 1%)
+    uint256 public keeperIncentive;
     
     /**
      * @dev Modifiers section
@@ -187,18 +191,21 @@ contract Shiva is
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
-     * @param _relayerFee The initial relayer fee as a fixed amount (e.g. 1e18 for 1 OVL)
+     * @param _nativeOvlFeed The address of the NATIVE/OVL price feed
+     * @param _keeperIncentive The incentive for keepers
      */
     function initialize(
         address _ovlToken,
         address _vaultFactory,
-        uint256 _relayerFee
+        IOverlayV1Feed _nativeOvlFeed,
+        uint256 _keeperIncentive
     ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
         ovlToken = IOverlayV1Token(_ovlToken);
-        relayerFee = _relayerFee;
+        nativeOvlFeed = _nativeOvlFeed;
+        keeperIncentive = _keeperIncentive;
 
         // Create new staking token
         stakingToken = new StakingToken();
@@ -380,6 +387,8 @@ contract Shiva is
         validDeadline(onBehalfOf.deadline)
         returns (uint256)
     {
+        uint256 gasStart = gasleft();
+        
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
@@ -396,7 +405,7 @@ contract Shiva is
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        uint256 positionId = _buildLogicWithRelayerFee(params, onBehalfOf.owner);
+        uint256 positionId = _buildLogicWithRelayerFee(params, onBehalfOf.owner, gasStart);
 
         emit LimitOrderExecuted(
             onBehalfOf.owner,
@@ -465,6 +474,8 @@ contract Shiva is
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
+        uint256 gasStart = gasleft();
+
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
@@ -480,7 +491,7 @@ contract Shiva is
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        _unwindLogicWithRelayerFee(params, onBehalfOf.owner);
+        _unwindLogicWithRelayerFee(params, onBehalfOf.owner, gasStart);
 
         emit TakeProfitExecuted(
             onBehalfOf.owner,
@@ -514,12 +525,14 @@ contract Shiva is
         onlyPositionOwner(params.ovlMarket, params.previousPositionId, onBehalfOf.owner)
         returns (uint256)
     {
+        uint256 gasStart = gasleft();
+        
         // build typed data hash
         bytes32 structHash = _computeBuildSingleTypedDataHash(params, onBehalfOf);
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
         if (payRelayerFee) {
-            return _buildSingleLogicWithRelayerFee(params, onBehalfOf.owner);
+            return _buildSingleLogicWithRelayerFee(params, onBehalfOf.owner, gasStart);
         }
 
         return _buildSingleLogic(params, onBehalfOf.owner);
@@ -545,6 +558,8 @@ contract Shiva is
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
+        uint256 gasStart = gasleft();
+        
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
@@ -561,7 +576,7 @@ contract Shiva is
         );
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        _executeStopLoss(params, onBehalfOf, payRelayerFee);
+        _executeStopLoss(params, onBehalfOf, payRelayerFee, gasStart);
     }
 
     /**
@@ -569,11 +584,13 @@ contract Shiva is
      * @param _params The parameters for the stop loss order
      * @param _onBehalfOf The parameters for acting on behalf of a user
      * @param _payRelayerFee Whether to pay a fee to the relayer
+     * @param _gasStart The initial gas amount to calculate the dynamic fee
      */
     function _executeStopLoss(
         ShivaStructs.StopLoss calldata _params,
         ShivaStructs.OnBehalfOf calldata _onBehalfOf,
-        bool _payRelayerFee
+        bool _payRelayerFee,
+        uint256 _gasStart
     ) internal {
         // 1. Check if the trigger condition is met
         if (
@@ -593,7 +610,7 @@ contract Shiva is
         });
 
         if (_payRelayerFee) {
-            _unwindLogicWithRelayerFee(unwindParams, _onBehalfOf.owner);
+            _unwindLogicWithRelayerFee(unwindParams, _onBehalfOf.owner, _gasStart);
         } else {
             _unwindLogic(unwindParams, _onBehalfOf.owner);
         }
@@ -669,23 +686,24 @@ contract Shiva is
      * @notice Internal logic for building a position with relayer fee
      * @param _params The parameters for building the position
      * @param _owner The address of the owner
+     * @param _gasStart The initial gas amount to calculate the dynamic fee
      * @return The ID of the newly created position
      */
     function _buildLogicWithRelayerFee(
         ShivaStructs.Build memory _params,
-        address _owner
+        address _owner,
+        uint256 _gasStart
     ) internal returns (uint256) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
         uint256 tradingFee = _getTradingFee(_params.ovlMarket, _params.collateral, _params.leverage);
 
-        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee + relayerFee);
-
-        ovlToken.transfer(msg.sender, relayerFee);
+        // Transfer OVL from user for collateral and trading fee
+        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
 
         // Approve the ovlMarket contract to spend OVL
         _approveMarket(_params.ovlMarket);
 
-        return _onBuildPosition(
+        uint256 positionId = _onBuildPosition(
             _owner,
             _params.ovlMarket,
             _params.collateral,
@@ -694,6 +712,14 @@ contract Shiva is
             _params.priceLimit,
             _params.brokerId
         );
+
+        uint256 gasUsed = _gasStart - gasleft();
+        uint256 dynamicFee = Utils.calculateDynamicRelayerFee(gasUsed, nativeOvlFeed, keeperIncentive);
+
+        // Transfer OVL from user to relayer
+        ovlToken.transferFrom(_owner, msg.sender, dynamicFee);
+
+        return positionId;
     }
 
     /**
@@ -717,10 +743,12 @@ contract Shiva is
      * @notice Internal logic for unwinding a position with relayer fee
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
+     * @param _gasStart The initial gas amount to calculate the dynamic fee
      */
     function _unwindLogicWithRelayerFee(
         ShivaStructs.Unwind memory _params,
-        address _owner
+        address _owner,
+        uint256 _gasStart
     ) internal {
         _onUnwindPosition(
             _params.ovlMarket,
@@ -730,17 +758,20 @@ contract Shiva is
             _params.brokerId
         );
 
+        uint256 gasUsed = _gasStart - gasleft();
+        uint256 dynamicFee = Utils.calculateDynamicRelayerFee(gasUsed, nativeOvlFeed, keeperIncentive);
+
         uint256 unwindAmount = ovlToken.balanceOf(address(this));
 
-        if (unwindAmount < relayerFee) {
-            revert InsufficientUnwindAmountForFee(unwindAmount, relayerFee);
+        if (unwindAmount < dynamicFee) {
+            revert InsufficientUnwindAmountForFee(unwindAmount, dynamicFee);
         }
 
         // Transfer remaining amount to owner
-        ovlToken.transfer(_owner, unwindAmount - relayerFee);
+        ovlToken.transfer(_owner, unwindAmount - dynamicFee);
 
         // Transfer fee to relayer
-        ovlToken.transfer(msg.sender, relayerFee);
+        ovlToken.transfer(msg.sender, dynamicFee);
     }
 
     /**
@@ -795,11 +826,13 @@ contract Shiva is
      * @notice Internal logic for building and keeping a single position with relayer fee
      * @param _params The parameters for building the single position
      * @param _owner The address of the owner
+     * @param _gasStart The initial gas amount to calculate the dynamic fee
      * @return positionId The ID of the newly created position
      */
     function _buildSingleLogicWithRelayerFee(
         ShivaStructs.BuildSingle calldata _params,
-        address _owner
+        address _owner,
+        uint256 _gasStart
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
@@ -822,9 +855,8 @@ contract Shiva is
         bool isLong =
             Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
-        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee + relayerFee);
-
-        ovlToken.transfer(msg.sender, relayerFee);
+        // Transfer OVL from user for the new collateral part and trading fee
+        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
 
         // Approve the ovlMarket contract to spend OVL
         _approveMarket(_params.ovlMarket);
@@ -838,6 +870,12 @@ contract Shiva is
             _params.buildPriceLimit,
             _params.brokerId
         );
+
+        uint256 gasUsed = _gasStart - gasleft();
+        uint256 dynamicFee = Utils.calculateDynamicRelayerFee(gasUsed, nativeOvlFeed, keeperIncentive);
+
+        // Transfer OVL from user to relayer
+        ovlToken.transferFrom(_owner, msg.sender, dynamicFee);
     }
 
     /**
@@ -1083,12 +1121,19 @@ contract Shiva is
     function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
 
     /**
-     * @notice Sets the relayer fee
-     * @param _newFee The new relayer fee as a fixed amount (e.g. 1e18 for 1 OVL)
+     * @notice Sets the NATIVE/OVL oracle feed address.
+     * @param _feed The address of the IOverlayV1Feed compliant oracle.
      */
-    function setRelayerFee(uint256 _newFee) external onlyGovernor(msg.sender) {
-        relayerFee = _newFee;
-        emit RelayerFeeUpdated(_newFee);
+    function setNativeOvlFeed(IOverlayV1Feed _feed) external onlyGovernor(msg.sender) {
+        nativeOvlFeed = _feed;
+    }
+
+    /**
+     * @notice Sets the incentive for keepers.
+     * @param _incentive The incentive, where 1e16 represents 1%.
+     */
+    function setKeeperIncentive(uint256 _incentive) external onlyGovernor(msg.sender) {
+        keeperIncentive = _incentive;
     }
 
     /**

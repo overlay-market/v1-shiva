@@ -168,4 +168,31 @@ library Utils {
             return currentPrice >= triggerPrice;
         }
     }
+
+    /**
+     * @notice Calculates the dynamic relayer fee based on gas consumed.
+     * @param gasUsed The amount of gas consumed by the transaction.
+     * @param nativeOvlFeed The oracle feed for the NATIVE/OVL price.
+     * @param keeperIncentive The percentage premium to add to the fee (e.g., 1e16 for 1%).
+     * @return The total fee in OVL.
+     */
+    function calculateDynamicRelayerFee(
+        uint256 gasUsed,
+        IOverlayV1Feed nativeOvlFeed,
+        uint256 keeperIncentive
+    ) internal view returns (uint256) {
+        Oracle.Data memory data = nativeOvlFeed.latest();
+        // Use the average of micro and macro window prices for stability
+        uint256 nativeOvlPrice = (data.priceOverMicroWindow + data.priceOverMacroWindow) / 2;
+
+        // nativeCost = gasUsed * tx.gasprice (wei)
+        uint256 nativeCost = gasUsed * tx.gasprice;
+
+        // ovlCost = (nativeCost * nativeOvlPrice) / 1e18
+        uint256 ovlCost = nativeCost.mulUp(nativeOvlPrice);
+
+        uint256 premiumAmount = ovlCost.mulUp(keeperIncentive);
+        
+        return ovlCost + premiumAmount;
+    }
 }

@@ -309,8 +309,8 @@ interface IShiva {
     ) external;
 
     /**
-     * @notice Sets the relayer fee.
-     * @param newFee The new fixed relayer fee.
+     * @notice Sets the keeper incentive.
+     * @param _incentive The new incentive for keepers.
      */
-    function setRelayerFee(uint256 newFee) external;
+    function setKeeperIncentive(uint256 _incentive) external;
 }
