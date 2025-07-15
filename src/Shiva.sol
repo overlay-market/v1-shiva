@@ -83,6 +83,15 @@ contract Shiva is
         "BuildSingleOnBehalfOfParams(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 unwindPriceLimit,uint256 buildPriceLimit,uint256 nonce,uint32 brokerId)"
     );
 
+    /**
+     * @notice Typehash for the StopLossOnBehalfOfParams struct
+     * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
+     */
+    bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "StopLossOnBehalfOf(address ovlMarket,uint256 positionId,uint256 fraction,uint256 triggerPrice,uint256 priceLimit,uint48 deadline,uint256 nonce,uint32 brokerId)"
+    );
+
+
     /// @notice The Overlay V1 Token contract
     IOverlayV1Token public ovlToken;
 
@@ -91,6 +100,12 @@ contract Shiva is
 
     /// @notice The BerachainRewardsVault contract
     IBerachainRewardsVault public rewardVault;
+
+    /// @notice The oracle feed for the NATIVE/OVL price
+    IOverlayV1Feed public nativeOvlFeed;
+
+    /// @notice The incentive paid to keepers, expressed as a percentage (1e16 = 1%)
+    uint256 public keeperIncentive;
 
     /// @notice List of authorized factories
     IOverlayV1Factory[] public authorizedFactories;
@@ -110,20 +125,6 @@ contract Shiva is
 
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
-
-    /**
-     * @notice Typehash for the StopLossOnBehalfOfParams struct
-     * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
-     */
-    bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "StopLossOnBehalfOf(address ovlMarket,uint256 positionId,uint256 fraction,uint256 triggerPrice,uint256 priceLimit,uint48 deadline,uint256 nonce,uint32 brokerId)"
-    );
-
-    /// @notice The oracle feed for the NATIVE/OVL price
-    IOverlayV1Feed public nativeOvlFeed;
-
-    /// @notice The incentive paid to keepers, expressed as a percentage (1e16 = 1%)
-    uint256 public keeperIncentive;
     
     /**
      * @dev Modifiers section
