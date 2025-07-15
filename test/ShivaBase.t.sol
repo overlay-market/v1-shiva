@@ -65,8 +65,11 @@ contract ShivaTestBase is Test, BaseSetup {
     IOverlayV1Token ovlToken;
     IBerachainRewardsVault rewardVault;
 
+    IOverlayV1ChainlinkFeed public nativeOvlFeed;
+
     MockSequencerOracle sequencerOracle;
     MockAggregator aggregator;
+    MockAggregator nativeOvlAggregator;
     OverlayV1ChainlinkFeedFactory feedFactory;
     IOverlayV1ChainlinkFeed feed;
 
@@ -142,6 +145,9 @@ contract ShivaTestBase is Test, BaseSetup {
         // Deploy aggregator
         aggregator = deployAggregator();
 
+        // Deploy native aggregator and feed
+        nativeOvlAggregator = deployNativeOvlAggregator();
+
         // Deploy feed factory and feed
         feedFactory = new OverlayV1ChainlinkFeedFactory(
             address(ovlToken),
@@ -150,6 +156,9 @@ contract ShivaTestBase is Test, BaseSetup {
         );
         feed = IOverlayV1ChainlinkFeed(
             feedFactory.deployFeed(address(aggregator), 172800) // 2 days window
+        );
+        nativeOvlFeed = IOverlayV1ChainlinkFeed(
+            feedFactory.deployFeed(address(nativeOvlAggregator), 172800) // 2 days window
         );
 
         // Deploy factory
@@ -170,10 +179,11 @@ contract ShivaTestBase is Test, BaseSetup {
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address,uint256)";
-        uint256 relayerFee = 100000000000000; // 0.01%
-        bytes memory data =
-            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory), relayerFee);
+        string memory functionName = "initialize(address,address,address,uint256)";
+        uint256 keeperIncentive = 1e16; // 1%
+        bytes memory data = abi.encodeWithSignature(
+            functionName, address(ovlToken), address(vaultFactory), address(nativeOvlFeed), keeperIncentive
+        );
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -218,6 +228,7 @@ contract ShivaTestBase is Test, BaseSetup {
         vm.label(address(ovlMarket), "Market");
         vm.label(address(shiva), "Shiva");
         vm.label(address(ovlToken), "OVL");
+        vm.label(address(nativeOvlFeed), "NativeOvlFeed");
     }
 
     /**
@@ -324,6 +335,19 @@ contract ShivaTestBase is Test, BaseSetup {
         aggregator_.submit(3, 979701714);
         vm.warp(block.timestamp + 60 * 60);
         aggregator_.submit(4, 979701714);
+    }
+
+    function deployNativeOvlAggregator() public returns (MockAggregator nativeOvlAggregator_) {
+        // Deploy MockAggregator with initial price
+        nativeOvlAggregator_ = new MockAggregator();
+
+        // Set up initial rounds of price data
+        vm.warp(block.timestamp + 60 * 60);
+        nativeOvlAggregator_.submit(2, 1e8); // 1 NATIVE = 1 OVL (with 8 decimals)
+        vm.warp(block.timestamp + 60 * 60);
+        nativeOvlAggregator_.submit(3, 1e8);
+        vm.warp(block.timestamp + 60 * 60);
+        nativeOvlAggregator_.submit(4, 1e8);
     }
 
     /**
@@ -626,8 +650,7 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public returns (uint256) {
         return shiva.build(
             ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
-            false // payRelayerFee - default to false for backward compatibility
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 
@@ -650,8 +673,7 @@ contract ShivaTestBase is Test, BaseSetup {
     ) public {
         shiva.unwind(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, fraction, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
-            false // payRelayerFee - default to false for backward compatibility
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 
