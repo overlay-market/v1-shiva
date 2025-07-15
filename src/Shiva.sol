@@ -775,6 +775,10 @@ contract Shiva is
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
+        // Get side before unwinding
+        bool isLong =
+            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
+
         // Track balance before unwinding
         uint256 balanceBefore = ovlToken.balanceOf(address(this));
 
@@ -790,9 +794,6 @@ contract Shiva is
         uint256 unwindAmount = ovlToken.balanceOf(address(this)) - balanceBefore;
         uint256 totalCollateral = _params.collateral + unwindAmount;
         uint256 tradingFee = _getTradingFee(_params.ovlMarket, totalCollateral, _params.leverage);
-
-        bool isLong =
-            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
         // transfer OVL from user to this contract
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
@@ -825,6 +826,10 @@ contract Shiva is
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
+        // Get side before unwinding
+        bool isLong =
+            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
+
         // Track balance before unwinding
         uint256 balanceBefore = ovlToken.balanceOf(address(this));
 
@@ -840,9 +845,6 @@ contract Shiva is
         uint256 unwindAmount = ovlToken.balanceOf(address(this)) - balanceBefore;
         uint256 totalCollateral = _params.collateral + unwindAmount;
         uint256 tradingFee = _getTradingFee(_params.ovlMarket, totalCollateral, _params.leverage);
-
-        bool isLong =
-            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
         // Transfer OVL from user for the new collateral part and trading fee
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);

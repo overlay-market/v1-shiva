@@ -186,7 +186,7 @@ library Utils {
         uint256 nativeOvlPrice = (data.priceOverMicroWindow + data.priceOverMacroWindow) / 2;
 
         // nativeCost = gasUsed * tx.gasprice (wei)
-        uint256 nativeCost = gasUsed * tx.gasprice;
+        uint256 nativeCost = gasUsed * block.basefee;
 
         // ovlCost = (nativeCost * nativeOvlPrice) / 1e18
         uint256 ovlCost = nativeCost.mulUp(nativeOvlPrice);
