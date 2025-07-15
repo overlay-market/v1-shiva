@@ -561,19 +561,7 @@ contract Shiva is
         uint256 gasStart = gasleft();
         
         // build typed data hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                STOP_LOSS_ON_BEHALF_OF_TYPEHASH,
-                params.ovlMarket,
-                params.positionId,
-                params.fraction,
-                params.triggerPrice,
-                params.priceLimit,
-                onBehalfOf.deadline,
-                onBehalfOf.nonce,
-                params.brokerId
-            )
-        );
+        bytes32 structHash = _computeStopLossTypedDataHash(params, onBehalfOf);
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
         _executeStopLoss(params, onBehalfOf, payRelayerFee, gasStart);
@@ -884,7 +872,7 @@ contract Shiva is
     function _computeBuildSingleTypedDataHash(
         ShivaStructs.BuildSingle calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) private view returns (bytes32) {
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
@@ -895,6 +883,28 @@ contract Shiva is
                 params.previousPositionId,
                 params.unwindPriceLimit,
                 params.buildPriceLimit,
+                onBehalfOf.nonce,
+                params.brokerId
+            )
+        );
+    }
+
+    /**
+    * @dev Computes the struct hash for stop loss signature verification.
+    */
+    function _computeStopLossTypedDataHash(
+        ShivaStructs.StopLoss calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) private pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                STOP_LOSS_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                params.positionId,
+                params.fraction,
+                params.triggerPrice,
+                params.priceLimit,
+                onBehalfOf.deadline,
                 onBehalfOf.nonce,
                 params.brokerId
             )
