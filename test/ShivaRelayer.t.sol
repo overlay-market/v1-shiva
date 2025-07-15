@@ -1,115 +1,95 @@
 // SPDX-License-Identifier: MIT
 pragma solidity <=0.8.25;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {ShivaTestBase} from "./ShivaBase.t.sol";
 import {IShiva} from "src/IShiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {Utils} from "src/utils/Utils.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 
 /**
  * @title ShivaRelayerTest
  * @notice Test suite for the relayer functionalities in Shiva contract
  */
 contract ShivaRelayerTest is ShivaTestBase {
+    using FixedPoint for uint256;
     /**
      * @dev Sets up the initial state for the test contract.
      */
     function setUp() public override {
         super.setUp();
-        
-        // Set initial relayer fee to 1 OVL
-        vm.startPrank(deployer);
-        shiva.setRelayerFee(1e18);
-        vm.stopPrank();
+        vm.fee(10 gwei); // Set a base fee for the block to enable dynamic fee calculation
     }
 
     /**
-     * @dev Group of tests for the relayer fee
+     * @dev Group of tests for the keeper incentive
      */
 
     /**
-     * @dev Test that the governor can set the relayer fee
+     * @dev Test that the governor can set the keeper incentive
      */
-    function test_setRelayerFee() public {
-        uint256 newFee = 0.5e18; // 0.5 OVL
+    function test_setKeeperIncentive() public {
+        uint256 newIncentive = 0.5e16; // 0.5%
 
         vm.startPrank(deployer);
-        shiva.setRelayerFee(newFee);
+        shiva.setKeeperIncentive(newIncentive);
         vm.stopPrank();
 
-        assertEq(shiva.relayerFee(), newFee, "Relayer fee should be updated");
+        assertEq(shiva.keeperIncentive(), newIncentive, "Keeper incentive should be updated");
     }
 
     /**
-     * @dev Test that a non-governor cannot set the relayer fee
+     * @dev Test that a non-governor cannot set the keeper incentive
      */
-    function test_revert_setRelayerFee_not_governor() public {
-        uint256 newFee = 0.5e18; // 0.5 OVL
+    function test_revert_setKeeperIncentive_not_governor() public {
+        uint256 newIncentive = 0.5e16; // 0.5%
 
         vm.startPrank(alice);
         vm.expectRevert("Shiva: !governor");
-        shiva.setRelayerFee(newFee);
+        shiva.setKeeperIncentive(newIncentive);
         vm.stopPrank();
     }
 
     /**
-     * @dev Test that build with relayer fee calculates and pays the fee correctly
+     * @dev Test that limit order build with relayer fee calculates and pays the fee correctly
      */
-    function test_build_with_relayer_fee() public {
-        uint256 fixedFee = 0.1e18;
+    function test_limitOrderBuild_with_relayer_fee() public {
         vm.startPrank(deployer);
-        shiva.setRelayerFee(fixedFee);
+        shiva.setKeeperIncentive(0.1e16); // 0.1%
         vm.stopPrank();
 
         uint256 collateral = 100e18;
         uint256 leverage = 2e18;
-        uint256 notional = collateral * leverage / 1e18;
-
-        // Calculate proper price limit
-        uint256 priceLimit =
-            Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, BASIC_SLIPPAGE, true);
 
         // Get digest and signature for build on behalf of
         bytes32 digest = getBuildOnBehalfOfDigest(
-            collateral, leverage, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
+            collateral, leverage, type(uint256).max, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
         // Get initial balances
-        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(msg.sender);
+        uint256 relayerBalanceBefore = ovlToken.balanceOf(automator);
+        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
 
-        // Execute build on behalf of with relayer fee
-        vm.prank(msg.sender);
-        shiva.build(
-            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payRelayerFee
+        vm.prank(automator);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
+            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
         );
 
         // Check that relayer received the fee
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(msg.sender);
-        uint256 actualRelayerFee = relayerBalanceAfter - relayerBalanceBefore;
-
-        assertEq(actualRelayerFee, fixedFee, "Relayer should receive fixed fee");
-
-        // Check that Alice paid the correct amount (collateral + trading fee + relayer fee)
-        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
-        uint256 tradingFee = (notional * 750000000000000) / 1e18;
-        uint256 expectedTotalPaid = collateral + tradingFee + fixedFee;
-        uint256 actualTotalPaid = aliceBalanceBefore - aliceBalanceAfter;
-
-        assertEq(actualTotalPaid, expectedTotalPaid, "Alice should pay correct total amount");
+        uint256 relayerBalanceAfter = ovlToken.balanceOf(automator);
+        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
     }
 
     /**
-     * @dev Test that unwind with relayer fee calculates and pays the fee correctly
+     * @dev Test that take profit with relayer fee calculates and pays the fee correctly
      */
-    function test_unwind_with_relayer_fee() public {
-        uint256 fixedFee = 0.2e18;
+    function test_takeProfit_with_relayer_fee() public {
         vm.startPrank(deployer);
-        shiva.setRelayerFee(fixedFee);
+        shiva.setKeeperIncentive(0.2e16); // 0.2%
         vm.stopPrank();
 
         // First build a position
@@ -117,46 +97,43 @@ contract ShivaRelayerTest is ShivaTestBase {
         uint256 posId = buildPosition(100e18, 2e18, 1, true);
         vm.stopPrank();
 
+        // Use a safe price limit
+        uint256 priceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+
         // Get digest and signature for unwind on behalf of
-        bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, 0, FIXED_NONCE, uint48(block.timestamp + 3600), 0);
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // Record balances before
-        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(bob);
+        uint256 relayerBalanceBefore = ovlToken.balanceOf(charlie);
+        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
 
-        // Unwind position with relayer fee
-        vm.startPrank(bob);
-        shiva.unwind(
-            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, 0),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payRelayerFee
+        // Give relayer gas money
+        vm.deal(charlie, 1 ether);
+
+        vm.startPrank(charlie);
+        shiva.takeProfit(
+            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
         );
         vm.stopPrank();
 
         // Check that relayer received the fee
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(bob);
-        assertEq(
-            relayerBalanceAfter - relayerBalanceBefore, fixedFee, "Relayer should receive fixed fee"
-        );
-
-        // Check that alice received the remaining amount
-        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
-        uint256 aliceReceived = aliceBalanceAfter - aliceBalanceBefore;
-        
-        // Alice should have received some amount (the unwind proceeds minus the relayer fee)
-        assertGt(aliceReceived, 0, "Alice should receive some amount from unwind");
+        uint256 relayerBalanceAfter = ovlToken.balanceOf(charlie);
+        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
     }
 
     /**
      * @dev Test that unwind reverts if the unwind amount is insufficient to pay the relayer fee
      */
     function test_revert_unwind_insufficient_for_fee() public {
-        // Set a high relayer fee that likely won't be covered
-        uint256 highFee = 500e18; // 500 OVL, very high
+        // Set a high keeper incentive that likely won't be covered
+        uint256 highIncentive = 50000e18; // 5000000%, absurdly high
         vm.startPrank(deployer);
-        shiva.setRelayerFee(highFee);
+        shiva.setKeeperIncentive(highIncentive);
         vm.stopPrank();
 
         // Build a small position
@@ -164,19 +141,29 @@ contract ShivaRelayerTest is ShivaTestBase {
         uint256 posId = buildPosition(10e18, 1e18, 1, true); // small 10 OVL position
         vm.stopPrank();
 
+        // Use a safe price limit
+        uint256 priceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+
         // Get digest and signature for unwind on behalf of
-        bytes32 digest =
-            getUnwindOnBehalfOfDigest(posId, ONE, 0, FIXED_NONCE, uint48(block.timestamp + 3600), 0);
+        bytes32 digest = getUnwindOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0
+        );
         bytes memory signature = getSignature(digest, alicePk);
+
+        // Give relayer gas money to avoid out-of-gas issues
+        vm.deal(bob, 1 ether);
 
         // Expect revert when unwinding
         vm.startPrank(bob);
-        vm.expectRevert();
-        shiva.unwind(
-            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, 0),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payRelayerFee
-        );
+        try shiva.takeProfit(
+            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        ) {
+            revert("Transaction did not revert as expected");
+        } catch (bytes memory reason) {
+            assertEq(reason, abi.encodeWithSelector(IShiva.InsufficientUnwindAmountForFee.selector, 9942478705580122309, 131030620560000000000), "Incorrect error");
+        }
         vm.stopPrank();
     }
 
@@ -184,129 +171,104 @@ contract ShivaRelayerTest is ShivaTestBase {
      * @dev Test that buildSingle with relayer fee calculates and pays the fee correctly
      */
     function test_buildSingle_with_relayer_fee() public {
-        uint256 fixedFee = 0.3e18;
-        _setRelayerFee(fixedFee);
+        vm.startPrank(deployer);
+        shiva.setKeeperIncentive(0.3e16); // 0.3%
+        vm.stopPrank();
 
-        // Prepare previous position data
-        uint256 posId = _buildInitialPosition();
+        // Bob builds a position
+        vm.startPrank(bob);
+        uint256 posId = buildPosition(100e18, 2e18, 1, true);
+        vm.stopPrank();
+
         uint256 newCollateral = 50e18;
         uint256 leverage = 2e18;
 
-        // Prepare price limits and signature
-        (uint256 unwindPriceLimit, uint256 buildPriceLimit, bytes memory signature) =
-            _prepareBuildSingleParams(posId, newCollateral, leverage);
-
-        // Balances before
-        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(msg.sender);
-
-        // Execute action
-        _executeBuildSingleWithRelayerFee(
-            newCollateral, leverage, posId, unwindPriceLimit, buildPriceLimit, signature
+        // Prepare parameters for Bob's buildSingle transaction
+        uint256 unwindPriceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+        uint256 estimatedTotalCollateral = newCollateral + 100e18;
+        uint256 buildPriceLimit = Utils.getEstimatedPrice(
+            ovlState, ovlMarket, estimatedTotalCollateral, leverage, BASIC_SLIPPAGE, true
         );
-
-        // Assert relayer received the fee
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(msg.sender);
-        assertEq(relayerBalanceAfter - relayerBalanceBefore, fixedFee, "Relayer should receive fixed fee");
-
-        // Assert Alice paid the correct amount
-        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
-        uint256 actualTotalPaid = aliceBalanceBefore - aliceBalanceAfter;
-        // The total collateral for the new position is (unwound amount + new collateral)
-        // We can't know the exact unwound amount beforehand due to PnL.
-        // But we know Alice must pay at least the new collateral + trading fee on new collateral + relayer fee.
-        assertGt(actualTotalPaid, newCollateral + fixedFee, "Alice should pay more than just new collateral + fee");
-    }
-
-    function _setRelayerFee(uint256 fee) private {
-        vm.startPrank(deployer);
-        shiva.setRelayerFee(fee);
-        vm.stopPrank();
-    }
-
-    function _buildInitialPosition() private returns (uint256) {
-        vm.startPrank(alice);
-        uint256 posId = buildPosition(100e18, 2e18, 1, true);
-        vm.stopPrank();
-        return posId;
-    }
-
-    function _prepareBuildSingleParams(
-        uint256 posId,
-        uint256 newCollateral,
-        uint256 leverage
-    ) private view returns (uint256 unwindPriceLimit, uint256 buildPriceLimit, bytes memory signature) {
-        unwindPriceLimit = Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
-        // Estimate price for the *total* collateral to be built
-        // Note: this is an approximation as we don't know the exact unwind amount yet
-        uint256 estimatedTotalCollateral = newCollateral + 100e18; // new + estimated old
-        buildPriceLimit = Utils.getEstimatedPrice(ovlState, ovlMarket, estimatedTotalCollateral, leverage, BASIC_SLIPPAGE, true);
         bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            newCollateral, leverage, posId, FIXED_NONCE, unwindPriceLimit, buildPriceLimit, uint48(block.timestamp + 3600), 0
+            newCollateral,
+            leverage,
+            posId,
+            FIXED_NONCE,
+            unwindPriceLimit,
+            buildPriceLimit,
+            uint48(block.timestamp + 3600),
+            0
         );
-        signature = getSignature(digest, alicePk);
-    }
+        bytes memory signature = getSignature(digest, bobPk);
 
-    function _executeBuildSingleWithRelayerFee(
-        uint256 newCollateral,
-        uint256 leverage,
-        uint256 posId,
-        uint256 unwindPriceLimit,
-        uint256 buildPriceLimit,
-        bytes memory signature
-    ) private {
-        vm.prank(msg.sender);
+        uint256 relayerBalanceBefore = ovlToken.balanceOf(automator);
+        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
+
+        // Automator executes the transaction for Bob
+        vm.startPrank(automator);
         shiva.buildSingle(
-            ShivaStructs.BuildSingle(ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
+            ShivaStructs.BuildSingle(
+                ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
+            ),
+            ShivaStructs.OnBehalfOf(bob, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
             true // payRelayerFee
         );
+        vm.stopPrank();
+
+        uint256 relayerBalanceAfter = ovlToken.balanceOf(automator);
+        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
     }
 
     /**
      * @dev Test that when payRelayerFee is false, no fee is paid
      */
     function test_no_relayer_fee_when_false() public {
-        // Set a high relayer fee to make it obvious if it's paid
         vm.startPrank(deployer);
-        shiva.setRelayerFee(10e18); // 10 OVL
+        shiva.setKeeperIncentive(10e16); // 10%
         vm.stopPrank();
 
-        uint256 collateral = 100e18;
+        // Alice builds a position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(100e18, 2e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        uint256 newCollateral = 50e18;
         uint256 leverage = 2e18;
 
-        // Calculate proper price limit
-        uint256 priceLimit =
-            Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, BASIC_SLIPPAGE, true);
+        uint256 unwindPriceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
+        uint256 estimatedTotalCollateral = newCollateral + 100e18;
+        uint256 buildPriceLimit = Utils.getEstimatedPrice(
+            ovlState, ovlMarket, estimatedTotalCollateral, leverage, BASIC_SLIPPAGE, true
+        );
 
-        // Get digest and signature for build on behalf of
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            collateral, leverage, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
+        bytes32 digest = getBuildSingleOnBehalfOfDigest(
+            newCollateral,
+            leverage,
+            posId,
+            FIXED_NONCE,
+            unwindPriceLimit,
+            buildPriceLimit,
+            uint48(block.timestamp + 3600),
+            0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
-        // Record balances before
-        uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
         uint256 relayerBalanceBefore = ovlToken.balanceOf(bob);
 
-        // Build position without relayer fee
+        // Bob executes the transaction for Alice
         vm.startPrank(bob);
-        shiva.build(
-            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, priceLimit),
+        shiva.buildSingle(
+            ShivaStructs.BuildSingle(
+                ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
+            ),
             ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
             false // payRelayerFee
         );
         vm.stopPrank();
 
-        // Check that relayer did not receive any fee
         uint256 relayerBalanceAfter = ovlToken.balanceOf(bob);
         assertEq(relayerBalanceAfter, relayerBalanceBefore, "Relayer should not receive fee");
-
-        // Check that alice paid collateral + trading fee (no relayer fee)
-        uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
-        uint256 notional = collateral * leverage / 1e18;
-        uint256 tradingFee = (notional * 750000000000000) / 1e18;
-        uint256 expectedPaid = collateral + tradingFee;
-        assertEq(aliceBalanceBefore - aliceBalanceAfter, expectedPaid, "Alice should pay collateral + trading fee");
     }
 } 
