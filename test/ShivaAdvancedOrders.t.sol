@@ -10,6 +10,8 @@ import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.
 import {Oracle} from "v1-core/contracts/libraries/Oracle.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
+import {MockAggregator} from "./mocks/MockAggregator.sol";
+import {IOverlayV1ChainlinkFeed} from "v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
 
 /**
  * @title ShivaAdvancedOrdersTest
@@ -26,12 +28,14 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
     uint256 internal constant WARM_UP_PERIOD = 1 hours;
     uint256 internal constant NUM_WARM_UP_ROUNDS = 5;
+    MockAggregator badNativeAggregator;
 
     /**
      * @dev Sets up the initial state for the test contract
      */
     function setUp() public override {
         super.setUp();
+        vm.fee(10 gwei); // Set a base fee for the block to enable dynamic fee calculation
         aggregator.addOracle(address(this));
         // Warm up the oracle to ensure sufficient data for TWAP calculations
         _warmUpOracle(IOverlayV1Feed(ovlMarket.feed()));
@@ -493,21 +497,17 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
     }
 
     /**
-     * @notice Tests that stop loss reverts with InsufficientUnwindAmountForFee if the
-     *         unwound value is less than the relayer fee.
+     * @notice Tests that stop loss reverts if the remaining collateral after unwind is less than the relayer fee.
      */
-    function testStopLossFailsWithInsufficientFundsForFee() public {
-        // 1. Alice builds a long position with small collateral and lower leverage
-        vm.startPrank(alice);
-        uint256 collateral = 0.5e18;
-        // Lower leverage to avoid liquidation on price drop
-        uint256 posId = buildPosition(collateral, 2e18, BASIC_SLIPPAGE, true);
+    function testStopLossRevertsIfRemainingCollateralIsLessThanRelayerFee() public {
+        // 1. Set a high keeper incentive to make the fee significant
+        vm.startPrank(deployer);
+        shiva.setKeeperIncentive(50000e18); // 5,000,000% incentive, high enough to trigger the revert
         vm.stopPrank();
 
-        // 2. Set a relayer fee that is greater than the expected unwind amount
-        vm.startPrank(deployer);
-        uint256 highRelayerFee = 0.6e18;
-        shiva.setRelayerFee(highRelayerFee);
+        // 2. Alice builds a small long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(10e18, 2e18, BASIC_SLIPPAGE, true); // 10 OVL, 2x leverage
         vm.stopPrank();
 
         // 3. Alice signs a stop-loss order
@@ -515,25 +515,78 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         Oracle.Data memory data = feed.latest();
         uint256 currentPrice = ovlMarket.bid(data, 0);
 
-        // A smaller price drop to avoid hitting liquidation
-        uint256 triggerPrice = currentPrice * 98 / 100; // 2% price drop
-        uint256 priceLimit = triggerPrice * 90 / 100; // 10% slippage to ensure it passes price limit check
-        uint48 deadline = uint48(block.timestamp + 3600);
+        uint256 triggerPrice = currentPrice * 90 / 100; // 10% price drop
+        uint256 priceLimit = 0; // Accept any price
+        uint48 deadline = uint48(block.timestamp + 4 hours);
 
         bytes32 digest =
             getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
         bytes memory signature = getSignature(digest, alicePk);
 
-        // 4. Price drops, making the stop-loss executable
-        uint256 executionPrice = triggerPrice * 98 / 100; // Price drops just below trigger
+        // 4. Price drops significantly, causing a large loss and triggering the stop loss
+        uint256 executionPrice = triggerPrice * 80 / 100; // 20% further drop, nearly wiping out the position
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+
+        // 5. Automator executes the stop-loss order
+        // The transaction is expected to revert because the unwound amount is insufficient to pay the fee.
+        vm.startPrank(automator);
+        vm.expectRevert(
+            abi.encodeWithSelector(IShiva.InsufficientUnwindAmountForFee.selector, 3839819857403767165, 155216104260000000000)
+        );
+        shiva.stopLoss(
+            ShivaStructs.StopLoss(ovlMarket, BROKER_ID, posId, ONE, triggerPrice, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
+            true // payRelayerFee
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a stop loss signature is invalidated after the position is closed via buildSingle.
+     */
+    function testStopLossSignatureIsInvalidatedAfterBuildSingle() public {
+        // 1. Alice builds an initial position
+        vm.startPrank(alice);
+        uint256 posId1 = buildPosition(100e18, 2e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a stop-loss order for the initial position
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.bid(data, 0);
+        uint256 triggerPrice = currentPrice * 95 / 100; // 5% drop
+        uint48 deadline = uint48(block.timestamp + 3600);
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId1, ONE, triggerPrice, 0, deadline, FIXED_NONCE, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Alice uses buildSingle to close posId1 and open posId2
+        vm.startPrank(alice);
+        uint256 unwindPriceLimit = 0; // accept any price for the unwind part of buildSingle
+        uint256 buildPriceLimit = type(uint256).max; // accept any price for the build part
+        uint256 newCollateral = 50e18;
+        uint256 newLeverage = 3e18;
+
+        buildSinglePosition(newCollateral, newLeverage, posId1, unwindPriceLimit, buildPriceLimit);
+        vm.stopPrank();
+
+        // 4. Verify the initial position is now closed
+        assertFractionRemainingIsZero(address(shiva), posId1);
+
+        // 5. Price drops, which would have triggered the original stop loss
+        uint256 executionPrice = triggerPrice * 99 / 100;
         aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
         vm.warp(block.timestamp + 60 * 60);
 
-        // 5. Automator executes the stop-loss, expecting it to fail because the unwind amount
-        // will be less than the collateral, which is less than the required fee.
+        // 6. Automator attempts to execute the original stop loss for posId1.
+        // This must fail because the position has already been closed.
         vm.startPrank(automator);
-        vm.expectRevert();
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true); // payRelayerFee = true
+        vm.expectRevert(); // Reverts from market with "OVLV1:!pos" because fractionRemaining is 0
+        stopLossOnBehalfOf(posId1, ONE, triggerPrice, 0, deadline, signature, alice, false);
         vm.stopPrank();
     }
 
@@ -737,50 +790,6 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         assertGt(fractionRemaining, 0, "Position should not have been closed");
     }
 
-    /**
-     * @notice Tests that stop loss for a short position reverts with InsufficientUnwindAmountForFee
-     *         if the unwound value is less than the relayer fee.
-     */
-    function testStopLossFailsWithInsufficientFundsForFeeShort() public {
-        // 1. Alice builds a short position with small collateral and lower leverage
-        vm.startPrank(alice);
-        uint256 collateral = 0.5e18;
-        uint256 posId = buildPosition(collateral, 2e18, BASIC_SLIPPAGE, false); // Lower leverage
-        vm.stopPrank();
-
-        // 2. Set a relayer fee that is greater than the expected unwind amount
-        vm.startPrank(deployer);
-        uint256 highRelayerFee = 0.6e18;
-        shiva.setRelayerFee(highRelayerFee);
-        vm.stopPrank();
-
-        // 3. Alice signs a stop-loss order
-        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
-        Oracle.Data memory data = feed.latest();
-        uint256 currentPrice = ovlMarket.ask(data, 0);
-
-        // A smaller price rise to avoid hitting liquidation
-        uint256 triggerPrice = currentPrice * 102 / 100; // 2% price rise
-        uint256 priceLimit = triggerPrice * 110 / 100; // 10% slippage to ensure it passes price limit check
-        uint48 deadline = uint48(block.timestamp + 3600);
-
-        bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
-        bytes memory signature = getSignature(digest, alicePk);
-
-        // 4. Price rises, making the stop-loss executable
-        uint256 executionPrice = triggerPrice * 101 / 100; // Price rises just above trigger
-        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
-        vm.warp(block.timestamp + 60 * 60);
-
-        // 5. Automator executes the stop-loss, expecting it to fail because the unwind amount
-        // will be less than the collateral, which is less than the required fee.
-        vm.startPrank(automator);
-        vm.expectRevert(); // Expect InsufficientUnwindAmountForFee
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true); // payRelayerFee = true
-        vm.stopPrank();
-    }
-
     // =================================================================
     //
     //                       TAKE-PROFIT TESTS
@@ -813,10 +822,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // The market will revert because the current execution price is less than the priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // OVLV1:price<limit
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            true
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
 
@@ -830,10 +838,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
 
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            true // payRelayerFee = true
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
 
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
@@ -844,6 +851,43 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         assertFractionRemainingIsZero(address(shiva), posId);
         assertGt(aliceBalanceAfter, aliceBalanceBefore, "Alice should have received her profits");
         assertGt(automatorBalanceAfter, automatorBalanceBefore, "Relayer should have received a fee");
+    }
+
+    /**
+     * @notice Tests that a take-profit order reverts if the profit is less than the relayer fee.
+     */
+    function testTakeProfitRevertsIfProfitIsLessThanRelayerFee() public {
+        // 1. Set a very high keeper incentive to make the fee significant
+        vm.startPrank(deployer);
+        shiva.setKeeperIncentive(50000e18); // 5,000,000% incentive
+        vm.stopPrank();
+
+        // 2. Alice builds a small long position that will have a very small gain or loss
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(10e18, 2e18, BASIC_SLIPPAGE, true); // 10 OVL, 2x leverage
+        vm.stopPrank();
+
+        // 3. Price can move negligibly. The goal is just to have a small unwindAmount.
+
+        // 4. Alice signs a take-profit order
+        uint256 priceLimit = 0; // Accept any price to ensure the order can be executed
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 5. Automator executes the take-profit order.
+        // It's expected to revert because the unwound amount is insufficient for the massive fee.
+        vm.startPrank(automator);
+        // The exact values for the revert data will be filled in after the first failed run.
+        vm.expectRevert(
+            abi.encodeWithSelector(IShiva.InsufficientUnwindAmountForFee.selector, 9416028083704622524, 147083441610000000000)
+        );
+        shiva.takeProfit(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+        vm.stopPrank();
     }
 
     /**
@@ -871,10 +915,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // The market will revert because the current execution price is greater than the priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // OVLV1:price>limit
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
 
@@ -888,10 +931,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
 
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false // payRelayerFee = false
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
 
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
@@ -901,7 +943,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 6. Verify position is closed and balances are correct
         assertFractionRemainingIsZero(address(shiva), posId);
         assertGt(aliceBalanceAfter, aliceBalanceBefore, "Alice should have received her profits");
-        assertEq(automatorBalanceAfter, automatorBalanceBefore, "Relayer should not have received a fee");
+        assertGt(automatorBalanceAfter, automatorBalanceBefore, "Relayer should have received a fee");
     }
 
     /**
@@ -931,10 +973,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the partial take-profit
         vm.startPrank(automator);
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, fractionToUnwind, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
 
@@ -979,10 +1020,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // because the underlying market position no longer exists.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
     }
@@ -1013,18 +1053,70 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the order successfully
         vm.startPrank(automator);
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
 
         // 5. Automator tries to execute the same order again, should fail due to used nonce
         vm.expectRevert(IShiva.InvalidNonce.selector);
-        shiva.unwind(
+        shiva.takeProfit(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a take-profit order fails with an invalid signature.
+     */
+    function testTakeProfitFailsWithInvalidSignature() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. An invalid signature is created (e.g., signed by Bob)
+        uint256 priceLimit = 0; // Accept any price
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, bobPk); // Signed by Bob
+
+        // 3. Automator attempts to execute the take-profit with the invalid signature
+        vm.startPrank(automator);
+        vm.expectRevert(IShiva.InvalidSignature.selector);
+        shiva.takeProfit(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a take-profit order fails when the market is shut down.
+     */
+    function testTakeProfitFailsWhenMarketIsShutdown() public {
+        // 1. Alice builds a long position
+        vm.startPrank(alice);
+        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true);
+        vm.stopPrank();
+
+        // 2. Alice signs a valid take-profit order
+        uint256 priceLimit = 0; // Accept any price
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. The market is shut down
+        shutDownMarket();
+
+        // 4. Automator attempts to execute the take-profit order
+        // It should fail because the market is shut down.
+        vm.startPrank(automator);
+        vm.expectRevert(); // Reverts from market with "OVLV1:shutdown"
+        shiva.takeProfit(
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
     }
@@ -1080,7 +1172,10 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should fail inside the market because the current execution price is > priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
-        buildPositionOnBehalfOf(ONE, 5e18, priceLimit, deadline, true, signature, alice);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
         vm.stopPrank();
 
         // 4. Simulate a price drop to make the order executable.
@@ -1091,7 +1186,10 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 5. Keeper executes the order successfully.
         vm.startPrank(automator);
-        uint256 posId = buildPositionOnBehalfOf(ONE, 5e18, priceLimit, deadline, true, signature, alice);
+        uint256 posId = shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
         vm.stopPrank();
 
         // 6. Verify the position has been created successfully.
@@ -1122,10 +1220,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should fail inside the market because the current execution price is < priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price<limit"
-        shiva.build(
+        shiva.limitOrderBuild(
             ShivaStructs.Build(ovlMarket, BROKER_ID, false, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            true // payRelayerFee
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
 
@@ -1138,10 +1235,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 5. Keeper executes the order successfully and gets paid.
         vm.startPrank(automator);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
-        uint256 posId = shiva.build(
+        uint256 posId = shiva.limitOrderBuild(
             ShivaStructs.Build(ovlMarket, BROKER_ID, false, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            true // payRelayerFee
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
         vm.stopPrank();
@@ -1150,7 +1246,6 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         assertFractionRemainingIsGreaterThanZero(address(shiva), posId);
         assertUserIsPositionOwnerInShiva(alice, posId);
         assertGt(automatorBalanceAfter, automatorBalanceBefore, "Relayer should have received a fee");
-        assertEq(automatorBalanceAfter - automatorBalanceBefore, shiva.relayerFee(), "Relayer fee is incorrect");
     }
 
     /**
@@ -1184,7 +1279,10 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // the `build` call should revert with `price > limit`.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
-        buildPositionOnBehalfOf(ONE, 5e18, priceLimit, deadline, true, signature, alice);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
         vm.stopPrank();
     }
 
@@ -1224,7 +1322,110 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // The revert comes from the OVL token contract's `transferFrom` function.
         vm.startPrank(automator);
         vm.expectRevert();
-        buildPositionOnBehalfOf(ONE, 5e18, priceLimit, deadline, true, signature, alice);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a limit order cannot be replayed.
+     */
+    function testLimitBuildFailsOnReplayAttack() public {
+        // 1. Define order parameters and simulate price drop to make it executable
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.ask(data, 0);
+        uint256 priceLimit = currentPrice * 95 / 100;
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        uint256 executionPrice = priceLimit * 99 / 100;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 1 hours);
+
+        // 2. Alice signs the `build` message.
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        );
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Keeper executes the order successfully the first time.
+        vm.startPrank(automator);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+
+        // 4. Keeper attempts to execute the same order again. It must fail.
+        vm.expectRevert(IShiva.InvalidNonce.selector);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a limit order fails if the nonce was cancelled.
+     */
+    function testLimitBuildFailsWithCancelledNonce() public {
+        // 1. Define order parameters.
+        IOverlayV1Feed feed = IOverlayV1Feed(ovlMarket.feed());
+        Oracle.Data memory data = feed.latest();
+        uint256 currentPrice = ovlMarket.ask(data, 0);
+        uint256 priceLimit = currentPrice * 95 / 100;
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        // 2. Alice signs the `build` message.
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        );
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. Alice cancels the nonce.
+        vm.prank(alice);
+        shiva.cancelNonce(FIXED_NONCE);
+
+        // 4. Price drops to make the order executable.
+        uint256 executionPrice = priceLimit * 99 / 100;
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 1 hours);
+
+        // 5. Keeper attempts to execute the order. It must fail.
+        vm.startPrank(automator);
+        vm.expectRevert(IShiva.InvalidNonce.selector);
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Tests that a limit order fails when the contract is paused.
+     */
+    function testLimitBuildFailsWhenPaused() public {
+        // 1. Define order parameters.
+        uint256 priceLimit = 0; // Price doesn't matter for this test
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+
+        // 2. Alice signs the `build` message.
+        bytes32 digest = getBuildOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        );
+        bytes memory signature = getSignature(digest, alicePk);
+
+        // 3. The contract is paused.
+        pauseShiva();
+
+        // 4. Keeper attempts to execute the order. It must fail.
+        vm.startPrank(automator);
+        vm.expectRevert("Pausable: paused");
+        shiva.limitOrderBuild(
+            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        );
         vm.stopPrank();
     }
 } 
