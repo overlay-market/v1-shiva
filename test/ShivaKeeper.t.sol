@@ -14,10 +14,10 @@ import {Oracle} from "v1-core/contracts/libraries/Oracle.sol";
 import {MockAggregator} from "./mocks/MockAggregator.sol";
 
 /**
- * @title ShivaRelayerTest
- * @notice Test suite for the relayer functionalities in Shiva contract
+ * @title ShivaKeeperTest
+ * @notice Test suite for the keeper functionalities in Shiva contract
  */
-contract ShivaRelayerTest is ShivaTestBase {
+contract ShivaKeeperTest is ShivaTestBase {
     using FixedPoint for uint256;
 
     MockAggregator badAggregator;
@@ -60,9 +60,9 @@ contract ShivaRelayerTest is ShivaTestBase {
     }
 
     /**
-     * @dev Test that limit order build with relayer fee calculates and pays the fee correctly
+     * @dev Test that limit order build with keeper fee calculates and pays the fee correctly
      */
-    function test_limitOrderBuild_with_relayer_fee() public {
+    function test_limitOrderBuild_with_keeper_fee() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(0.1e16); // 0.1%
         vm.stopPrank();
@@ -77,8 +77,8 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes memory signature = getSignature(digest, alicePk);
 
         // Get initial balances
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(automator);
-        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(automator);
+        assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
 
         vm.prank(automator);
         shiva.limitOrderBuild(
@@ -86,15 +86,15 @@ contract ShivaRelayerTest is ShivaTestBase {
             ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
         );
 
-        // Check that relayer received the fee
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(automator);
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
+        // Check that keeper received the fee
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(automator);
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee");
     }
 
     /**
-     * @dev Test that take profit with relayer fee calculates and pays the fee correctly
+     * @dev Test that take profit with keeper fee calculates and pays the fee correctly
      */
-    function test_takeProfit_with_relayer_fee() public {
+    function test_takeProfit_with_keeper_fee() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(0.2e16); // 0.2%
         vm.stopPrank();
@@ -115,10 +115,10 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes memory signature = getSignature(digest, alicePk);
 
         // Record balances before
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(charlie);
-        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(charlie);
+        assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
 
-        // Give relayer gas money
+        // Give keeper gas money
         vm.deal(charlie, 1 ether);
 
         vm.startPrank(charlie);
@@ -128,13 +128,13 @@ contract ShivaRelayerTest is ShivaTestBase {
         );
         vm.stopPrank();
 
-        // Check that relayer received the fee
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(charlie);
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
+        // Check that keeper received the fee
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(charlie);
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee");
     }
 
     /**
-     * @dev Test that unwind reverts if the unwind amount is insufficient to pay the relayer fee
+     * @dev Test that unwind reverts if the unwind amount is insufficient to pay the keeper fee
      */
     function test_revert_unwind_insufficient_for_fee() public {
         // Set a high keeper incentive that likely won't be covered
@@ -158,7 +158,7 @@ contract ShivaRelayerTest is ShivaTestBase {
         );
         bytes memory signature = getSignature(digest, alicePk);
 
-        // Give relayer gas money to avoid out-of-gas issues
+        // Give keeper gas money to avoid out-of-gas issues
         vm.deal(bob, 1 ether);
 
         // Expect revert when unwinding
@@ -175,9 +175,9 @@ contract ShivaRelayerTest is ShivaTestBase {
     }
 
     /**
-     * @dev Test that buildSingle with relayer fee calculates and pays the fee correctly
+     * @dev Test that buildSingle with keeper fee calculates and pays the fee correctly
      */
-    function test_buildSingle_with_relayer_fee() public {
+    function test_buildSingle_with_keeper_fee() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(0.3e16); // 0.3%
         vm.stopPrank();
@@ -209,8 +209,8 @@ contract ShivaRelayerTest is ShivaTestBase {
         );
         bytes memory signature = getSignature(digest, bobPk);
 
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(automator);
-        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(automator);
+        assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
 
         // Automator executes the transaction for Bob
         vm.startPrank(automator);
@@ -219,18 +219,18 @@ contract ShivaRelayerTest is ShivaTestBase {
                 ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
             ),
             ShivaStructs.OnBehalfOf(bob, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payRelayerFee
+            true // payKeeperFee
         );
         vm.stopPrank();
 
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(automator);
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(automator);
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee");
     }
 
     /**
-     * @dev Test that when payRelayerFee is false, no fee is paid
+     * @dev Test that when payKeeperFee is false, no fee is paid
      */
-    function test_no_relayer_fee_when_false() public {
+    function test_no_keeper_fee_when_false() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(10e16); // 10%
         vm.stopPrank();
@@ -262,7 +262,7 @@ contract ShivaRelayerTest is ShivaTestBase {
         );
         bytes memory signature = getSignature(digest, alicePk);
 
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(bob);
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(bob);
 
         // Bob executes the transaction for Alice
         vm.startPrank(bob);
@@ -271,18 +271,18 @@ contract ShivaRelayerTest is ShivaTestBase {
                 ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
             ),
             ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            false // payRelayerFee
+            false // payKeeperFee
         );
         vm.stopPrank();
 
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(bob);
-        assertEq(relayerBalanceAfter, relayerBalanceBefore, "Relayer should not receive fee");
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(bob);
+        assertEq(keeperBalanceAfter, keeperBalanceBefore, "Keeper should not receive fee");
     }
 
     /**
-     * @dev Test that stop loss with relayer fee calculates and pays the fee correctly
+     * @dev Test that stop loss with keeper fee calculates and pays the fee correctly
      */
-    function test_stopLoss_with_relayer_fee() public {
+    function test_stopLoss_with_keeper_fee() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(0.1e16); // 0.1%
         vm.stopPrank();
@@ -321,7 +321,7 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes32 digest = getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(automator);
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(automator);
         vm.deal(automator, 1 ether); // give gas money
 
         // Automator executes the transaction for Alice
@@ -329,14 +329,14 @@ contract ShivaRelayerTest is ShivaTestBase {
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true);
         vm.stopPrank();
         
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(automator);
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee");
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(automator);
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee");
     }
 
     /**
-     * @dev Test that stop loss does not pay a fee when payRelayerFee is false
+     * @dev Test that stop loss does not pay a fee when payKeeperFee is false
      */
-    function test_stopLoss_no_relayer_fee_when_false() public {
+    function test_stopLoss_no_keeper_fee_when_false() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(10e16); // 10% incentive
         vm.stopPrank();
@@ -372,20 +372,20 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes32 digest = getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(bob);
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(bob);
         vm.deal(bob, 1 ether);
 
-        // Bob executes the transaction for Alice with payRelayerFee = false
+        // Bob executes the transaction for Alice with payKeeperFee = false
         vm.startPrank(bob);
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
         vm.stopPrank();
 
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(bob);
-        assertEq(relayerBalanceAfter, relayerBalanceBefore, "Relayer should not receive a fee");
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(bob);
+        assertEq(keeperBalanceAfter, keeperBalanceBefore, "Keeper should not receive a fee");
     }
 
     /**
-     * @dev Test that limitOrderBuild reverts if the user has insufficient balance for the relayer fee.
+     * @dev Test that limitOrderBuild reverts if the user has insufficient balance for the keeper fee.
      */
     function test_revert_limitOrderBuild_insufficient_fee() public {
         vm.startPrank(deployer);
@@ -410,7 +410,7 @@ contract ShivaRelayerTest is ShivaTestBase {
         vm.deal(automator, 1 ether); // give gas money
         vm.prank(automator);
         
-        // Expect a revert because Alice's balance is insufficient to pay the additional relayer fee
+        // Expect a revert because Alice's balance is insufficient to pay the additional keeper fee
         vm.expectRevert();
         shiva.limitOrderBuild(
             ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
@@ -419,7 +419,7 @@ contract ShivaRelayerTest is ShivaTestBase {
     }
 
     /**
-     * @dev Test that buildSingle reverts if the user has insufficient balance for the relayer fee.
+     * @dev Test that buildSingle reverts if the user has insufficient balance for the keeper fee.
      */
     function test_revert_buildSingle_insufficient_fee() public {
         vm.startPrank(deployer);
@@ -465,21 +465,21 @@ contract ShivaRelayerTest is ShivaTestBase {
         vm.deal(automator, 1 ether); // give gas money
         vm.prank(automator);
 
-        // Expect a revert because Bob's balance is insufficient to pay the additional relayer fee
+        // Expect a revert because Bob's balance is insufficient to pay the additional keeper fee
         vm.expectRevert();
         shiva.buildSingle(
             ShivaStructs.BuildSingle(
                 ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
             ),
             ShivaStructs.OnBehalfOf(bob, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payRelayerFee
+            true // payKeeperFee
         );
     }
 
     /**
-     * @dev Test that take profit with a partial unwind still pays the relayer fee correctly.
+     * @dev Test that take profit with a partial unwind still pays the keeper fee correctly.
      */
-    function test_takeProfit_partial_unwind_with_relayer_fee() public {
+    function test_takeProfit_partial_unwind_with_keeper_fee() public {
         vm.startPrank(deployer);
         shiva.setKeeperIncentive(0.2e16); // 0.2%
         vm.stopPrank();
@@ -503,10 +503,10 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes memory signature = getSignature(digest, alicePk);
 
         // Record balances before
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(charlie);
-        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(charlie);
+        assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
 
-        // Give relayer gas money
+        // Give keeper gas money
         vm.deal(charlie, 1 ether);
 
         vm.startPrank(charlie);
@@ -516,13 +516,13 @@ contract ShivaRelayerTest is ShivaTestBase {
         );
         vm.stopPrank();
 
-        // Check that relayer received the fee
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(charlie);
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive a fee for partial unwind");
+        // Check that keeper received the fee
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(charlie);
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee for partial unwind");
     }
 
     /**
-     * @dev Test that relayer fee is still paid when keeper incentive is zero (covers base gas cost).
+     * @dev Test that keeper fee is still paid when keeper incentive is zero (covers base gas cost).
      */
     function test_fee_with_zero_keeper_incentive() public {
         // Set keeper incentive to zero
@@ -540,8 +540,8 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes memory signature = getSignature(digest, alicePk);
 
         // Get initial balances
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(automator);
-        assertEq(relayerBalanceBefore, 0, "Relayer should have no OVL initially");
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(automator);
+        assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
 
         vm.deal(automator, 1 ether);
         vm.prank(automator);
@@ -550,13 +550,13 @@ contract ShivaRelayerTest is ShivaTestBase {
             ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
         );
 
-        // Check that relayer received a fee (the base gas cost reimbursement)
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(automator);
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should receive base gas fee even with zero incentive");
+        // Check that keeper received a fee (the base gas cost reimbursement)
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(automator);
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive base gas fee even with zero incentive");
     }
 
     /**
-     * @dev Test that stopLoss reverts if the unwind amount is insufficient to pay the relayer fee.
+     * @dev Test that stopLoss reverts if the unwind amount is insufficient to pay the keeper fee.
      */
     function test_revert_stopLoss_insufficient_for_fee() public {
         // Set an absurdly high keeper incentive
@@ -638,7 +638,7 @@ contract ShivaRelayerTest is ShivaTestBase {
         bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
-        uint256 relayerBalanceBefore = ovlToken.balanceOf(charlie);
+        uint256 keeperBalanceBefore = ovlToken.balanceOf(charlie);
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
         vm.deal(charlie, 1 ether);
 
@@ -649,15 +649,15 @@ contract ShivaRelayerTest is ShivaTestBase {
         );
         vm.stopPrank();
 
-        uint256 relayerBalanceAfter = ovlToken.balanceOf(charlie);
+        uint256 keeperBalanceAfter = ovlToken.balanceOf(charlie);
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
 
-        assertGt(relayerBalanceAfter, relayerBalanceBefore, "Relayer should still receive a fee");
+        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should still receive a fee");
         assertLt(aliceBalanceAfter, aliceBalanceBefore + collateral, "Alice's balance should reflect a loss");
     }
 
     /**
-     * @dev Test that any relayer transaction reverts if the nativeOvlFeed is failing.
+     * @dev Test that any keeper transaction reverts if the nativeOvlFeed is failing.
      */
     function test_revert_on_nativeOvlFeed_failure() public {
         // Deploy a new bad aggregator that has no data
