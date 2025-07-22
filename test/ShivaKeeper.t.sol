@@ -175,59 +175,6 @@ contract ShivaKeeperTest is ShivaTestBase {
     }
 
     /**
-     * @dev Test that buildSingle with keeper fee calculates and pays the fee correctly
-     */
-    function test_buildSingle_with_keeper_fee() public {
-        vm.startPrank(deployer);
-        shiva.setKeeperIncentive(0.3e16); // 0.3%
-        vm.stopPrank();
-
-        // Bob builds a position
-        vm.startPrank(bob);
-        uint256 posId = buildPosition(100e18, 2e18, 1, true);
-        vm.stopPrank();
-
-        uint256 newCollateral = 50e18;
-        uint256 leverage = 2e18;
-
-        // Prepare parameters for Bob's buildSingle transaction
-        uint256 unwindPriceLimit =
-            Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
-        uint256 estimatedTotalCollateral = newCollateral + 100e18;
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(
-            ovlState, ovlMarket, estimatedTotalCollateral, leverage, BASIC_SLIPPAGE, true
-        );
-        bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            newCollateral,
-            leverage,
-            posId,
-            FIXED_NONCE,
-            unwindPriceLimit,
-            buildPriceLimit,
-            uint48(block.timestamp + 3600),
-            0
-        );
-        bytes memory signature = getSignature(digest, bobPk);
-
-        uint256 keeperBalanceBefore = ovlToken.balanceOf(automator);
-        assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
-
-        // Automator executes the transaction for Bob
-        vm.startPrank(automator);
-        shiva.buildSingle(
-            ShivaStructs.BuildSingle(
-                ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
-            ),
-            ShivaStructs.OnBehalfOf(bob, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payKeeperFee
-        );
-        vm.stopPrank();
-
-        uint256 keeperBalanceAfter = ovlToken.balanceOf(automator);
-        assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee");
-    }
-
-    /**
      * @dev Test that when payKeeperFee is false, no fee is paid
      */
     function test_no_keeper_fee_when_false() public {
@@ -270,8 +217,7 @@ contract ShivaKeeperTest is ShivaTestBase {
             ShivaStructs.BuildSingle(
                 ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
             ),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            false // payKeeperFee
+            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
         );
         vm.stopPrank();
 
@@ -415,64 +361,6 @@ contract ShivaKeeperTest is ShivaTestBase {
         shiva.limitOrderBuild(
             ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
             ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
-        );
-    }
-
-    /**
-     * @dev Test that buildSingle reverts if the user has insufficient balance for the keeper fee.
-     */
-    function test_revert_buildSingle_insufficient_fee() public {
-        vm.startPrank(deployer);
-        shiva.setKeeperIncentive(10e16); // 10%
-        vm.stopPrank();
-
-        // Bob builds an initial position
-        vm.startPrank(bob);
-        uint256 posId = buildPosition(100e18, 2e18, 1, true);
-        vm.stopPrank();
-
-        uint256 newCollateral = 50e18;
-        uint256 leverage = 2e18;
-
-        // Estimate the trading fee for the buildSingle operation.
-        // It's based on the total collateral (new + unwound from previous position).
-        // Assuming PnL is negligible, unwound amount is ~100 OVL.
-        uint256 estimatedUnwoundAmount = 100e18;
-        uint256 totalCollateral = newCollateral + estimatedUnwoundAmount;
-        uint256 notional = totalCollateral.mulUp(leverage);
-        uint256 tradingFee = notional.mulUp(ovlMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
-        
-        // Set Bob's balance to exactly cover the new collateral and the calculated trading fee
-        uint256 bobBalance = newCollateral + tradingFee;
-        deal(address(ovlToken), bob, bobBalance);
-
-        // Prepare parameters for Bob's buildSingle transaction
-        uint256 unwindPriceLimit = Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
-        uint256 buildPriceLimit = Utils.getEstimatedPrice(ovlState, ovlMarket, totalCollateral, leverage, BASIC_SLIPPAGE, true);
-        
-        bytes32 digest = getBuildSingleOnBehalfOfDigest(
-            newCollateral,
-            leverage,
-            posId,
-            FIXED_NONCE,
-            unwindPriceLimit,
-            buildPriceLimit,
-            uint48(block.timestamp + 3600),
-            0
-        );
-        bytes memory signature = getSignature(digest, bobPk);
-
-        vm.deal(automator, 1 ether); // give gas money
-        vm.prank(automator);
-
-        // Expect a revert because Bob's balance is insufficient to pay the additional keeper fee
-        vm.expectRevert();
-        shiva.buildSingle(
-            ShivaStructs.BuildSingle(
-                ovlMarket, 0, unwindPriceLimit, buildPriceLimit, newCollateral, leverage, posId
-            ),
-            ShivaStructs.OnBehalfOf(bob, uint48(block.timestamp + 3600), FIXED_NONCE, signature),
-            true // payKeeperFee
         );
     }
 

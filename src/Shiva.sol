@@ -510,15 +510,13 @@ contract Shiva is
      * ShivaStructs.BuildSingle struct
      * @param onBehalfOf The parameters for building on behalf of a user based on the
      * ShivaStructs.OnBehalfOf struct
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction
      * @return The ID of the newly created position
      * @dev Only callable when the contract is not paused, the deadline is valid, and the
      * caller is the owner of the previous position
      */
     function buildSingle(
         ShivaStructs.BuildSingle calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     )
         external
         whenNotPaused
@@ -526,15 +524,9 @@ contract Shiva is
         onlyPositionOwner(params.ovlMarket, params.previousPositionId, onBehalfOf.owner)
         returns (uint256)
     {
-        uint256 gasStart = gasleft();
-        
         // build typed data hash
         bytes32 structHash = _computeBuildSingleTypedDataHash(params, onBehalfOf);
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
-
-        if (payRelayerFee) {
-            return _buildSingleLogicWithRelayerFee(params, onBehalfOf.owner, gasStart);
-        }
 
         return _buildSingleLogic(params, onBehalfOf.owner);
     }
@@ -810,63 +802,6 @@ contract Shiva is
             _params.buildPriceLimit,
             _params.brokerId
         );
-    }
-
-    /**
-     * @notice Internal logic for building and keeping a single position with relayer fee
-     * @param _params The parameters for building the single position
-     * @param _owner The address of the owner
-     * @param _gasStart The initial gas amount to calculate the dynamic fee
-     * @return positionId The ID of the newly created position
-     */
-    function _buildSingleLogicWithRelayerFee(
-        ShivaStructs.BuildSingle calldata _params,
-        address _owner,
-        uint256 _gasStart
-    ) internal returns (uint256 positionId) {
-        require(_params.leverage >= ONE, "Shiva:lev<min");
-
-        // Get side before unwinding
-        bool isLong =
-            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
-
-        // Track balance before unwinding
-        uint256 balanceBefore = ovlToken.balanceOf(address(this));
-
-        _onUnwindPosition(
-            _params.ovlMarket,
-            _params.previousPositionId,
-            ONE,
-            _params.unwindPriceLimit,
-            _params.brokerId
-        );
-
-        // Calculate actual unwound amount
-        uint256 unwindAmount = ovlToken.balanceOf(address(this)) - balanceBefore;
-        uint256 totalCollateral = _params.collateral + unwindAmount;
-        uint256 tradingFee = _getTradingFee(_params.ovlMarket, totalCollateral, _params.leverage);
-
-        // Transfer OVL from user for the new collateral part and trading fee
-        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
-
-        // Approve the ovlMarket contract to spend OVL
-        _approveMarket(_params.ovlMarket);
-
-        positionId = _onBuildPosition(
-            _owner,
-            _params.ovlMarket,
-            totalCollateral,
-            _params.leverage,
-            isLong,
-            _params.buildPriceLimit,
-            _params.brokerId
-        );
-
-        uint256 gasUsed = _gasStart - gasleft();
-        uint256 dynamicFee = Utils.calculateDynamicRelayerFee(gasUsed, nativeOvlFeed, keeperIncentive);
-
-        // Transfer OVL from user to relayer
-        ovlToken.transferFrom(_owner, msg.sender, dynamicFee);
     }
 
     /**

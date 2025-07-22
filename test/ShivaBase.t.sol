@@ -709,8 +709,7 @@ contract ShivaTestBase is Test, BaseSetup {
                 leverage,
                 previousPositionId
             ),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
-            false // payRelayerFee - default to false for backward compatibility
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 

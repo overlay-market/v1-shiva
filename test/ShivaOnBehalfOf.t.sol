@@ -512,8 +512,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             ShivaStructs.BuildSingle(
                 ovlMarket, BROKER_ID + 1, unwindPriceLimit, buildPriceLimit, ONE, ONE, posId1
             ),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false // payRelayerFee - default to false for backward compatibility
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
 
         // the market is different from the one used in the signature
@@ -525,8 +524,7 @@ contract ShivaOnBehalfOfTest is Test, ShivaTestBase {
             ShivaStructs.BuildSingle(
                 otherOvlMarket, BROKER_ID, unwindPriceLimit, buildPriceLimit, ONE, ONE, posId1
             ),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false // payRelayerFee - default to false for backward compatibility
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
     }
 
