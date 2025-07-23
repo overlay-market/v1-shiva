@@ -80,7 +80,7 @@ library ShivaStructs {
      * @notice Represents the parameters to perform a stop loss order
      * @param ovlMarket The market interface
      * @param brokerId The ID of the broker; 0 in most cases
-     * @param payRelayerFee Indicates whether the relayer should be paid a fee
+     * @param payKeeperFee Indicates whether the keeper should be paid a fee
      * @param positionId The ID of the position to unwind
      * @param fraction The fraction of the position to unwind
      * @param priceLimit The price limit for the unwind
@@ -90,7 +90,7 @@ library ShivaStructs {
     struct StopLoss {
         IOverlayV1Market ovlMarket;
         uint32 brokerId;
-        bool payRelayerFee;
+        bool payKeeperFee;
         uint256 positionId;
         uint256 fraction;
         uint256 priceLimit;

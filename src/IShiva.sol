@@ -2,6 +2,7 @@
 pragma solidity 0.8.10;
 
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 
 /**
@@ -58,6 +59,7 @@ interface IShiva {
      * @param fraction Fraction of the position unwound.
      * @param triggerPrice The price at which the stop loss was triggered.
      * @param brokerId ID of the broker used to unwind the position.
+     * @param keeperFee Fee paid to the keeper for executing the transaction.
      */
     event StopLossExecuted(
         address indexed owner,
@@ -66,7 +68,8 @@ interface IShiva {
         uint256 positionId,
         uint256 fraction,
         uint256 triggerPrice,
-        uint32 brokerId
+        uint32 brokerId,
+        uint256 keeperFee
     );
 
     /**
@@ -77,6 +80,7 @@ interface IShiva {
      * @param positionId Unique ID of the unwound position.
      * @param fraction Fraction of the position unwound.
      * @param brokerId ID of the broker used to unwind the position.
+     * @param keeperFee Fee paid to the keeper for executing the transaction.
      */
     event TakeProfitExecuted(
         address indexed owner,
@@ -84,7 +88,8 @@ interface IShiva {
         address performer,
         uint256 positionId,
         uint256 fraction,
-        uint32 brokerId
+        uint32 brokerId,
+        uint256 keeperFee
     );
 
     /**
@@ -97,6 +102,7 @@ interface IShiva {
      * @param leverage Leverage applied to the position.
      * @param brokerId ID of the broker used to build the position.
      * @param isLong Indicates whether the position is long or short.
+     * @param keeperFee Fee paid to the keeper for executing the transaction.
      */
     event LimitOrderExecuted(
         address indexed owner,
@@ -106,7 +112,8 @@ interface IShiva {
         uint256 collateral,
         uint256 leverage,
         uint32 brokerId,
-        bool isLong
+        bool isLong,
+        uint256 keeperFee
     );
 
     /**
@@ -160,12 +167,6 @@ interface IShiva {
     event NonceCancelled(address indexed owner, uint256 nonce);
 
     /**
-     * @notice Emitted when the relayer fee is updated.
-     * @param newFee The new fixed relayer fee.
-     */
-    event RelayerFeeUpdated(uint256 newFee);
-
-    /**
      * @notice Error emitted when the caller is not the owner of the position.
      */
     error NotPositionOwner();
@@ -196,11 +197,11 @@ interface IShiva {
     error TriggerNotMet();
 
     /**
-     * @notice Error emitted when the unwind amount is insufficient to pay the relayer fee.
-     * @param unwindAmount The amount unwound from the position.
-     * @param relayerFee The required fee for the relayer.
+     * @notice Error emitted when the user has an insufficient balance to pay the keeper fee.
+     * @param ownerBalance The available balance of the user.
+     * @param keeperFee The required fee for the keeper.
      */
-    error InsufficientUnwindAmountForFee(uint256 unwindAmount, uint256 relayerFee);
+    error InsufficientBalanceForKeeperFee(uint256 ownerBalance, uint256 keeperFee);
 
     /**
      * @notice Thrown when the calculated keeper fee exceeds the maximum specified amount.
@@ -312,8 +313,8 @@ interface IShiva {
     ) external;
 
     /**
-     * @notice Sets the keeper incentive.
-     * @param _incentive The new incentive for keepers.
+     * @notice Sets the keeper fee feed.
+     * @param _feed The new feed for keeper fees.
      */
-    function setKeeperIncentive(uint256 _incentive) external;
+    function setKeeperFeeFeed(IOverlayV1Feed _feed) external;
 }

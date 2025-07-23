@@ -88,7 +88,7 @@ contract Shiva is
      * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
      */
     bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
-        "StopLossOnBehalfOf(address ovlMarket,uint32 brokerId,bool payRelayerFee,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 triggerPrice,uint256 maxKeeperFee,uint48 deadline,uint256 nonce)"
+        "StopLossOnBehalfOf(address ovlMarket,uint32 brokerId,bool payKeeperFee,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 triggerPrice,uint256 maxKeeperFee,uint48 deadline,uint256 nonce)"
     );
 
     /**
@@ -117,11 +117,8 @@ contract Shiva is
     /// @notice The BerachainRewardsVault contract
     IBerachainRewardsVault public rewardVault;
 
-    /// @notice The oracle feed for the NATIVE/OVL price
-    IOverlayV1Feed public nativeOvlFeed;
-
-    /// @notice The incentive paid to keepers, expressed as a percentage (1e16 = 1%)
-    uint256 public keeperIncentive;
+    /// @notice The oracle feed for the keeper fee
+    IOverlayV1Feed public keeperFeeFeed;
 
     /// @notice List of authorized factories
     IOverlayV1Factory[] public authorizedFactories;
@@ -208,21 +205,18 @@ contract Shiva is
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
      * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
-     * @param _nativeOvlFeed The address of the NATIVE/OVL price feed
-     * @param _keeperIncentive The incentive for keepers
+     * @param _keeperFeeFeed The address of the keeper fee feed
      */
     function initialize(
         address _ovlToken,
         address _vaultFactory,
-        IOverlayV1Feed _nativeOvlFeed,
-        uint256 _keeperIncentive
+        IOverlayV1Feed _keeperFeeFeed
     ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
         ovlToken = IOverlayV1Token(_ovlToken);
-        nativeOvlFeed = _nativeOvlFeed;
-        keeperIncentive = _keeperIncentive;
+        keeperFeeFeed = _keeperFeeFeed;
 
         // Create new staking token
         stakingToken = new StakingToken();
@@ -404,24 +398,23 @@ contract Shiva is
         validDeadline(onBehalfOf.deadline)
         returns (uint256)
     {
-        uint256 gasStart = gasleft();
-
-        // build typed data hash
-        bytes32 structHash = keccak256(
-            abi.encode(
-                LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH,
-                params.ovlMarket,
-                params.brokerId,
-                params.isLong,
-                params.collateral,
-                params.leverage,
-                params.priceLimit,
-                params.maxKeeperFee,
-                onBehalfOf.deadline,
-                onBehalfOf.nonce
-            )
-        );
-        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+        {
+            bytes32 structHash = keccak256(
+                abi.encode(
+                    LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH,
+                    params.ovlMarket,
+                    params.brokerId,
+                    params.isLong,
+                    params.collateral,
+                    params.leverage,
+                    params.priceLimit,
+                    params.maxKeeperFee,
+                    onBehalfOf.deadline,
+                    onBehalfOf.nonce
+                )
+            );
+            _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+        }
 
         ShivaStructs.Build memory buildParams = ShivaStructs.Build({
             ovlMarket: params.ovlMarket,
@@ -432,8 +425,8 @@ contract Shiva is
             brokerId: params.brokerId
         });
 
-        uint256 positionId =
-            _buildLogicWithRelayerFee(buildParams, onBehalfOf.owner, gasStart, params.maxKeeperFee);
+        uint256 positionId = _buildLogic(buildParams, onBehalfOf.owner);
+        uint256 keeperFee = _payKeeperFee(onBehalfOf.owner, params.maxKeeperFee);
 
         emit LimitOrderExecuted(
             onBehalfOf.owner,
@@ -443,7 +436,8 @@ contract Shiva is
             params.collateral,
             params.leverage,
             params.brokerId,
-            params.isLong
+            params.isLong,
+            keeperFee
         );
         return positionId;
     }
@@ -502,8 +496,6 @@ contract Shiva is
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
-        uint256 gasStart = gasleft();
-
         // build typed data hash
         bytes32 structHash = keccak256(
             abi.encode(
@@ -527,8 +519,10 @@ contract Shiva is
             priceLimit: params.priceLimit,
             brokerId: params.brokerId
         });
+    
+        _unwindLogic(unwindParams, onBehalfOf.owner);
 
-        _unwindLogicWithRelayerFee(unwindParams, onBehalfOf.owner, gasStart, params.maxKeeperFee);
+        uint256 keeperFee = _payKeeperFee(onBehalfOf.owner, params.maxKeeperFee);
 
         emit TakeProfitExecuted(
             onBehalfOf.owner,
@@ -536,7 +530,8 @@ contract Shiva is
             msg.sender,
             params.positionId,
             params.fraction,
-            params.brokerId
+            params.brokerId,
+            keeperFee
         );
     }
 
@@ -585,25 +580,21 @@ contract Shiva is
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
-        uint256 gasStart = gasleft();
-
         // build typed data hash
         bytes32 structHash = _computeStopLossTypedDataHash(params, onBehalfOf);
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
-        _executeStopLoss(params, onBehalfOf, gasStart);
+        _executeStopLoss(params, onBehalfOf);
     }
 
     /**
      * @notice Internal logic for executing a stop loss order
      * @param _params The parameters for the stop loss order
      * @param _onBehalfOf The parameters for acting on behalf of a user
-     * @param _gasStart The initial gas amount to calculate the dynamic fee
      */
     function _executeStopLoss(
         ShivaStructs.StopLoss calldata _params,
-        ShivaStructs.OnBehalfOf calldata _onBehalfOf,
-        uint256 _gasStart
+        ShivaStructs.OnBehalfOf calldata _onBehalfOf
     ) internal {
         // 1. Check if the trigger condition is met
         if (
@@ -622,10 +613,10 @@ contract Shiva is
             brokerId: _params.brokerId
         });
 
-        if (_params.payRelayerFee) {
-            _unwindLogicWithRelayerFee(
-                unwindParams, _onBehalfOf.owner, _gasStart, _params.maxKeeperFee
-            );
+        uint256 keeperFee;
+        if (_params.payKeeperFee) {
+            _unwindLogic(unwindParams, _onBehalfOf.owner);
+            keeperFee = _payKeeperFee(_onBehalfOf.owner, _params.maxKeeperFee);
         } else {
             _unwindLogic(unwindParams, _onBehalfOf.owner);
         }
@@ -637,7 +628,8 @@ contract Shiva is
             _params.positionId,
             _params.fraction,
             _params.triggerPrice,
-            _params.brokerId
+            _params.brokerId,
+            keeperFee
         );
     }
 
@@ -698,53 +690,6 @@ contract Shiva is
     }
 
     /**
-     * @notice Internal logic for building a position with relayer fee
-     * @param _params The parameters for building the position
-     * @param _owner The address of the owner
-     * @param _gasStart The initial gas amount to calculate the dynamic fee
-     * @param _maxKeeperFee The maximum keeper fee allowed
-     * @return The ID of the newly created position
-     */
-    function _buildLogicWithRelayerFee(
-        ShivaStructs.Build memory _params,
-        address _owner,
-        uint256 _gasStart,
-        uint256 _maxKeeperFee
-    ) internal returns (uint256) {
-        require(_params.leverage >= ONE, "Shiva:lev<min");
-        uint256 tradingFee = _getTradingFee(_params.ovlMarket, _params.collateral, _params.leverage);
-
-        // Transfer OVL from user for collateral and trading fee
-        ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
-
-        // Approve the ovlMarket contract to spend OVL
-        _approveMarket(_params.ovlMarket);
-
-        uint256 positionId = _onBuildPosition(
-            _owner,
-            _params.ovlMarket,
-            _params.collateral,
-            _params.leverage,
-            _params.isLong,
-            _params.priceLimit,
-            _params.brokerId
-        );
-
-        uint256 gasUsed = _gasStart - gasleft();
-        uint256 dynamicFee =
-            Utils.calculateDynamicRelayerFee(gasUsed, nativeOvlFeed, keeperIncentive);
-
-        if (dynamicFee > _maxKeeperFee) {
-            revert KeeperFeeExceedsMax(dynamicFee, _maxKeeperFee);
-        }
-
-        // Transfer OVL from user to relayer
-        ovlToken.transferFrom(_owner, msg.sender, dynamicFee);
-
-        return positionId;
-    }
-
-    /**
      * @notice Internal logic for unwinding a position
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
@@ -759,48 +704,6 @@ contract Shiva is
         );
 
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
-    }
-
-    /**
-     * @notice Internal logic for unwinding a position with relayer fee
-     * @param _params The parameters for unwinding the position
-     * @param _owner The address of the owner
-     * @param _gasStart The initial gas amount to calculate the dynamic fee
-     * @param _maxKeeperFee The maximum keeper fee allowed
-     */
-    function _unwindLogicWithRelayerFee(
-        ShivaStructs.Unwind memory _params,
-        address _owner,
-        uint256 _gasStart,
-        uint256 _maxKeeperFee
-    ) internal {
-        _onUnwindPosition(
-            _params.ovlMarket,
-            _params.positionId,
-            _params.fraction,
-            _params.priceLimit,
-            _params.brokerId
-        );
-
-        uint256 gasUsed = _gasStart - gasleft();
-        uint256 dynamicFee =
-            Utils.calculateDynamicRelayerFee(gasUsed, nativeOvlFeed, keeperIncentive);
-
-        uint256 unwindAmount = ovlToken.balanceOf(address(this));
-
-        if (dynamicFee > _maxKeeperFee) {
-            revert KeeperFeeExceedsMax(dynamicFee, _maxKeeperFee);
-        }
-
-        if (unwindAmount < dynamicFee) {
-            revert InsufficientUnwindAmountForFee(unwindAmount, dynamicFee);
-        }
-
-        // Transfer remaining amount to owner
-        ovlToken.transfer(_owner, unwindAmount - dynamicFee);
-
-        // Transfer fee to relayer
-        ovlToken.transfer(msg.sender, dynamicFee);
     }
 
     /**
@@ -887,7 +790,7 @@ contract Shiva is
                 STOP_LOSS_ON_BEHALF_OF_TYPEHASH,
                 params.ovlMarket,
                 params.brokerId,
-                params.payRelayerFee,
+                params.payKeeperFee,
                 params.positionId,
                 params.fraction,
                 params.priceLimit,
@@ -921,6 +824,33 @@ contract Shiva is
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
 
         emit ShivaEmergencyWithdraw(_owner, address(_market), msg.sender, _positionId);
+    }
+
+    /**
+     * @notice Internal logic for paying the keeper fee.
+     * @param _owner The address of the owner who will pay the fee.
+     * @param _maxKeeperFee The maximum fee the owner is willing to pay.
+     * @return The keeper fee paid.
+     */
+    function _payKeeperFee(
+        address _owner,
+        uint256 _maxKeeperFee
+    ) internal returns (uint256) {
+        uint256 keeperFee = keeperFeeFeed.latest().priceOverMicroWindow;
+
+        if (keeperFee > _maxKeeperFee) {
+            revert KeeperFeeExceedsMax(keeperFee, _maxKeeperFee);
+        }
+
+        uint256 ownerBalance = ovlToken.balanceOf(_owner);
+        if (ownerBalance < keeperFee) {
+            revert InsufficientBalanceForKeeperFee(ownerBalance, keeperFee);
+        }
+
+        // Fee is paid directly from the owner's balance (for build and unwind orders)
+        ovlToken.transferFrom(_owner, msg.sender, keeperFee);
+
+        return keeperFee;
     }
 
     /**
@@ -1119,19 +1049,11 @@ contract Shiva is
     function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
 
     /**
-     * @notice Sets the NATIVE/OVL oracle feed address.
+     * @notice Sets the keeper fee feed address.
      * @param _feed The address of the IOverlayV1Feed compliant oracle.
      */
-    function setNativeOvlFeed(IOverlayV1Feed _feed) external onlyGovernor(msg.sender) {
-        nativeOvlFeed = _feed;
-    }
-
-    /**
-     * @notice Sets the incentive for keepers.
-     * @param _incentive The incentive, where 1e16 represents 1%.
-     */
-    function setKeeperIncentive(uint256 _incentive) external onlyGovernor(msg.sender) {
-        keeperIncentive = _incentive;
+    function setKeeperFeeFeed(IOverlayV1Feed _feed) external onlyGovernor(msg.sender) {
+        keeperFeeFeed = _feed;
     }
 
     /**
