@@ -59,7 +59,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         // Deploy aggregator
         aggregator = deployAggregator();
 
-        nativeOvlAggregator = deployNativeOvlAggregator();
+        keeperFeeAggregator = deployKeeperFeeAggregator();
 
         // Deploy feed factory and feed
         feedFactory = new OverlayV1ChainlinkFeedFactory(
@@ -70,8 +70,8 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         feed = IOverlayV1ChainlinkFeed(
             feedFactory.deployFeed(address(aggregator), 172800) // 2 days window
         );
-        nativeOvlFeed = IOverlayV1ChainlinkFeed(
-            feedFactory.deployFeed(address(nativeOvlAggregator), 172800) // 2 days window
+        keeperFeeFeed = IOverlayV1ChainlinkFeed(
+            feedFactory.deployFeed(address(keeperFeeAggregator), 172800) // 2 days window
         );
 
         // Deploy factory
@@ -86,10 +86,9 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address,address,uint256)";
-        uint256 keeperIncentive = 1e16; // 1%
+        string memory functionName = "initialize(address,address,address)";
         bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovlToken), address(vaultFactory), address(nativeOvlFeed), keeperIncentive
+            functionName, address(ovlToken), address(vaultFactory), address(keeperFeeFeed)
         );
 
         // Set up shiva contract and reward vault

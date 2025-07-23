@@ -65,11 +65,11 @@ contract ShivaTestBase is Test, BaseSetup {
     IOverlayV1Token ovlToken;
     IBerachainRewardsVault rewardVault;
 
-    IOverlayV1ChainlinkFeed public nativeOvlFeed;
+    IOverlayV1ChainlinkFeed public keeperFeeFeed;
 
     MockSequencerOracle sequencerOracle;
     MockAggregator aggregator;
-    MockAggregator nativeOvlAggregator;
+    MockAggregator keeperFeeAggregator;
     OverlayV1ChainlinkFeedFactory feedFactory;
     IOverlayV1ChainlinkFeed feed;
 
@@ -146,7 +146,7 @@ contract ShivaTestBase is Test, BaseSetup {
         aggregator = deployAggregator();
 
         // Deploy native aggregator and feed
-        nativeOvlAggregator = deployNativeOvlAggregator();
+        keeperFeeAggregator = deployKeeperFeeAggregator();
 
         // Deploy feed factory and feed
         feedFactory = new OverlayV1ChainlinkFeedFactory(
@@ -157,8 +157,8 @@ contract ShivaTestBase is Test, BaseSetup {
         feed = IOverlayV1ChainlinkFeed(
             feedFactory.deployFeed(address(aggregator), 172800) // 2 days window
         );
-        nativeOvlFeed = IOverlayV1ChainlinkFeed(
-            feedFactory.deployFeed(address(nativeOvlAggregator), 172800) // 2 days window
+        keeperFeeFeed = IOverlayV1ChainlinkFeed(
+            feedFactory.deployFeed(address(keeperFeeAggregator), 172800) // 2 days window
         );
 
         // Deploy factory
@@ -179,11 +179,9 @@ contract ShivaTestBase is Test, BaseSetup {
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
-        string memory functionName = "initialize(address,address,address,uint256)";
-        uint256 keeperIncentive = 1e16; // 1%
-        bytes memory data = abi.encodeWithSignature(
-            functionName, address(ovlToken), address(vaultFactory), address(nativeOvlFeed), keeperIncentive
-        );
+        string memory functionName = "initialize(address,address,address)";
+        bytes memory data =
+            abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory), address(keeperFeeFeed));
 
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
@@ -228,7 +226,7 @@ contract ShivaTestBase is Test, BaseSetup {
         vm.label(address(ovlMarket), "Market");
         vm.label(address(shiva), "Shiva");
         vm.label(address(ovlToken), "OVL");
-        vm.label(address(nativeOvlFeed), "NativeOvlFeed");
+        vm.label(address(keeperFeeFeed), "keeperFeeFeed");
     }
 
     /**
@@ -337,17 +335,17 @@ contract ShivaTestBase is Test, BaseSetup {
         aggregator_.submit(4, 979701714);
     }
 
-    function deployNativeOvlAggregator() public returns (MockAggregator nativeOvlAggregator_) {
+    function deployKeeperFeeAggregator() public returns (MockAggregator keeperFeeAggregator_) {
         // Deploy MockAggregator with initial price
-        nativeOvlAggregator_ = new MockAggregator();
+        keeperFeeAggregator_ = new MockAggregator();
 
         // Set up initial rounds of price data
         vm.warp(block.timestamp + 60 * 60);
-        nativeOvlAggregator_.submit(2, 1e8); // 1 NATIVE = 1 OVL (with 8 decimals)
+        keeperFeeAggregator_.submit(2, 1e8); // 1 OVL keeper fee (with 8 decimals)
         vm.warp(block.timestamp + 60 * 60);
-        nativeOvlAggregator_.submit(3, 1e8);
+        keeperFeeAggregator_.submit(3, 1e8);
         vm.warp(block.timestamp + 60 * 60);
-        nativeOvlAggregator_.submit(4, 1e8);
+        keeperFeeAggregator_.submit(4, 1e8);
     }
 
     /**
@@ -652,7 +650,7 @@ contract ShivaTestBase is Test, BaseSetup {
         uint48 deadline,
         uint256 nonce,
         uint32 brokerId,
-        bool payRelayerFee,
+        bool payKeeperFee,
         uint256 maxKeeperFee
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
@@ -660,7 +658,7 @@ contract ShivaTestBase is Test, BaseSetup {
                 shiva.STOP_LOSS_ON_BEHALF_OF_TYPEHASH(),
                 ovlMarket,
                 brokerId,
-                payRelayerFee,
+                payKeeperFee,
                 posId,
                 fraction,
                 priceLimit,
@@ -813,7 +811,7 @@ contract ShivaTestBase is Test, BaseSetup {
      * @param deadline The deadline for the transaction.
      * @param signature The signature of the owner authorizing the transaction.
      * @param owner The address of the owner on whose behalf the position is being unwound.
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
+     * @param payKeeperFee Whether to pay a fee to the keeper executing the transaction.
      */
     function stopLossOnBehalfOf(
         uint256 positionId,
@@ -823,14 +821,14 @@ contract ShivaTestBase is Test, BaseSetup {
         uint48 deadline,
         bytes memory signature,
         address owner,
-        bool payRelayerFee,
+        bool payKeeperFee,
         uint256 maxKeeperFee
     ) public {
         shiva.stopLoss(
             ShivaStructs.StopLoss(
                 ovlMarket,
                 BROKER_ID,
-                payRelayerFee,
+                payKeeperFee,
                 positionId,
                 fraction,
                 priceLimit,
