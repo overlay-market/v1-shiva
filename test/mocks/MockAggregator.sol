@@ -23,7 +23,7 @@ contract MockAggregator is IFluxAggregator {
 
     // Initial setup values
     int256 private constant INITIAL_PRICE = 979701714; // ~$9.79 with 8 decimals
-    uint256 private constant MIN_ANSWER = 1e8; // $1
+    uint256 private constant MIN_ANSWER = 0; // $1
     uint256 private constant MAX_ANSWER = 1000000e18; // $1M
 
     constructor() {
