@@ -514,6 +514,33 @@ contract ShivaTestBase is Test, BaseSetup {
         return shiva.getDigest(structHash);
     }
 
+    function getLimitOrderOnBehalfOfDigest(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 priceLimit,
+        uint256 nonce,
+        uint48 deadline,
+        bool isLong,
+        uint32 brokerId,
+        uint256 maxKeeperFee
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH(),
+                ovlMarket,
+                brokerId,
+                isLong,
+                collateral,
+                leverage,
+                priceLimit,
+                maxKeeperFee,
+                deadline,
+                nonce
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
     /**
      * @dev Gets the digest for unwinding a position on behalf of another user.
      * @param posId The ID of the position to be unwound.
@@ -541,6 +568,31 @@ contract ShivaTestBase is Test, BaseSetup {
                 priceLimit,
                 nonce,
                 brokerId
+            )
+        );
+        return shiva.getDigest(structHash);
+    }
+
+    function getTakeProfitOnBehalfOfDigest(
+        uint256 posId,
+        uint256 fraction,
+        uint256 priceLimit,
+        uint256 nonce,
+        uint48 deadline,
+        uint32 brokerId,
+        uint256 maxKeeperFee
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                shiva.TAKE_PROFIT_ON_BEHALF_OF_TYPEHASH(),
+                ovlMarket,
+                brokerId,
+                posId,
+                fraction,
+                priceLimit,
+                maxKeeperFee,
+                deadline,
+                nonce
             )
         );
         return shiva.getDigest(structHash);
@@ -599,19 +651,23 @@ contract ShivaTestBase is Test, BaseSetup {
         uint256 priceLimit,
         uint48 deadline,
         uint256 nonce,
-        uint32 brokerId
+        uint32 brokerId,
+        bool payRelayerFee,
+        uint256 maxKeeperFee
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 shiva.STOP_LOSS_ON_BEHALF_OF_TYPEHASH(),
                 ovlMarket,
+                brokerId,
+                payRelayerFee,
                 posId,
                 fraction,
-                triggerPrice,
                 priceLimit,
+                triggerPrice,
+                maxKeeperFee,
                 deadline,
-                nonce,
-                brokerId
+                nonce
             )
         );
         return shiva.getDigest(structHash);
@@ -713,6 +769,41 @@ contract ShivaTestBase is Test, BaseSetup {
         );
     }
 
+    function limitOrderBuildOnBehalfOf(
+        uint256 collateral,
+        uint256 leverage,
+        uint256 priceLimit,
+        uint48 deadline,
+        bool isLong,
+        bytes memory signature,
+        address owner,
+        uint256 maxKeeperFee
+    ) public returns (uint256) {
+        return shiva.limitOrderBuild(
+            ShivaStructs.LimitOrder(
+                ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit, maxKeeperFee
+            ),
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
+        );
+    }
+
+    function takeProfitOnBehalfOf(
+        uint256 positionId,
+        uint256 fraction,
+        uint256 priceLimit,
+        uint48 deadline,
+        bytes memory signature,
+        address owner,
+        uint256 maxKeeperFee
+    ) public {
+        shiva.takeProfit(
+            ShivaStructs.TakeProfit(
+                ovlMarket, BROKER_ID, positionId, fraction, priceLimit, maxKeeperFee
+            ),
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
+        );
+    }
+
     /**
      * @dev Executes a stop loss order on behalf of another user.
      * @param positionId The ID of the position to be unwound.
@@ -732,12 +823,21 @@ contract ShivaTestBase is Test, BaseSetup {
         uint48 deadline,
         bytes memory signature,
         address owner,
-        bool payRelayerFee
+        bool payRelayerFee,
+        uint256 maxKeeperFee
     ) public {
         shiva.stopLoss(
-            ShivaStructs.StopLoss(ovlMarket, BROKER_ID, positionId, fraction, triggerPrice, priceLimit),
-            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature),
-            payRelayerFee
+            ShivaStructs.StopLoss(
+                ovlMarket,
+                BROKER_ID,
+                payRelayerFee,
+                positionId,
+                fraction,
+                priceLimit,
+                triggerPrice,
+                maxKeeperFee
+            ),
+            ShivaStructs.OnBehalfOf(owner, deadline, FIXED_NONCE, signature)
         );
     }
 

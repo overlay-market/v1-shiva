@@ -71,8 +71,15 @@ contract ShivaKeeperTest is ShivaTestBase {
         uint256 leverage = 2e18;
 
         // Get digest and signature for build on behalf of
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            collateral, leverage, type(uint256).max, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            collateral,
+            leverage,
+            type(uint256).max,
+            FIXED_NONCE,
+            uint48(block.timestamp + 3600),
+            true,
+            0,
+            type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -81,9 +88,15 @@ contract ShivaKeeperTest is ShivaTestBase {
         assertEq(keeperBalanceBefore, 0, "Keeper should have no OVL initially");
 
         vm.prank(automator);
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            collateral,
+            leverage,
+            type(uint256).max,
+            uint48(block.timestamp + 3600),
+            true,
+            signature,
+            alice,
+            type(uint256).max
         );
 
         // Check that keeper received the fee
@@ -109,8 +122,8 @@ contract ShivaKeeperTest is ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         // Get digest and signature for unwind on behalf of
-        bytes32 digest = getUnwindOnBehalfOfDigest(
-            posId, ONE, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -122,9 +135,8 @@ contract ShivaKeeperTest is ShivaTestBase {
         vm.deal(charlie, 1 ether);
 
         vm.startPrank(charlie);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, uint48(block.timestamp + 3600), signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -153,8 +165,8 @@ contract ShivaKeeperTest is ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), ONE, BASIC_SLIPPAGE);
 
         // Get digest and signature for unwind on behalf of
-        bytes32 digest = getUnwindOnBehalfOfDigest(
-            posId, ONE, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -163,14 +175,10 @@ contract ShivaKeeperTest is ShivaTestBase {
 
         // Expect revert when unwinding
         vm.startPrank(bob);
-        try shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
-        ) {
-            revert("Transaction did not revert as expected");
-        } catch (bytes memory reason) {
-            assertEq(reason, abi.encodeWithSelector(IShiva.InsufficientUnwindAmountForFee.selector, 9942478705580122309, 131030620560000000000), "Incorrect error");
-        }
+        vm.expectRevert(abi.encodeWithSelector(IShiva.KeeperFeeExceedsMax.selector, 131030620560000000000, 0));
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, uint48(block.timestamp + 3600), signature, alice, 0
+        );
         vm.stopPrank();
     }
 
@@ -261,10 +269,12 @@ contract ShivaKeeperTest is ShivaTestBase {
         marketAggregator.submit(marketAggregator.latestRound() + 1, newOraclePrice);
         vm.stopPrank();
 
-        uint256 priceLimit = 0; 
+        uint256 priceLimit = 0;
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, 0);
+        bytes32 digest = getStopLossOnBehalfOfDigest(
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, 0, true, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         uint256 keeperBalanceBefore = ovlToken.balanceOf(automator);
@@ -272,9 +282,11 @@ contract ShivaKeeperTest is ShivaTestBase {
 
         // Automator executes the transaction for Alice
         vm.startPrank(automator);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true);
+        stopLossOnBehalfOf(
+            posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true, type(uint256).max
+        );
         vm.stopPrank();
-        
+
         uint256 keeperBalanceAfter = ovlToken.balanceOf(automator);
         assertGt(keeperBalanceAfter, keeperBalanceBefore, "Keeper should receive a fee");
     }
@@ -314,8 +326,9 @@ contract ShivaKeeperTest is ShivaTestBase {
 
         uint256 priceLimit = 0;
         uint48 deadline = uint48(block.timestamp + 3600);
-        
-        bytes32 digest = getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, 0);
+
+        bytes32 digest =
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, 0, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         uint256 keeperBalanceBefore = ovlToken.balanceOf(bob);
@@ -323,7 +336,7 @@ contract ShivaKeeperTest is ShivaTestBase {
 
         // Bob executes the transaction for Alice with payKeeperFee = false
         vm.startPrank(bob);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
         uint256 keeperBalanceAfter = ovlToken.balanceOf(bob);
@@ -346,21 +359,34 @@ contract ShivaKeeperTest is ShivaTestBase {
 
         // Set Alice's balance precisely
         deal(address(ovlToken), alice, aliceBalance);
-        
+
         // Get digest and signature for build on behalf of
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            collateral, leverage, type(uint256).max, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            collateral,
+            leverage,
+            type(uint256).max,
+            FIXED_NONCE,
+            uint48(block.timestamp + 3600),
+            true,
+            0,
+            type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
         vm.deal(automator, 1 ether); // give gas money
         vm.prank(automator);
-        
+
         // Expect a revert because Alice's balance is insufficient to pay the additional keeper fee
         vm.expectRevert();
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            collateral,
+            leverage,
+            type(uint256).max,
+            uint48(block.timestamp + 3600),
+            true,
+            signature,
+            alice,
+            type(uint256).max
         );
     }
 
@@ -385,8 +411,14 @@ contract ShivaKeeperTest is ShivaTestBase {
             Utils.getUnwindPrice(ovlState, ovlMarket, posId, address(shiva), fractionToUnwind, BASIC_SLIPPAGE);
 
         // Get digest and signature for unwind on behalf of
-        bytes32 digest = getUnwindOnBehalfOfDigest(
-            posId, fractionToUnwind, priceLimit, FIXED_NONCE, uint48(block.timestamp + 3600), 0
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId,
+            fractionToUnwind,
+            priceLimit,
+            FIXED_NONCE,
+            uint48(block.timestamp + 3600),
+            0,
+            type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -398,9 +430,14 @@ contract ShivaKeeperTest is ShivaTestBase {
         vm.deal(charlie, 1 ether);
 
         vm.startPrank(charlie);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, 0, posId, fractionToUnwind, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId,
+            fractionToUnwind,
+            priceLimit,
+            uint48(block.timestamp + 3600),
+            signature,
+            alice,
+            type(uint256).max
         );
         vm.stopPrank();
 
@@ -422,8 +459,15 @@ contract ShivaKeeperTest is ShivaTestBase {
         uint256 leverage = 2e18;
 
         // Get digest and signature for build on behalf of
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            collateral, leverage, type(uint256).max, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            collateral,
+            leverage,
+            type(uint256).max,
+            FIXED_NONCE,
+            uint48(block.timestamp + 3600),
+            true,
+            0,
+            type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -433,9 +477,15 @@ contract ShivaKeeperTest is ShivaTestBase {
 
         vm.deal(automator, 1 ether);
         vm.prank(automator);
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            collateral,
+            leverage,
+            type(uint256).max,
+            uint48(block.timestamp + 3600),
+            true,
+            signature,
+            alice,
+            type(uint256).max
         );
 
         // Check that keeper received a fee (the base gas cost reimbursement)
@@ -475,22 +525,30 @@ contract ShivaKeeperTest is ShivaTestBase {
         vm.stopPrank();
 
         uint48 deadline = uint48(block.timestamp + 3600);
-        bytes32 digest = getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, 0, deadline, FIXED_NONCE, 0);
+        bytes32 digest = getStopLossOnBehalfOfDigest(
+            posId, ONE, triggerPrice, 0, deadline, FIXED_NONCE, 0, true, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
-        
+
         vm.deal(automator, 1 ether);
         vm.startPrank(automator);
 
         // Expect revert due to insufficient amount to pay the massive fee
-        try shiva.stopLoss(
-            ShivaStructs.StopLoss(ovlMarket, 0, posId, ONE, triggerPrice, 0),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            true
-        ) {
+        try
+            shiva.stopLoss(
+                ShivaStructs.StopLoss(ovlMarket, BROKER_ID, true, posId, ONE, triggerPrice, 0, type(uint256).max),
+                ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+            )
+        {
             // If the transaction does not revert, fail the test.
             fail();
-        } catch {
-            // An empty catch block signifies that we expect any revert, which is sufficient here.
+        } catch (bytes memory reason) {
+            assertEq(
+                reason,
+                abi.encodeWithSelector(
+                    IShiva.InsufficientUnwindAmountForFee.selector, 9942478705580122309, 131030620560000000000
+                )
+            );
         }
         vm.stopPrank();
     }
@@ -523,7 +581,7 @@ contract ShivaKeeperTest is ShivaTestBase {
         uint256 priceLimit = 0;
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, 0);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, 0, type(uint256).max);
         bytes memory signature = getSignature(digest, alicePk);
 
         uint256 keeperBalanceBefore = ovlToken.balanceOf(charlie);
@@ -531,9 +589,8 @@ contract ShivaKeeperTest is ShivaTestBase {
         vm.deal(charlie, 1 ether);
 
         vm.startPrank(charlie);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, 0, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -559,23 +616,36 @@ contract ShivaKeeperTest is ShivaTestBase {
         vm.startPrank(deployer);
         shiva.setNativeOvlFeed(badFeed);
         vm.stopPrank();
-        
+
         // Prepare a standard limitOrderBuild call
         uint256 collateral = 100e18;
         uint256 leverage = 2e18;
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            collateral, leverage, type(uint256).max, FIXED_NONCE, uint48(block.timestamp + 3600), true, 0
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            collateral,
+            leverage,
+            type(uint256).max,
+            FIXED_NONCE,
+            uint48(block.timestamp + 3600),
+            true,
+            0,
+            type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
         vm.deal(automator, 1 ether);
         vm.prank(automator);
-        
+
         // The call should revert because nativeOvlFeed.latest() will fail internally
         vm.expectRevert("No data present");
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, 0, true, collateral, leverage, type(uint256).max),
-            ShivaStructs.OnBehalfOf(alice, uint48(block.timestamp + 3600), FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            collateral,
+            leverage,
+            type(uint256).max,
+            uint48(block.timestamp + 3600),
+            true,
+            signature,
+            alice,
+            type(uint256).max
         );
     }
 } 

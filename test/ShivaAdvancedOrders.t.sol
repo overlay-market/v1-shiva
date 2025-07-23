@@ -68,7 +68,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
             priceLimit,
             deadline,
             FIXED_NONCE,
-            BROKER_ID
+            BROKER_ID,
+            false,
+            0
         );
 
         bytes memory signature = getSignature(digest, alicePk);
@@ -83,7 +85,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
             deadline,
             signature,
             alice,
-            false // payRelayerFee
+            false, // payRelayerFee
+            0
         );
     }
 
@@ -108,14 +111,16 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600); // 1 hour deadline
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, true, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Automator tries to execute before trigger, should fail
         vm.startPrank(automator);
         vm.expectRevert(IShiva.TriggerNotMet.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true);
+        stopLossOnBehalfOf(
+            posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true, type(uint256).max
+        );
         vm.stopPrank();
 
         // 4. Price drops, making the stop-loss executable
@@ -126,7 +131,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 5. Automator executes the stop-loss order successfully and gets paid
         vm.startPrank(automator);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true);
+        stopLossOnBehalfOf(
+            posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, true, type(uint256).max
+        );
         uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
         vm.stopPrank();
 
@@ -157,14 +164,14 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Automator tries to execute before trigger, should fail
         vm.startPrank(automator);
         vm.expectRevert(IShiva.TriggerNotMet.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
         // 4. Price rises, making the stop-loss executable
@@ -176,7 +183,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         vm.startPrank(automator);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
         vm.stopPrank();
@@ -207,41 +214,51 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = 99e18;
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         vm.startPrank(automator);
 
         // 3. Try to execute with different parameters, all should revert with InvalidSignature
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(otherPosId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(
+            otherPosId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0
+        );
 
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(posId, ONE / 2, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(
+            posId, ONE / 2, triggerPrice, priceLimit, deadline, signature, alice, false, 0
+        );
 
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice + 1, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(
+            posId, ONE, triggerPrice + 1, priceLimit, deadline, signature, alice, false, 0
+        );
 
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit + 1, deadline, signature, alice, false);
+        stopLossOnBehalfOf(
+            posId, ONE, triggerPrice, priceLimit + 1, deadline, signature, alice, false, 0
+        );
 
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline + 1, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline + 1, signature, alice, false, 0);
 
         // Different brokerId
         vm.expectRevert(IShiva.InvalidSignature.selector);
         shiva.stopLoss(
-            ShivaStructs.StopLoss(ovlMarket, BROKER_ID + 1, posId, ONE, triggerPrice, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.StopLoss(
+                ovlMarket, BROKER_ID + 1, false, posId, ONE, priceLimit, triggerPrice, 0
+            ),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
 
         // Different market - this reverts with NotPositionOwner because the check happens before the signature validation
         vm.expectRevert(IShiva.NotPositionOwner.selector);
         shiva.stopLoss(
-            ShivaStructs.StopLoss(otherOvlMarket, BROKER_ID, posId, ONE, triggerPrice, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            false
+            ShivaStructs.StopLoss(
+                otherOvlMarket, BROKER_ID, false, posId, ONE, priceLimit, triggerPrice, 0
+            ),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
 
         vm.stopPrank();
@@ -262,7 +279,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = 99e18;
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
 
         // 3. Bob signs the digest instead of Alice
         bytes memory signature = getSignature(digest, bobPk);
@@ -270,7 +287,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Automator tries to execute on behalf of Alice with Bob's signature, which should fail
         vm.startPrank(automator);
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -290,7 +307,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // Note the different nonce used for the digest
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE + 1, BROKER_ID
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE + 1, BROKER_ID, false, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -298,7 +315,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // so the signature won't match.
         vm.startPrank(automator);
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -320,7 +337,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Price drops, making the stop-loss executable
@@ -330,11 +347,11 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the stop-loss order successfully
         vm.startPrank(automator);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
 
         // 5. Automator tries to execute the same order again, should fail due to used nonce
         vm.expectRevert(IShiva.InvalidNonce.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -352,7 +369,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 triggerPrice = 100e18;
         uint256 priceLimit = 99e18;
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Alice cancels the nonce used in the signature
@@ -362,7 +379,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Automator tries to execute, it should fail
         vm.startPrank(automator);
         vm.expectRevert(IShiva.InvalidNonce.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -380,7 +397,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 triggerPrice = 100e18;
         uint256 priceLimit = 99e18;
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. The contract is paused
@@ -389,7 +406,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Automator tries to execute, it should fail
         vm.startPrank(automator);
         vm.expectRevert("Pausable: paused");
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -407,13 +424,13 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 triggerPrice = 100e18;
         uint256 priceLimit = 99e18;
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, bobPk);
 
         // 3. Automator tries to execute on behalf of Bob for Alice's position, should fail ownership check
         vm.startPrank(automator);
         vm.expectRevert(IShiva.NotPositionOwner.selector);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, bob, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, bob, false, 0);
         vm.stopPrank();
     }
 
@@ -436,7 +453,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, fractionToUnwind, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            posId, fractionToUnwind, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -447,7 +464,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the partial stop-loss
         vm.startPrank(automator);
-        stopLossOnBehalfOf(posId, fractionToUnwind, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(
+            posId, fractionToUnwind, triggerPrice, priceLimit, deadline, signature, alice, false, 0
+        );
         vm.stopPrank();
 
         // 5. Verify position is partially closed (approximately 50% remaining)
@@ -474,7 +493,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600); // 1 hour deadline
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -488,7 +507,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // The exact revert message comes from the OverlayV1Market contract.
         vm.startPrank(automator);
         vm.expectRevert();
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
         // 5. Verify position is NOT closed
@@ -520,7 +539,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 4 hours);
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, true, type(uint256).max);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 4. Price drops significantly, causing a large loss and triggering the stop loss
@@ -538,9 +557,10 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
             abi.encodeWithSelector(IShiva.InsufficientUnwindAmountForFee.selector, 3839819857403767165, 155216104260000000000)
         );
         shiva.stopLoss(
-            ShivaStructs.StopLoss(ovlMarket, BROKER_ID, posId, ONE, triggerPrice, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature),
-            true // payRelayerFee
+            ShivaStructs.StopLoss(
+                ovlMarket, BROKER_ID, true, posId, ONE, priceLimit, triggerPrice, type(uint256).max
+            ),
+            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
         );
         vm.stopPrank();
     }
@@ -561,7 +581,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 triggerPrice = currentPrice * 95 / 100; // 5% drop
         uint48 deadline = uint48(block.timestamp + 3600);
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId1, ONE, triggerPrice, 0, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId1, ONE, triggerPrice, 0, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Alice uses buildSingle to close posId1 and open posId2
@@ -586,7 +606,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // This must fail because the position has already been closed.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:!pos" because fractionRemaining is 0
-        stopLossOnBehalfOf(posId1, ONE, triggerPrice, 0, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId1, ONE, triggerPrice, 0, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -609,7 +629,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Alice manually closes her position before the stop loss triggers
@@ -629,7 +649,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // because the underlying market position no longer exists.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -652,7 +672,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. The market is shut down
@@ -666,7 +686,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // because the market is shut down.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:shutdown"
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
 
@@ -689,7 +709,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -699,7 +719,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the stop-loss order successfully
         vm.startPrank(automator);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
         // 5. Verify position is closed
@@ -725,7 +745,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest =
-            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID);
+            getStopLossOnBehalfOfDigest(posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Price gaps down to a level between the trigger and the limit
@@ -736,7 +756,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Automator executes the stop-loss order
         vm.startPrank(automator);
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
         vm.stopPrank();
 
@@ -769,7 +789,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 3600);
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
-            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID
+            posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -782,7 +802,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should fail because the current price is worse (higher) than the user's priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
-        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false);
+        stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
         // 5. Verify position is NOT closed
@@ -815,16 +835,17 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = currentPrice * 105 / 100;
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Automator tries to execute before price target is met. Should fail.
         // The market will revert because the current execution price is less than the priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // OVLV1:price<limit
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -838,9 +859,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
 
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
 
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
@@ -873,7 +893,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = 0; // Accept any price to ensure the order can be executed
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max);
         bytes memory signature = getSignature(digest, alicePk);
 
         // 5. Automator executes the take-profit order.
@@ -883,9 +903,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(IShiva.InsufficientUnwindAmountForFee.selector, 9416028083704622524, 147083441610000000000)
         );
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, 0
         );
         vm.stopPrank();
     }
@@ -908,16 +927,17 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = currentPrice * 95 / 100;
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Automator tries to execute before price target is met. Should fail.
         // The market will revert because the current execution price is greater than the priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // OVLV1:price>limit
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -931,9 +951,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 aliceBalanceBefore = ovlToken.balanceOf(alice);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
 
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
 
         uint256 aliceBalanceAfter = ovlToken.balanceOf(alice);
@@ -963,7 +982,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = currentPrice * 105 / 100; // 5% profit target
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, fractionToUnwind, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, fractionToUnwind, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Price rises, making the take-profit executable
@@ -973,9 +994,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the partial take-profit
         vm.startPrank(automator);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, fractionToUnwind, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, fractionToUnwind, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -1000,7 +1020,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = currentPrice * 105 / 100;
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Alice manually closes her position before the take profit triggers
@@ -1020,9 +1042,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // because the underlying market position no longer exists.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1043,7 +1064,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = currentPrice * 105 / 100;
         uint48 deadline = uint48(block.timestamp + 3600);
 
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Price rises, making the take-profit executable
@@ -1053,16 +1076,14 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 4. Automator executes the order successfully
         vm.startPrank(automator);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
 
         // 5. Automator tries to execute the same order again, should fail due to used nonce
         vm.expectRevert(IShiva.InvalidNonce.selector);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1079,15 +1100,16 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 2. An invalid signature is created (e.g., signed by Bob)
         uint256 priceLimit = 0; // Accept any price
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, bobPk); // Signed by Bob
 
         // 3. Automator attempts to execute the take-profit with the invalid signature
         vm.startPrank(automator);
         vm.expectRevert(IShiva.InvalidSignature.selector);
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1104,7 +1126,9 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 2. Alice signs a valid take-profit order
         uint256 priceLimit = 0; // Accept any price
         uint48 deadline = uint48(block.timestamp + 1 hours);
-        bytes32 digest = getUnwindOnBehalfOfDigest(posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID);
+        bytes32 digest = getTakeProfitOnBehalfOfDigest(
+            posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
+        );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. The market is shut down
@@ -1114,9 +1138,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should fail because the market is shut down.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:shutdown"
-        shiva.takeProfit(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, posId, ONE, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        takeProfitOnBehalfOf(
+            posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1163,8 +1186,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
         // 2. Alice signs the `build` message.
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -1172,9 +1195,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should fail inside the market because the current execution price is > priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -1186,9 +1208,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 5. Keeper executes the order successfully.
         vm.startPrank(automator);
-        uint256 posId = shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        uint256 posId = limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -1211,8 +1232,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
         // 2. Alice signs the `build` message.
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, false, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, false, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -1220,9 +1241,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should fail inside the market because the current execution price is < priceLimit.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price<limit"
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, false, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, false, signature, alice, type(uint256).max
         );
         vm.stopPrank();
 
@@ -1235,9 +1255,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 5. Keeper executes the order successfully and gets paid.
         vm.startPrank(automator);
         uint256 automatorBalanceBefore = ovlToken.balanceOf(automator);
-        uint256 posId = shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, false, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        uint256 posId = limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, false, signature, alice, type(uint256).max
         );
         uint256 automatorBalanceAfter = ovlToken.balanceOf(automator);
         vm.stopPrank();
@@ -1263,8 +1282,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = desiredPrice;
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -1279,9 +1298,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // the `build` call should revert with `price > limit`.
         vm.startPrank(automator);
         vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1308,8 +1326,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint256 priceLimit = currentPrice * 95 / 100;
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -1322,9 +1340,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // The revert comes from the OVL token contract's `transferFrom` function.
         vm.startPrank(automator);
         vm.expectRevert();
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1345,23 +1362,21 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         vm.warp(block.timestamp + 1 hours);
 
         // 2. Alice signs the `build` message.
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Keeper executes the order successfully the first time.
         vm.startPrank(automator);
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
 
         // 4. Keeper attempts to execute the same order again. It must fail.
         vm.expectRevert(IShiva.InvalidNonce.selector);
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1378,8 +1393,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
         // 2. Alice signs the `build` message.
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -1395,9 +1410,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 5. Keeper attempts to execute the order. It must fail.
         vm.startPrank(automator);
         vm.expectRevert(IShiva.InvalidNonce.selector);
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }
@@ -1411,8 +1425,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         uint48 deadline = uint48(block.timestamp + 1 hours);
 
         // 2. Alice signs the `build` message.
-        bytes32 digest = getBuildOnBehalfOfDigest(
-            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID
+        bytes32 digest = getLimitOrderOnBehalfOfDigest(
+            ONE, 5e18, priceLimit, FIXED_NONCE, deadline, true, BROKER_ID, type(uint256).max
         );
         bytes memory signature = getSignature(digest, alicePk);
 
@@ -1422,9 +1436,8 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Keeper attempts to execute the order. It must fail.
         vm.startPrank(automator);
         vm.expectRevert("Pausable: paused");
-        shiva.limitOrderBuild(
-            ShivaStructs.Build(ovlMarket, BROKER_ID, true, ONE, 5e18, priceLimit),
-            ShivaStructs.OnBehalfOf(alice, deadline, FIXED_NONCE, signature)
+        limitOrderBuildOnBehalfOf(
+            ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
         vm.stopPrank();
     }

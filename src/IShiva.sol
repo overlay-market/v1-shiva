@@ -203,6 +203,13 @@ interface IShiva {
     error InsufficientUnwindAmountForFee(uint256 unwindAmount, uint256 relayerFee);
 
     /**
+     * @notice Thrown when the calculated keeper fee exceeds the maximum specified amount.
+     * @param calculatedFee The fee calculated based on gas usage and other factors.
+     * @param maxFee The maximum fee allowed by the user.
+     */
+    error KeeperFeeExceedsMax(uint256 calculatedFee, uint256 maxFee);
+
+    /**
      * @dev Functions that Shiva should implement.
      */
 
@@ -231,7 +238,7 @@ interface IShiva {
      * @return positionId Unique ID of the built position.
      */
     function limitOrderBuild(
-        ShivaStructs.Build calldata params,
+        ShivaStructs.LimitOrder calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external returns (uint256 positionId);
 
@@ -277,7 +284,7 @@ interface IShiva {
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
      */
     function takeProfit(
-        ShivaStructs.Unwind calldata params,
+        ShivaStructs.TakeProfit calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external;
 
@@ -286,12 +293,10 @@ interface IShiva {
      * @param params The parameters for the stop loss order based on the
      * ShivaStructs.StopLoss struct.
      * @param onBehalfOf The parameters for acting on behalf of a user.
-     * @param payRelayerFee Whether to pay a fee to the relayer executing the transaction.
      */
     function stopLoss(
         ShivaStructs.StopLoss calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf,
-        bool payRelayerFee
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external;
 
     /**
