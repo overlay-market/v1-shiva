@@ -481,7 +481,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
     function testStopLossRevertsIfPriceLimitBreached() public {
         // 1. Alice builds a long position
         vm.startPrank(alice);
-        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, true); // 1 OVL collateral, 5x leverage
+        uint256 posId = buildPosition(100e18, 2e18, BASIC_SLIPPAGE, true); // 100 OVL collateral, 2x leverage
         vm.stopPrank();
 
         // 2. Alice signs a stop-loss order with a trigger and a price limit
@@ -491,7 +491,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         uint256 triggerPrice = currentPrice * 95 / 100; // 5% price drop
         uint256 priceLimit = triggerPrice * 99 / 100; // 1% slippage tolerance for the unwind
-        uint48 deadline = uint48(block.timestamp + 3600); // 1 hour deadline
+        uint48 deadline = uint48(block.timestamp + 4 hours); // 4 hour deadline to account for time warps
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
             posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
@@ -499,15 +499,20 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         bytes memory signature = getSignature(digest, alicePk);
 
         // 3. Price drops significantly, below both the trigger price and the price limit
-        uint256 executionPrice = priceLimit * 95 / 100; // Price drops 5% below the user's limit
+        uint256 executionPrice = priceLimit * 98 / 100; // Price drops 2% below the user's limit (less aggressive)
+        // Submit multiple price updates to ensure oracle has sufficient data
         aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
-        vm.warp(block.timestamp + 60 * 60); // Advance time to ensure oracle update
+        vm.warp(block.timestamp + 60 * 60);
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
 
         // 4. Automator attempts to execute the stop-loss order
         // It should fail because the current price is worse than the user's priceLimit.
         // The exact revert message comes from the OverlayV1Market contract.
         vm.startPrank(automator);
-        vm.expectRevert();
+        vm.expectRevert("OVLV1:slippage>max");
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
@@ -606,7 +611,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 6. Automator attempts to execute the original stop loss for posId1.
         // This must fail because the position has already been closed.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:!pos" because fractionRemaining is 0
+        vm.expectRevert("OVLV1:!position"); // Reverts from market because position no longer exists
         stopLossOnBehalfOf(posId1, ONE, triggerPrice, 0, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
@@ -732,7 +737,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 6. Automator attempts to execute the stop-loss, which should fail
         // because the underlying market position no longer exists.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
+        vm.expectRevert("OVLV1:!position"); // Reverts from market because position no longer exists
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
@@ -769,7 +774,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 5. Automator attempts to execute the stop-loss, which should fail
         // because the market is shut down.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:shutdown"
+        vm.expectRevert("OVLV1: shutdown"); // Reverts from market because market is shut down
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
     }
@@ -947,7 +952,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
     function testStopLossRevertsIfPriceLimitBreachedShort() public {
         // 1. Alice builds a short position
         vm.startPrank(alice);
-        uint256 posId = buildPosition(ONE, 5e18, BASIC_SLIPPAGE, false); // 1 OVL collateral, 5x leverage, short
+        uint256 posId = buildPosition(100e18, 2e18, BASIC_SLIPPAGE, false); // 100 OVL collateral, 2x leverage, short
         vm.stopPrank();
 
         // 2. Alice signs a stop-loss order with a trigger and a price limit
@@ -957,7 +962,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         uint256 triggerPrice = currentPrice * 105 / 100; // 5% price rise
         uint256 priceLimit = triggerPrice * 101 / 100; // 1% slippage tolerance (higher is worse for shorts)
-        uint48 deadline = uint48(block.timestamp + 3600);
+        uint48 deadline = uint48(block.timestamp + 4 hours); // 4 hour deadline to account for time warps
 
         bytes32 digest = getStopLossOnBehalfOfDigest(
             posId, ONE, triggerPrice, priceLimit, deadline, FIXED_NONCE, BROKER_ID, false, 0
@@ -966,13 +971,18 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
 
         // 3. Price rises significantly, above both the trigger price and the price limit
         uint256 executionPrice = priceLimit * 105 / 100; // Price jumps 5% beyond the user's limit
+        // Submit multiple price updates to ensure oracle has sufficient data
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
+        aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
+        vm.warp(block.timestamp + 60 * 60);
         aggregator.submit(aggregator.latestRound() + 1, int256(executionPrice / 1e10));
         vm.warp(block.timestamp + 60 * 60);
 
         // 4. Automator attempts to execute the stop-loss order
         // It should fail because the current price is worse (higher) than the user's priceLimit.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because price exceeds slippage limit
         stopLossOnBehalfOf(posId, ONE, triggerPrice, priceLimit, deadline, signature, alice, false, 0);
         vm.stopPrank();
 
@@ -1014,7 +1024,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 3. Automator tries to execute before price target is met. Should fail.
         // The market will revert because the current execution price is less than the priceLimit.
         vm.startPrank(automator);
-        vm.expectRevert(); // OVLV1:price<limit
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because price is below slippage limit
         takeProfitOnBehalfOf(
             posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
@@ -1106,7 +1116,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 3. Automator tries to execute before price target is met. Should fail.
         // The market will revert because the current execution price is greater than the priceLimit.
         vm.startPrank(automator);
-        vm.expectRevert(); // OVLV1:price>limit
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because execution price > priceLimit for short
         takeProfitOnBehalfOf(
             posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
@@ -1189,7 +1199,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         Oracle.Data memory data = feed.latest();
         uint256 currentPrice = ovlMarket.bid(data, 0);
         uint256 priceLimit = currentPrice * 105 / 100;
-        uint48 deadline = uint48(block.timestamp + 3600);
+        uint48 deadline = uint48(block.timestamp + 4 hours); // 4 hour deadline to account for time warps
 
         bytes32 digest = getTakeProfitOnBehalfOfDigest(
             posId, ONE, priceLimit, FIXED_NONCE, deadline, BROKER_ID, type(uint256).max
@@ -1211,7 +1221,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 5. Automator attempts to execute the order. It should now fail because the
         // execution price is less than the required priceLimit.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:price<limit"
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because price is below slippage limit
         takeProfitOnBehalfOf(
             posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
@@ -1259,7 +1269,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 6. Automator attempts to execute the take-profit, which should fail
         // because the underlying market position no longer exists.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:!pos"
+        vm.expectRevert("OVLV1:!position"); // Reverts from market because position no longer exists
         takeProfitOnBehalfOf(
             posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
@@ -1355,7 +1365,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Automator attempts to execute the take-profit order
         // It should fail because the market is shut down.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:shutdown"
+        vm.expectRevert("OVLV1: shutdown"); // Reverts from market because market is shut down
         takeProfitOnBehalfOf(
             posId, ONE, priceLimit, deadline, signature, alice, type(uint256).max
         );
@@ -1412,7 +1422,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 3. Keeper attempts to execute before price condition is met.
         // It should fail inside the market because the current execution price is > priceLimit.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because slippage exceeds maximum
         limitOrderBuildOnBehalfOf(
             ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
@@ -1458,7 +1468,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 3. Keeper attempts to execute before price condition is met.
         // It should fail inside the market because the current execution price is < priceLimit.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:price<limit"
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because execution price < priceLimit for short
         limitOrderBuildOnBehalfOf(
             ONE, 5e18, priceLimit, deadline, false, signature, alice, type(uint256).max
         );
@@ -1515,7 +1525,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // higher than `desiredPrice`. Since `priceLimit` is exactly `desiredPrice`,
         // the `build` call should revert with `price > limit`.
         vm.startPrank(automator);
-        vm.expectRevert(); // Reverts from market with "OVLV1:price>limit"
+        vm.expectRevert("OVLV1:slippage>max"); // Reverts from market because execution price > priceLimit
         limitOrderBuildOnBehalfOf(
             ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
@@ -1557,7 +1567,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // 4. Keeper attempts to execute, which should fail due to insufficient funds.
         // The revert comes from the OVL token contract's `transferFrom` function.
         vm.startPrank(automator);
-        vm.expectRevert();
+        vm.expectRevert("ERC20: transfer amount exceeds balance");
         limitOrderBuildOnBehalfOf(
             ONE, 5e18, priceLimit, deadline, true, signature, alice, type(uint256).max
         );
@@ -1737,7 +1747,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should revert. The revert will likely come from the underlying OverlayV1Market
         // contract, which should not allow building a position with no collateral.
         vm.startPrank(automator);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(0x5ce91fd0)); // StakeAmountIsZero error from RewardVault
         limitOrderBuildOnBehalfOf(
             zeroCollateral,
             leverage,
@@ -1788,7 +1798,7 @@ contract ShivaAdvancedOrdersTest is Test, ShivaTestBase {
         // It should revert. The revert will likely come from the underlying OverlayV1Market
         // contract's unwind function, which should not allow unwinding zero fraction.
         vm.startPrank(automator);
-        vm.expectRevert();
+        vm.expectRevert("OVLV1:fraction<min");
         stopLossOnBehalfOf(
             posId,
             zeroFraction,
