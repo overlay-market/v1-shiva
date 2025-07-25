@@ -544,8 +544,8 @@ contract RewardVaultTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Tests that delegateWithdraw is still blocked when paused, but regular withdraw/exit work.
-    function test_delegate_withdraw_still_blocked_when_paused() public {
+    /// @notice Tests that delegateWithdraw works when paused, along with regular withdraw/exit.
+    function test_delegate_withdraw_works_when_paused() public {
         // Bob stakes for Alice
         vm.prank(bob);
         rewardVault.delegateStake(alice, 100 * ONE);
@@ -570,10 +570,11 @@ contract RewardVaultTest is Test {
         assertEq(stakingToken.balanceOf(alice), balanceBefore + 25 * ONE, "Alice should be able to exit when paused");
         vm.stopPrank();
 
-        // Bob should NOT be able to delegateWithdraw when paused
+        // Bob should be able to delegateWithdraw when paused (emergency exit functionality)
         vm.startPrank(bob);
-        vm.expectRevert("Pausable: paused");
+        uint256 bobBalanceBefore = stakingToken.balanceOf(bob);
         rewardVault.delegateWithdraw(alice, 50 * ONE);
+        assertEq(stakingToken.balanceOf(bob), bobBalanceBefore + 50 * ONE, "Bob should be able to delegateWithdraw when paused");
         vm.stopPrank();
     }
 
