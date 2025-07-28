@@ -5,10 +5,10 @@ import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {RewardVault} from "src/rewardVault/RewardVault.sol";
 import {RewardVaultFactory} from "src/rewardVault/RewardVaultFactory.sol";
-import {IStakingRewardsErrors} from "src/rewardVault/berachain/IStakingRewardsErrors.sol";
-import {IPOLErrors} from "src/rewardVault/berachain/IPOLErrors.sol";
+import {IStakingRewardsErrors} from "src/rewardVault/core/IStakingRewardsErrors.sol";
+import {IPOLErrors} from "src/rewardVault/core/IPOLErrors.sol";
 import {IRewardVault} from "src/rewardVault/IRewardVault.sol";
-import {IRewardVaultFactory} from "src/rewardVault/berachain/IRewardVaultFactory.sol";
+import {IRewardVaultFactory} from "src/rewardVault/core/IRewardVaultFactory.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 
 contract RewardVaultTest is Test {
