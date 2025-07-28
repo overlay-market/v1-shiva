@@ -7,14 +7,14 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/securit
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
-import { Utils } from "./berachain/Utils.sol";
+import { Utils } from "./core/Utils.sol";
 import { IRewardVault } from "./IRewardVault.sol";
-import { FactoryOwnable } from "./berachain/FactoryOwnable.sol";
-import { StakingRewards } from "./berachain/StakingRewards.sol";
+import { FactoryOwnable } from "./core/FactoryOwnable.sol";
+import { StakingRewards } from "./core/StakingRewards.sol";
 
 /// @title Rewards Vault
-/// @author Berachain Team
-/// @notice This contract is the vault for the Berachain rewards, it handles the staking and rewards accounting of BGT.
+/// @author Overlay Team
+/// @notice This contract is the vault for the Overlay rewards, it handles the staking and rewards accounting of BGT.
 /// @dev This contract is taken from the stable and tested:
 /// https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol
 /// We are using this model instead of 4626 because we want to incentivize staying in the vault for x period of time to

@@ -10,7 +10,7 @@ import { Utils } from "./Utils.sol";
 import { IStakingRewards } from "./IStakingRewards.sol";
 
 /// @title StakingRewards
-/// @author Berachain Team
+/// @author Overlay Team
 /// @notice This is a minimal implementation of staking rewards logic to be inherited.
 /// @dev This contract is modified and abstracted from the stable and tested:
 /// https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol

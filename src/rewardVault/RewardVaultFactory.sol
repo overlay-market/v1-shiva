@@ -5,12 +5,12 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { LibClone } from "solady/src/utils/LibClone.sol";
 import { UpgradeableBeacon } from "solady/src/utils/UpgradeableBeacon.sol";
-import { Utils } from "./berachain/Utils.sol";
-import { IRewardVaultFactory } from "./berachain/IRewardVaultFactory.sol";
+import { Utils } from "./core/Utils.sol";
+import { IRewardVaultFactory } from "./core/IRewardVaultFactory.sol";
 import { RewardVault } from "./RewardVault.sol";
 
 /// @title RewardVaultFactory
-/// @author Berachain Team
+/// @author Overlay Team
 /// @notice Factory contract for creating RewardVaults and keeping track of them.
 contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UUPSUpgradeable {
     using Utils for bytes4;

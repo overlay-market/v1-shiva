@@ -8,7 +8,7 @@ import { IRewardVaultFactory } from "./IRewardVaultFactory.sol";
 import { Utils } from "./Utils.sol";
 
 /// @title FactoryOwnable
-/// @author Berachain Team
+/// @author Overlay Team
 /// @notice Contract module which provides a modifier for restricting access to the factory owner.
 abstract contract FactoryOwnable is Initializable {
     using Utils for bytes4;
@@ -17,12 +17,12 @@ abstract contract FactoryOwnable is Initializable {
     /// @param account The address of the sender.
     error OwnableUnauthorizedAccount(address account);
 
-    /// @custom:storage-location erc7201:berachain.storage.factoryOwnable
+    /// @custom:storage-location erc7201:core.storage.factoryOwnable
     struct FactoryOwnableStorage {
         address _factory;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("berachain.storage.factoryOwnable")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("core.storage.factoryOwnable")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant FactoryOwnableStorageLocation =
         0x4e32a932fdd4658a66f9586d8955a0d0a795a01bd8251335b4fae29d972acc00;
 
