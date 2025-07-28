@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity <=0.8.25;
+pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IRewardVaultFactory} from "./core/IRewardVaultFactory.sol";
-import {IPOLErrors} from "./core/IPOLErrors.sol";
-import {IRewardVault} from "./core/IRewardVault.sol";
+import {RewardVaultFactory} from "src/rewardVault/RewardVaultFactory.sol";
+import {IPOLErrors} from "berachain/src/pol/interfaces/IPOLErrors.sol";
+import {RewardVault} from "src/rewardVault/RewardVault.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract RewardVaultFactoryTest is Test {
     // Contracts
-    IRewardVaultFactory factory;
+    RewardVaultFactory factory;
     address rewardVaultImplementation;
     MockERC20 bgt;
     MockERC20 stakingToken;
@@ -42,7 +42,7 @@ contract RewardVaultFactoryTest is Test {
             address(rewardVaultImplementation)
         );
 
-        factory = IRewardVaultFactory(address(new ERC1967Proxy(address(factoryImplementation), factoryData)));
+        factory = RewardVaultFactory(address(new ERC1967Proxy(address(factoryImplementation), factoryData)));
         vm.stopPrank();
     }
 
@@ -61,7 +61,7 @@ contract RewardVaultFactoryTest is Test {
         assertEq(factory.allVaults(0), vaultAddress, "Vault address mismatch in array");
 
         // Check if vault is initialized correctly
-        IRewardVault vault = IRewardVault(vaultAddress);
+        RewardVault vault = RewardVault(vaultAddress);
         assertEq(address(vault.stakeToken()), address(stakingToken));
         assertEq(address(vault.rewardToken()), address(bgt));
         assertEq(vault.factory(), address(factory));

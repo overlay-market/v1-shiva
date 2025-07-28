@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity <=0.8.25;
+pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IStakingRewardsErrors} from "./core/IStakingRewardsErrors.sol";
-import {IPOLErrors} from "./core/IPOLErrors.sol";
-import {IRewardVaultFactory} from "./core/IRewardVaultFactory.sol";
-import {IRewardVault} from "./core/IRewardVault.sol";
+import {IStakingRewardsErrors} from "berachain/src/base/IStakingRewardsErrors.sol";
+import {IPOLErrors} from "berachain/src/pol/interfaces/IPOLErrors.sol";
+import {IRewardVaultFactory} from "berachain/src/pol/interfaces/IRewardVaultFactory.sol";
+import {IRewardVault} from "src/rewardVault/IRewardVault.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
-import {FactoryOwnable} from "./core/FactoryOwnable.sol";
+import {FactoryOwnable} from "berachain/src/base/FactoryOwnable.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 contract RewardVaultTest is Test {
     // Tokens
@@ -65,8 +67,8 @@ contract RewardVaultTest is Test {
 
         // Grant pauser/manager roles to deployer for testing
         // Manager role must be granted first as it's the admin for the pauser role.
-        factory.grantRole(factory.VAULT_MANAGER_ROLE(), deployer);
-        factory.grantRole(factory.VAULT_PAUSER_ROLE(), deployer);
+        IAccessControl(address(factory)).grantRole(factory.VAULT_MANAGER_ROLE(), deployer);
+        IAccessControl(address(factory)).grantRole(factory.VAULT_PAUSER_ROLE(), deployer);
 
         // Create a vault
         address vaultAddress = factory.createRewardVault(address(stakingToken));
@@ -1330,7 +1332,7 @@ contract RewardVaultTest is Test {
         // 1. Pause the contract
         vm.startPrank(deployer);
         rewardVault.pause();
-        assertTrue(rewardVault.paused(), "Contract should be paused");
+        assertTrue(PausableUpgradeable(address(rewardVault)).paused(), "Contract should be paused");
         vm.stopPrank();
 
         // 2. Check that entry functions fail but exit functions work
@@ -1352,7 +1354,7 @@ contract RewardVaultTest is Test {
         // 3. Unpause the contract
         vm.startPrank(deployer);
         rewardVault.unpause();
-        assertFalse(rewardVault.paused(), "Contract should be unpaused");
+        assertFalse(PausableUpgradeable(address(rewardVault)).paused(), "Contract should be unpaused");
         vm.stopPrank();
 
         // 4. Check that all functionality is restored
