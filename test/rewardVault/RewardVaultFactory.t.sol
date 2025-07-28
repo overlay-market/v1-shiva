@@ -3,18 +3,17 @@ pragma solidity <=0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {RewardVault} from "src/rewardVault/RewardVault.sol";
-import {RewardVaultFactory} from "src/rewardVault/RewardVaultFactory.sol";
-import {IRewardVaultFactory} from "src/rewardVault/berachain/IRewardVaultFactory.sol";
-import {IPOLErrors} from "src/rewardVault/berachain/IPOLErrors.sol";
+import {IRewardVaultFactory} from "./core/IRewardVaultFactory.sol";
+import {IPOLErrors} from "./core/IPOLErrors.sol";
+import {IRewardVault} from "./core/IRewardVault.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract RewardVaultFactoryTest is Test {
     // Contracts
-    RewardVaultFactory factory;
-    RewardVault rewardVaultImplementation;
+    IRewardVaultFactory factory;
+    address rewardVaultImplementation;
     MockERC20 bgt;
     MockERC20 stakingToken;
 
@@ -32,9 +31,9 @@ contract RewardVaultFactoryTest is Test {
         
         bgt = new MockERC20("BGT", "BGT", 18);
         stakingToken = new MockERC20("Staking Token", "STK", 18);
-        rewardVaultImplementation = new RewardVault();
+        rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
         
-        RewardVaultFactory factoryImplementation = new RewardVaultFactory();
+        address factoryImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
         
         bytes memory factoryData = abi.encodeWithSignature(
             "initialize(address,address,address)",
@@ -43,7 +42,7 @@ contract RewardVaultFactoryTest is Test {
             address(rewardVaultImplementation)
         );
 
-        factory = RewardVaultFactory(address(new ERC1967Proxy(address(factoryImplementation), factoryData)));
+        factory = IRewardVaultFactory(address(new ERC1967Proxy(address(factoryImplementation), factoryData)));
         vm.stopPrank();
     }
 
@@ -62,7 +61,7 @@ contract RewardVaultFactoryTest is Test {
         assertEq(factory.allVaults(0), vaultAddress, "Vault address mismatch in array");
 
         // Check if vault is initialized correctly
-        RewardVault vault = RewardVault(vaultAddress);
+        IRewardVault vault = IRewardVault(vaultAddress);
         assertEq(address(vault.stakeToken()), address(stakingToken));
         assertEq(address(vault.rewardToken()), address(bgt));
         assertEq(vault.factory(), address(factory));
@@ -119,14 +118,14 @@ contract RewardVaultFactoryTest is Test {
     }
 
     function test_upgrade_implementation() public {
-        RewardVaultFactory newImplementation = new RewardVaultFactory();
+        address newImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
         
         vm.prank(admin);
         factory.upgradeTo(address(newImplementation));
     }
 
     function test_revert_upgrade_implementation_not_admin() public {
-        RewardVaultFactory newImplementation = new RewardVaultFactory();
+        address newImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
         
         vm.prank(alice);
         // Expect any revert since only admin can upgrade.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity 0.8.10;
+pragma solidity 0.8.26;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -7,10 +7,10 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/securit
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
-import { Utils } from "./berachain/Utils.sol";
+import { Utils } from "berachain/src/libraries/Utils.sol";
 import { IRewardVault } from "./IRewardVault.sol";
-import { FactoryOwnable } from "./berachain/FactoryOwnable.sol";
-import { StakingRewards } from "./berachain/StakingRewards.sol";
+import { FactoryOwnable } from "berachain/src/base/FactoryOwnable.sol";
+import { StakingRewards } from "berachain/src/base/StakingRewards.sol";
 
 /// @title Rewards Vault
 /// @author Berachain Team
@@ -39,17 +39,17 @@ contract RewardVault is
     /// @param stakedByDelegate The mapping of the amount staked by each delegate.
     struct DelegateStake {
         uint256 delegateTotalStaked;
-        mapping(address => uint256) stakedByDelegate;
+        mapping(address delegate => uint256 amount) stakedByDelegate;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          STORAGE                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    mapping(address => DelegateStake) internal _delegateStake;
+    mapping(address account => DelegateStake) internal _delegateStake;
 
     /// @notice The mapping of accounts to their operators.
-    mapping(address => address) internal _operators;
+    mapping(address account => address operator) internal _operators;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {

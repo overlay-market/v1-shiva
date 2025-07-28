@@ -3,12 +3,10 @@ pragma solidity <=0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {RewardVault} from "src/rewardVault/RewardVault.sol";
-import {RewardVaultFactory} from "src/rewardVault/RewardVaultFactory.sol";
-import {IStakingRewardsErrors} from "src/rewardVault/berachain/IStakingRewardsErrors.sol";
-import {IPOLErrors} from "src/rewardVault/berachain/IPOLErrors.sol";
-import {IRewardVault} from "src/rewardVault/IRewardVault.sol";
-import {IRewardVaultFactory} from "src/rewardVault/berachain/IRewardVaultFactory.sol";
+import {IStakingRewardsErrors} from "./core/IStakingRewardsErrors.sol";
+import {IPOLErrors} from "./core/IPOLErrors.sol";
+import {IRewardVaultFactory} from "./core/IRewardVaultFactory.sol";
+import {IRewardVault} from "./core/IRewardVault.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 
 contract RewardVaultTest is Test {
@@ -17,8 +15,8 @@ contract RewardVaultTest is Test {
     MockERC20 bgt;
 
     // Contracts
-    RewardVaultFactory factory;
-    RewardVault rewardVault;
+    IRewardVaultFactory factory;
+    IRewardVault rewardVault;
 
     // Users
     address deployer;
@@ -47,8 +45,8 @@ contract RewardVaultTest is Test {
         bgt = new MockERC20("Berachain Governance Token", "BGT", 18);
 
         // Deploy implementations
-        RewardVault rewardVaultImplementation = new RewardVault();
-        RewardVaultFactory rewardVaultFactoryImplementation = new RewardVaultFactory();
+        address rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
+        address rewardVaultFactoryImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
 
         // Deploy factory proxy
         bytes memory rewardVaultFactoryData = abi.encodeWithSignature(
@@ -57,7 +55,7 @@ contract RewardVaultTest is Test {
             deployer,
             address(rewardVaultImplementation)
         );
-        factory = RewardVaultFactory(
+        factory = IRewardVaultFactory(
             address(new ERC1967Proxy(address(rewardVaultFactoryImplementation), rewardVaultFactoryData))
         );
 
@@ -68,7 +66,7 @@ contract RewardVaultTest is Test {
 
         // Create a vault
         address vaultAddress = factory.createRewardVault(address(stakingToken));
-        rewardVault = RewardVault(vaultAddress);
+        rewardVault = IRewardVault(vaultAddress);
 
         vm.stopPrank();
 
@@ -268,8 +266,6 @@ contract RewardVaultTest is Test {
         uint256 bobEarned = rewardVault.earned(bob);
         uint256 totalEarned = aliceEarned + bobEarned;
 
-        uint256 totalRewardWithPrecision = rewardAmount * PRECISION;
-
         // Total earned should be approx the total reward
         assertApproxEqAbs(totalEarned, rewardAmount, 1e16, "Total earned should equal total reward");
         
@@ -406,7 +402,6 @@ contract RewardVaultTest is Test {
         vm.startPrank(alice);
         uint256 initialAliceStakingBalance = stakingToken.balanceOf(alice);
         uint256 initialAliceBgtBalance = bgt.balanceOf(alice);
-        uint256 totalAliceStakeBefore = rewardVault.balanceOf(alice);
 
         uint256 expectedRewards = rewardVault.earned(alice);
         

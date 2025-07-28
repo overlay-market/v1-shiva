@@ -2,14 +2,19 @@
 pragma solidity <=0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {RewardToken} from "src/rewardVault/RewardToken.sol";
-import {IRewardToken} from "src/rewardVault/IRewardToken.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+
+interface IRewardToken is IAccessControl, IERC20 {
+    function mint(address _recipient, uint256 _amount) external;
+    function burn(uint256 _amount) external;
+    function toggleLock() external;
+    function unlocked() external view returns (bool);
+}
 
 contract RewardTokenTest is Test {
-    RewardToken token;
+    IRewardToken token;
 
     address deployer;
     address minter;
@@ -37,7 +42,7 @@ contract RewardTokenTest is Test {
         bob = makeAddr("bob");
 
         vm.startPrank(deployer);
-        token = new RewardToken();
+        token = IRewardToken(deployCode("RewardToken.sol:RewardToken"));
 
         // Grant roles
         token.grantRole(MINTER_ROLE, minter);

@@ -15,9 +15,6 @@ import {ShivaStructs} from "src/ShivaStructs.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {IBerachainRewardsVaultFactory} from "src/interfaces/berachain/IRewardVaults.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
-import {RewardVault} from "src/rewardVault/RewardVault.sol";
-import {RewardVaultFactory} from "src/rewardVault/RewardVaultFactory.sol";
-import {IRewardVault} from "src/rewardVault/IRewardVault.sol";
 
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IOverlayV1ChainlinkFeed} from
@@ -82,8 +79,8 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
 
         // Set Vault Factory
         ovlTokenForBgt = deployToken();
-        RewardVault rewardVaultImplementation = new RewardVault();
-        RewardVaultFactory rewardVaultFactoryImplementation = new RewardVaultFactory();
+        address rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
+        address rewardVaultFactoryImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
         bytes memory rewardVaultFactoryData = abi.encodeWithSignature(
             "initialize(address,address,address)",
             address(ovlTokenForBgt),

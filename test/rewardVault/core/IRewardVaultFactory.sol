@@ -2,8 +2,9 @@
 pragma solidity ^0.8.10;
 
 import { IPOLErrors } from "./IPOLErrors.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-interface IRewardVaultFactory is IPOLErrors {
+interface IRewardVaultFactory is IPOLErrors, IAccessControl {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          EVENTS                             */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -88,4 +89,17 @@ interface IRewardVaultFactory is IPOLErrors {
      * @return The address of the reward vault.
      */
     function predictRewardVaultAddress(address stakingToken) external view returns (address);
+
+    /**
+     * @notice Gets the address of the vault at the given index.
+     * @param index The index of the vault.
+     * @return The address of the vault.
+     */
+    function allVaults(uint256 index) external view returns (address);
+
+    /**
+     * @notice Upgrades the implementation of the factory.
+     * @param newImplementation The address of the new implementation.
+     */
+    function upgradeTo(address newImplementation) external;
 }

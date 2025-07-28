@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.10;
 
-import { IPOLErrors } from "berachain/src/pol/interfaces/IPOLErrors.sol";
-import { IStakingRewards } from "berachain/src/base/IStakingRewards.sol";
+import { IPOLErrors } from "./IPOLErrors.sol";
+import { IStakingRewards } from "./IStakingRewards.sol";
 
 interface IRewardVault is IPOLErrors, IStakingRewards {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -78,6 +78,10 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
 
     /// @notice Allows the factory vault manager to unpause the vault.
     function unpause() external;
+    
+    /// @notice Returns true if the vault is paused.
+    /// @return True if the vault is paused.
+    function paused() external view returns (bool);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         MUTATIVE                           */
@@ -118,4 +122,21 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
     /// @notice Allows msg.sender to set another address to claim and manage their rewards.
     /// @param _operator The address that will be allowed to claim and manage rewards.
     function setOperator(address _operator) external;
+
+    /// @notice Returns the address of the staking token.
+    /// @return The address of the staking token.
+    function stakeToken() external view returns (address);
+
+    /// @notice Returns the address of the reward token.
+    /// @return The address of the reward token.
+    function rewardToken() external view returns (address);
+
+    /// @notice Returns the address of the factory.
+    /// @return The address of the factory.
+    function factory() external view returns (address);
+
+    /// @notice Returns the duration of the rewards.
+    /// @return The duration of the rewards.
+    function rewardsDuration() external view returns (uint256);
+    
 }
