@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `Shiva` contract is designed for interacting with the OverlayV1 protocol. It provides a streamlined way to build, unwind, and manage positions in OverlayV1 markets. It also integrates staking mechanisms through the BerachainRewardsVault, enabling users to stake their collateral to earn rewards.
+The `Shiva` contract is designed for interacting with the OverlayV1 protocol. It provides a streamlined way to build, unwind, and manage positions in OverlayV1 markets. It also integrates staking mechanisms through the RewardsVault, enabling users to stake their collateral to earn rewards.
 
 This contract is:
 
@@ -22,7 +22,7 @@ This contract is:
    - **Emergency Withdrawal:** Allows users to withdraw their collateral in case of market shutdown.
 
 2. **Staking and Rewards**
-   - Stake collateral to earn rewards through the Berachain Rewards Vault.
+   - Stake collateral to earn rewards through the Rewards Vault.
    - Unstake collateral when positions are unwound.
 
 3. **On-Behalf-Of Operations**
@@ -40,7 +40,7 @@ This contract is:
 
 - **`IOverlayV1Market`:** Interface for OverlayV1 markets.
 - **`ShivaStructs`:** Library defining the data structures for `build`, `unwind`, and on-behalf-of operations.
-- **`IBerachainRewardsVault`:** Interface for interacting with the Berachain Rewards Vault.
+- **`IRewardsVault`:** Interface for interacting with the Rewards Vault.
 
 ### Key Variables
 
@@ -123,4 +123,4 @@ shiva.build(buildParams, onBehalfOfParams);
 
 - OpenZeppelin contracts for cryptographic utilities and upgradeable functionality.
 - OverlayV1 contracts for market interaction.
-- Berachain contracts for staking and rewards.
+- contracts for staking and rewards.

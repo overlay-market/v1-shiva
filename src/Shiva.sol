@@ -2,10 +2,8 @@
 pragma solidity 0.8.10;
 
 import {IShiva} from "./IShiva.sol";
-import {
-    IBerachainRewardsVault,
-    IBerachainRewardsVaultFactory
-} from "./interfaces/berachain/IRewardVaults.sol";
+import {IRewardVault} from "./rewardVault/IRewardVault.sol";
+import {IRewardVaultFactory} from "./rewardVault/core/IRewardVaultFactory.sol";
 import {StakingToken} from "./PolStakingToken.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 import {Utils} from "./utils/Utils.sol";
@@ -37,7 +35,7 @@ import {PausableUpgradeable} from
  * @author Overlay team
  * @notice Contract for interact with OverlayV1 protocol
  * @notice This contract is used to build, unwind and manage positions in OverlayV1 markets
- * @notice Stakes and unstakes the collateral in the BerachainRewardsVault
+ * @notice Stakes and unstakes the collateral in the RewardsVault
  * @notice Can be used to build, unwind and manage positions on behalf of users with
  * signature verification
  * @dev This contract is upgradable by using UUPS pattern
@@ -88,8 +86,8 @@ contract Shiva is
     /// @notice The StakingToken contract
     StakingToken public stakingToken;
 
-    /// @notice The BerachainRewardsVault contract
-    IBerachainRewardsVault public rewardVault;
+    /// @notice The RewardsVault contract
+    IRewardVault public rewardVault;
 
     /// @notice List of authorized factories
     IOverlayV1Factory[] public authorizedFactories;
@@ -175,7 +173,7 @@ contract Shiva is
     /**
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
-     * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
+     * @param _vaultFactory The address of the Rewards Vault Factory contract
      */
     function initialize(
         address _ovlToken,
@@ -191,9 +189,9 @@ contract Shiva is
 
         // Create vault for newly created token
         address vaultAddress =
-            IBerachainRewardsVaultFactory(_vaultFactory).createRewardVault(address(stakingToken));
+            IRewardVaultFactory(_vaultFactory).createRewardVault(address(stakingToken));
 
-        rewardVault = IBerachainRewardsVault(vaultAddress);
+        rewardVault = IRewardVault(vaultAddress);
 
         // Approve rewardVault to spend max amount of stakingToken
         stakingToken.approve(address(rewardVault), type(uint256).max);
