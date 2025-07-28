@@ -42,38 +42,14 @@ contract RewardVault is
         mapping(address => uint256) stakedByDelegate;
     }
 
-    /// @notice Struct to hold an incentive data.
-    /// @param minIncentiveRate The minimum amount of the token to incentivize per BGT emission.
-    /// @param incentiveRate The amount of the token to incentivize per BGT emission.
-    /// @param amountRemaining The amount of the token remaining to incentivize.
-    /// @param manager The address of the manager that can addIncentive for this incentive token.
-    struct Incentive {
-        uint256 minIncentiveRate;
-        uint256 incentiveRate;
-        uint256 amountRemaining;
-        address manager;
-    }
-
-    uint256 private constant MAX_INCENTIVE_RATE = 1e36; // for 18 decimal token, this will mean 1e18 incentiveTokens
-        // per BGT emission.
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          STORAGE                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice The maximum count of incentive tokens that can be stored.
-    uint8 public maxIncentiveTokensCount;
 
     mapping(address => DelegateStake) internal _delegateStake;
 
     /// @notice The mapping of accounts to their operators.
     mapping(address => address) internal _operators;
-
-    /// @notice the mapping of incentive token to its incentive data.
-    mapping(address => Incentive) public incentives;
-
-    /// @notice The list of whitelisted tokens.
-    address[] public whitelistedTokens;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -92,8 +68,6 @@ contract RewardVault is
         __Pausable_init();
         __ReentrancyGuard_init();
         __StakingRewards_init(_stakingToken, _bgt, 3 days);
-        maxIncentiveTokensCount = 3;
-        emit MaxIncentiveTokensCountUpdated(maxIncentiveTokensCount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -112,11 +86,6 @@ contract RewardVault is
         _;
     }
 
-    modifier onlyWhitelistedToken(address token) {
-        if (incentives[token].minIncentiveRate == 0) TokenNotWhitelisted.selector.revertWith();
-        _;
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       ADMIN FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -128,7 +97,6 @@ contract RewardVault is
 
     /// @inheritdoc IRewardVault
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyFactoryOwner {
-        if (incentives[tokenAddress].minIncentiveRate != 0) CannotRecoverIncentiveToken.selector.revertWith();
         if (tokenAddress == address(stakeToken)) {
             uint256 maxRecoveryAmount = IERC20(stakeToken).balanceOf(address(this)) - totalSupply;
             if (tokenAmount > maxRecoveryAmount) {
@@ -142,69 +110,6 @@ contract RewardVault is
     /// @inheritdoc IRewardVault
     function setRewardsDuration(uint256 _rewardsDuration) external onlyFactoryOwner {
         _setRewardsDuration(_rewardsDuration);
-    }
-
-    /// @inheritdoc IRewardVault
-    function whitelistIncentiveToken(
-        address token,
-        uint256 minIncentiveRate,
-        address manager
-    )
-        external
-        onlyFactoryOwner
-    {
-        // validate `minIncentiveRate` value
-        if (minIncentiveRate == 0) MinIncentiveRateIsZero.selector.revertWith();
-        if (minIncentiveRate > MAX_INCENTIVE_RATE) IncentiveRateTooHigh.selector.revertWith();
-
-        // validate token and manager address
-        if (token == address(0) || manager == address(0)) ZeroAddress.selector.revertWith();
-
-        Incentive storage incentive = incentives[token];
-        if (whitelistedTokens.length == maxIncentiveTokensCount || incentive.minIncentiveRate != 0) {
-            TokenAlreadyWhitelistedOrLimitReached.selector.revertWith();
-        }
-        whitelistedTokens.push(token);
-        //set the incentive rate to the minIncentiveRate.
-        incentive.incentiveRate = minIncentiveRate;
-        incentive.minIncentiveRate = minIncentiveRate;
-        // set the manager
-        incentive.manager = manager;
-        emit IncentiveTokenWhitelisted(token, minIncentiveRate, manager);
-    }
-
-    /// @inheritdoc IRewardVault
-    function removeIncentiveToken(address token) external onlyFactoryVaultManager onlyWhitelistedToken(token) {
-        delete incentives[token];
-        // delete the token from the list.
-        _deleteWhitelistedTokenFromList(token);
-        emit IncentiveTokenRemoved(token);
-    }
-
-    /// @inheritdoc IRewardVault
-    function updateIncentiveManager(
-        address token,
-        address newManager
-    )
-        external
-        onlyFactoryOwner
-        onlyWhitelistedToken(token)
-    {
-        if (newManager == address(0)) ZeroAddress.selector.revertWith();
-        Incentive storage incentive = incentives[token];
-        // cache the current manager
-        address currentManager = incentive.manager;
-        incentive.manager = newManager;
-        emit IncentiveManagerChanged(token, newManager, currentManager);
-    }
-
-    /// @inheritdoc IRewardVault
-    function setMaxIncentiveTokensCount(uint8 _maxIncentiveTokensCount) external onlyFactoryOwner {
-        if (_maxIncentiveTokensCount < whitelistedTokens.length) {
-            InvalidMaxIncentiveTokensCount.selector.revertWith();
-        }
-        maxIncentiveTokensCount = _maxIncentiveTokensCount;
-        emit MaxIncentiveTokensCountUpdated(_maxIncentiveTokensCount);
     }
 
     /// @inheritdoc IRewardVault
@@ -224,16 +129,6 @@ contract RewardVault is
     /// @inheritdoc IRewardVault
     function operator(address account) external view returns (address) {
         return _operators[account];
-    }
-
-    /// @inheritdoc IRewardVault
-    function getWhitelistedTokensCount() external view returns (uint256) {
-        return whitelistedTokens.length;
-    }
-
-    /// @inheritdoc IRewardVault
-    function getWhitelistedTokens() public view returns (address[] memory) {
-        return whitelistedTokens;
     }
 
     /// @inheritdoc IRewardVault
@@ -320,73 +215,6 @@ contract RewardVault is
         emit OperatorSet(msg.sender, _operator);
     }
 
-    /// @inheritdoc IRewardVault
-    function addIncentive(
-        address token,
-        uint256 amount,
-        uint256 incentiveRate
-    )
-        external
-        nonReentrant
-        onlyWhitelistedToken(token)
-    {
-        if (incentiveRate > MAX_INCENTIVE_RATE) IncentiveRateTooHigh.selector.revertWith();
-        Incentive storage incentive = incentives[token];
-        (uint256 minIncentiveRate, uint256 incentiveRateStored, uint256 amountRemainingBefore, address manager) =
-            (incentive.minIncentiveRate, incentive.incentiveRate, incentive.amountRemaining, incentive.manager);
-
-        // Only allow the incentive token manager to add incentive.
-        if (msg.sender != manager) NotIncentiveManager.selector.revertWith();
-
-        // The incentive amount should be equal to or greater than the `minIncentiveRate` to avoid spamming.
-        // If the `minIncentiveRate` is 100 USDC/BGT, the amount should be at least 100 USDC.
-        if (amount < minIncentiveRate) AmountLessThanMinIncentiveRate.selector.revertWith();
-
-        // The incentive rate should be greater than or equal to the `minIncentiveRate`.
-        if (incentiveRate < minIncentiveRate) InvalidIncentiveRate.selector.revertWith();
-
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        incentive.amountRemaining = amountRemainingBefore + amount;
-        // Allows updating the incentive rate if the remaining incentive amount is 0.
-        // Allow to decrease the incentive rate when accounted incentives are finished.
-        if (amountRemainingBefore == 0) {
-            incentive.incentiveRate = incentiveRate;
-        }
-        // Always allow to increase the incentive rate.
-        else if (incentiveRate >= incentiveRateStored) {
-            incentive.incentiveRate = incentiveRate;
-        }
-        // If the remaining incentive amount is not 0 and the new rate is less than the current rate, revert.
-        else {
-            InvalidIncentiveRate.selector.revertWith();
-        }
-
-        emit IncentiveAdded(token, msg.sender, amount, incentive.incentiveRate);
-    }
-
-    /// @inheritdoc IRewardVault
-    function accountIncentives(address token, uint256 amount) external nonReentrant onlyWhitelistedToken(token) {
-        Incentive storage incentive = incentives[token];
-        (uint256 minIncentiveRate, uint256 incentiveRateStored, uint256 amountRemainingBefore, address manager) =
-            (incentive.minIncentiveRate, incentive.incentiveRate, incentive.amountRemaining, incentive.manager);
-
-        // Only allow the incentive token manager to account for cumulated incentives.
-        if (msg.sender != manager) NotIncentiveManager.selector.revertWith();
-
-        if (amount < minIncentiveRate) AmountLessThanMinIncentiveRate.selector.revertWith();
-
-        uint256 incentiveBalance = IERC20(token).balanceOf(address(this));
-        if (token == address(stakeToken)) {
-            incentiveBalance -= totalSupply;
-        }
-
-        if (amount > incentiveBalance - amountRemainingBefore) NotEnoughBalance.selector.revertWith();
-
-        incentive.amountRemaining += amount;
-
-        emit IncentiveAdded(token, msg.sender, amount, incentiveRateStored);
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        INTERNAL FUNCTIONS                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -398,21 +226,6 @@ contract RewardVault is
         unchecked {
             uint256 selfStaked = _accountInfo[account].balance - _delegateStake[account].delegateTotalStaked;
             if (selfStaked < amount) InsufficientSelfStake.selector.revertWith();
-        }
-    }
-
-    function _deleteWhitelistedTokenFromList(address token) internal {
-        uint256 activeTokens = whitelistedTokens.length;
-        // The length of `whitelistedTokens` cannot be 0 because the `onlyWhitelistedToken` check has already been
-        // performed.
-        unchecked {
-            for (uint256 i; i < activeTokens; ++i) {
-                if (token == whitelistedTokens[i]) {
-                    whitelistedTokens[i] = whitelistedTokens[activeTokens - 1];
-                    whitelistedTokens.pop();
-                    return;
-                }
-            }
         }
     }
 }
