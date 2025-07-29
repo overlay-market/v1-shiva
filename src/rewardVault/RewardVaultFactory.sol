@@ -10,7 +10,7 @@ import { IRewardVaultFactory } from "berachain/src/pol/interfaces/IRewardVaultFa
 import { RewardVault } from "./RewardVault.sol";
 
 /// @title RewardVaultFactory
-/// @author Berachain Team
+/// @author Overlay Team
 /// @notice Factory contract for creating RewardVaults and keeping track of them.
 contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UUPSUpgradeable {
     using Utils for bytes4;

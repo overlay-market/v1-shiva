@@ -13,8 +13,8 @@ import { FactoryOwnable } from "berachain/src/base/FactoryOwnable.sol";
 import { StakingRewards } from "berachain/src/base/StakingRewards.sol";
 
 /// @title Rewards Vault
-/// @author Berachain Team
-/// @notice This contract is the vault for the Berachain rewards, it handles the staking and rewards accounting of BGT.
+/// @author Overlay Team
+/// @notice This contract is the vault for the Overlay rewards, it handles the staking and rewards accounting of BGT.
 /// @dev This contract is taken from the stable and tested:
 /// https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol
 /// We are using this model instead of 4626 because we want to incentivize staying in the vault for x period of time to
