@@ -13,7 +13,7 @@ import {ShivaTest} from "./Shiva.t.sol";
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {Utils} from "src/utils/Utils.sol";
-import {IBerachainRewardsVaultFactory} from "src/interfaces/berachain/IRewardVaults.sol";
+import {IRewardsVaultFactory} from "src/interfaces/rewardVault/IRewardVaults.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
@@ -43,7 +43,7 @@ import {OverlayV1ChainlinkFeedFactory} from
 contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
     using FixedPoint for uint256;
 
-    IOverlayV1Token public ovlTokenForBgt;
+    IOverlayV1Token public ovlTokenForRewardToken;
 
     /**
      * @dev Sets up the initial state for the ShivaBase test contract
@@ -78,17 +78,17 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         ovlMarket = deployMarket(ovlFactory, address(feed));
 
         // Set Vault Factory
-        ovlTokenForBgt = deployToken();
+        ovlTokenForRewardToken = deployToken();
         address rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
         address rewardVaultFactoryImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
         bytes memory rewardVaultFactoryData = abi.encodeWithSignature(
             "initialize(address,address,address)",
-            address(ovlTokenForBgt),
+            address(ovlTokenForRewardToken),
             deployer,
             address(rewardVaultImplementation)
         );
-        IBerachainRewardsVaultFactory vaultFactory =
-            IBerachainRewardsVaultFactory(address(new ERC1967Proxy(address(rewardVaultFactoryImplementation), rewardVaultFactoryData)));
+        IRewardsVaultFactory vaultFactory =
+            IRewardsVaultFactory(address(new ERC1967Proxy(address(rewardVaultFactoryImplementation), rewardVaultFactoryData)));
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();

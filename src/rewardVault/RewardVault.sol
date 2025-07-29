@@ -13,10 +13,11 @@ import { FactoryOwnable } from "berachain/src/base/FactoryOwnable.sol";
 import { StakingRewards } from "berachain/src/base/StakingRewards.sol";
 
 /// @title Rewards Vault
-/// @author Berachain Team
-/// @notice This contract is the vault for the Berachain rewards, it handles the staking and rewards accounting of BGT.
+/// @author Overlay Team
+/// @notice This contract is the vault for the Overlay rewards, it handles the staking and rewards accounting of rewardToken.
 /// @dev This contract is taken from the stable and tested:
 /// https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol
+/// https://github.com/berachain/contracts/blob/main/src/pol/rewards/RewardVault.sol
 /// We are using this model instead of 4626 because we want to incentivize staying in the vault for x period of time to
 /// to be considered a 'miner' and not a 'trader'.
 contract RewardVault is
@@ -58,7 +59,7 @@ contract RewardVault is
 
     /// @inheritdoc IRewardVault
     function initialize(
-        address _bgt,
+        address _rewardToken,
         address _stakingToken
     )
         external
@@ -67,7 +68,7 @@ contract RewardVault is
         __FactoryOwnable_init(msg.sender);
         __Pausable_init();
         __ReentrancyGuard_init();
-        __StakingRewards_init(_stakingToken, _bgt, 3 days);
+        __StakingRewards_init(_stakingToken, _rewardToken, 3 days);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

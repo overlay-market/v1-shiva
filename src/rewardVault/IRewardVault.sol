@@ -54,10 +54,10 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
 
     /**
      * @notice Initialize the vault, this is only callable once and by the factory since its the deployer.
-     * @param _bgt The address of the BGT token.
+     * @param _rewardToken The address of the rewardToken token.
      * @param _stakingToken The address of the staking token.
      */
-    function initialize(address _bgt, address _stakingToken) external;
+    function initialize(address _rewardToken, address _stakingToken) external;
 
     /// @notice Allows the distributor to notify the reward amount.
     /// @param pubkey The pubkey of the validator.
@@ -86,11 +86,11 @@ interface IRewardVault is IPOLErrors, IStakingRewards {
     /// @notice Exit the vault with the staked tokens and claim the reward.
     /// @dev Only the account holder can call this function, not the operator.
     /// @dev Clears out the user self-staked balance and rewards.
-    /// @param recipient The address to send the 'BGT' reward to.
+    /// @param recipient The address to send the 'rewardToken' reward to.
     function exit(address recipient) external;
 
     /// @notice Claim the reward.
-    /// @dev The operator only handles BGT, not STAKING_TOKEN.
+    /// @dev The operator only handles rewardToken, not STAKING_TOKEN.
     /// @dev Callable by the operator or the account holder.
     /// @param account The account to get the reward for.
     /// @param recipient The address to send the reward to.
