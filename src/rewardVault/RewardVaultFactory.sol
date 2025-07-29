@@ -28,8 +28,8 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
     /// @notice The beacon address.
     address public beacon;
 
-    /// @notice The BGT token address.
-    address public bgt;
+    /// @notice The rewardToken token address.
+    address public rewardToken;
 
     /// @notice Mapping of staking token to vault address.
     mapping(address stakingToken => address vault) public getVault;
@@ -47,7 +47,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
     }
 
     function initialize(
-        address _bgt,
+        address _rewardToken,
         address _governance,
         address _vaultImpl
     )
@@ -61,7 +61,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
         // vault manager can grant and revoke the access for the vault pauser role.
         _setRoleAdmin(VAULT_PAUSER_ROLE, VAULT_MANAGER_ROLE);
         // slither-disable-next-line missing-zero-check
-        bgt = _bgt;
+        rewardToken = _rewardToken;
 
         beacon = address(new UpgradeableBeacon(_governance, _vaultImpl));
     }
@@ -105,7 +105,7 @@ contract RewardVaultFactory is IRewardVaultFactory, AccessControlUpgradeable, UU
         emit VaultCreated(stakingToken, vault);
 
         // Initialize the vault.
-        RewardVault(vault).initialize(bgt, stakingToken);
+        RewardVault(vault).initialize(rewardToken, stakingToken);
 
         return vault;
     }

@@ -43,7 +43,7 @@ import {OverlayV1ChainlinkFeedFactory} from
 contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
     using FixedPoint for uint256;
 
-    IOverlayV1Token public ovlTokenForBgt;
+    IOverlayV1Token public ovlTokenForRewardToken;
 
     /**
      * @dev Sets up the initial state for the ShivaBase test contract
@@ -78,12 +78,12 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         ovlMarket = deployMarket(ovlFactory, address(feed));
 
         // Set Vault Factory
-        ovlTokenForBgt = deployToken();
+        ovlTokenForRewardToken = deployToken();
         address rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
         address rewardVaultFactoryImplementation = deployCode("RewardVaultFactory.sol:RewardVaultFactory");
         bytes memory rewardVaultFactoryData = abi.encodeWithSignature(
             "initialize(address,address,address)",
-            address(ovlTokenForBgt),
+            address(ovlTokenForRewardToken),
             deployer,
             address(rewardVaultImplementation)
         );

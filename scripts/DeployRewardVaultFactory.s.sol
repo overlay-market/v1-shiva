@@ -17,10 +17,10 @@ abstract contract DeployRewardVaultFactoryScript is Script {
         vm.stopBroadcast();
     }
 
-    function _deployRewardVaultFactory(address _bgt, address _owner, address _vaultImpl) internal returns (RewardVaultFactory rewardVaultFactoryProxy) {
+    function _deployRewardVaultFactory(address _rewardToken, address _owner, address _vaultImpl) internal returns (RewardVaultFactory rewardVaultFactoryProxy) {
         /*Proxy initialize data*/
         string memory functionName = "initialize(address,address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, _bgt, _owner, _vaultImpl);
+        bytes memory data = abi.encodeWithSignature(functionName, _rewardToken, _owner, _vaultImpl);
 
         vm.startBroadcast(deployerPrivateKey);
         RewardVaultFactory impl = new RewardVaultFactory();

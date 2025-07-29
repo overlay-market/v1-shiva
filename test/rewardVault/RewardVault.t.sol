@@ -15,7 +15,7 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/securit
 contract RewardVaultTest is Test {
     // Tokens
     MockERC20 stakingToken;
-    MockERC20 bgt;
+    MockERC20 rewardtoken;
 
     // Contracts
     IRewardVaultFactory factory;
@@ -48,7 +48,7 @@ contract RewardVaultTest is Test {
 
         // Deploy tokens
         stakingToken = new MockERC20("Staking Token", "STK", 18);
-        bgt = new MockERC20("Berachain Governance Token", "BGT", 18);
+        rewardtoken = new MockERC20("Berachain Governance Token", "REWARDTOKEN", 18);
 
         // Deploy implementations
         address rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
@@ -57,7 +57,7 @@ contract RewardVaultTest is Test {
         // Deploy factory proxy
         bytes memory rewardVaultFactoryData = abi.encodeWithSignature(
             "initialize(address,address,address)",
-            address(bgt),
+            address(rewardtoken),
             deployer,
             address(rewardVaultImplementation)
         );
@@ -81,7 +81,7 @@ contract RewardVaultTest is Test {
         stakingToken.mint(bob, 1000 * ONE);
         stakingToken.mint(charlie, 1000 * ONE);
         stakingToken.mint(david, 1000 * ONE);
-        bgt.mint(deployer, 10000 * ONE); // Mint BGT for the deployer to use as rewards
+        rewardtoken.mint(deployer, 10000 * ONE); // Mint REWARDTOKEN for the deployer to use as rewards
 
         vm.startPrank(alice);
         stakingToken.approve(address(rewardVault), type(uint256).max);
@@ -246,7 +246,7 @@ contract RewardVaultTest is Test {
         // Try to initialize again - this should revert
         vm.startPrank(deployer);
         vm.expectRevert("Initializable: contract is already initialized");
-        newVault.initialize(address(bgt), address(stakingToken));
+        newVault.initialize(address(rewardtoken), address(stakingToken));
         vm.stopPrank();
     }
 
@@ -313,7 +313,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), 500 * ONE);
+        rewardtoken.transfer(address(rewardVault), 500 * ONE);
         rewardVault.notifyRewardAmount(bytes(""), 500 * ONE);
         vm.stopPrank();
 
@@ -340,7 +340,7 @@ contract RewardVaultTest is Test {
 
         // 2. First reward period
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -353,7 +353,7 @@ contract RewardVaultTest is Test {
 
         // 3. Second reward period
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -385,7 +385,7 @@ contract RewardVaultTest is Test {
 
         // 2. Add rewards and wait
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -483,7 +483,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards and wait
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -515,7 +515,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards when no one has staked
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -554,7 +554,7 @@ contract RewardVaultTest is Test {
 
         // Add small rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), smallReward);
+        rewardtoken.transfer(address(rewardVault), smallReward);
         rewardVault.notifyRewardAmount(bytes(""), smallReward);
         vm.stopPrank();
 
@@ -582,7 +582,7 @@ contract RewardVaultTest is Test {
 
         // Add more rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), smallReward);
+        rewardtoken.transfer(address(rewardVault), smallReward);
         rewardVault.notifyRewardAmount(bytes(""), smallReward);
         vm.stopPrank();
 
@@ -609,7 +609,7 @@ contract RewardVaultTest is Test {
 
         // Add large rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), largeReward);
+        rewardtoken.transfer(address(rewardVault), largeReward);
         rewardVault.notifyRewardAmount(bytes(""), largeReward);
         vm.stopPrank();
 
@@ -638,7 +638,7 @@ contract RewardVaultTest is Test {
 
         // Add more large rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), largeReward);
+        rewardtoken.transfer(address(rewardVault), largeReward);
         rewardVault.notifyRewardAmount(bytes(""), largeReward);
         vm.stopPrank();
 
@@ -667,7 +667,7 @@ contract RewardVaultTest is Test {
         vm.stopPrank();
 
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -749,7 +749,7 @@ contract RewardVaultTest is Test {
 
         // Add large rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), largeReward);
+        rewardtoken.transfer(address(rewardVault), largeReward);
         rewardVault.notifyRewardAmount(bytes(""), largeReward);
         vm.stopPrank();
 
@@ -829,7 +829,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -902,7 +902,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), 500 * ONE);
+        rewardtoken.transfer(address(rewardVault), 500 * ONE);
         rewardVault.notifyRewardAmount(bytes(""), 500 * ONE);
         vm.stopPrank();
 
@@ -928,7 +928,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -954,7 +954,7 @@ contract RewardVaultTest is Test {
 
         // Check that Alice received her rewards
         assertGt(
-            bgt.balanceOf(alice),
+            rewardtoken.balanceOf(alice),
             0,
             "Alice should receive her earned rewards"
         );
@@ -968,7 +968,7 @@ contract RewardVaultTest is Test {
 
         // Add rewards first
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -996,7 +996,7 @@ contract RewardVaultTest is Test {
 
         // Test with Bob entering even later
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -1029,8 +1029,8 @@ contract RewardVaultTest is Test {
 
         // 2. Owner notifies rewards
         vm.startPrank(deployer);
-        // The RewardVault holds BGT, so we need to transfer them there first
-        bgt.transfer(address(rewardVault), rewardAmount);
+        // The RewardVault holds REWARDTOKEN, so we need to transfer them there first
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -1054,12 +1054,12 @@ contract RewardVaultTest is Test {
         assertApproxEqAbs(earned, rewardAmount / 2, 1e16, "Earned amount is incorrect");
 
         // 5. Alice claims rewards
-        uint256 initialBgtBalance = bgt.balanceOf(alice);
+        uint256 initialRewardTokenBalance = rewardtoken.balanceOf(alice);
         uint256 claimed = rewardVault.getReward(alice, alice);
         assertApproxEqAbs(claimed, earned, 1e16, "Claimed amount should equal earned amount");
 
         // 6. Check final state
-        assertEq(bgt.balanceOf(alice), initialBgtBalance + claimed, "Alice BGT balance should increase");
+        assertEq(rewardtoken.balanceOf(alice), initialRewardTokenBalance + claimed, "Alice REWARDTOKEN balance should increase");
         assertEq(rewardVault.rewards(alice), 0, "Pending rewards should be zero after claim");
         vm.stopPrank();
     }
@@ -1079,7 +1079,7 @@ contract RewardVaultTest is Test {
 
         // 2. Owner notifies rewards
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -1217,7 +1217,7 @@ contract RewardVaultTest is Test {
 
         // 2. Add rewards and wait
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), rewardAmount);
+        rewardtoken.transfer(address(rewardVault), rewardAmount);
         rewardVault.notifyRewardAmount(bytes(""), rewardAmount);
         vm.stopPrank();
 
@@ -1227,7 +1227,7 @@ contract RewardVaultTest is Test {
         // 3. Alice exits
         vm.startPrank(alice);
         uint256 initialAliceStakingBalance = stakingToken.balanceOf(alice);
-        uint256 initialAliceBgtBalance = bgt.balanceOf(alice);
+        uint256 initialAliceRewardTokenBalance = rewardtoken.balanceOf(alice);
 
         uint256 expectedRewards = rewardVault.earned(alice);
         
@@ -1242,8 +1242,8 @@ contract RewardVaultTest is Test {
         );
         // Alice should have her rewards
         assertApproxEqAbs(
-            bgt.balanceOf(alice),
-            initialAliceBgtBalance + expectedRewards,
+            rewardtoken.balanceOf(alice),
+            initialAliceRewardTokenBalance + expectedRewards,
             1e16,
             "Alice should receive her earned rewards"
         );
@@ -1278,7 +1278,7 @@ contract RewardVaultTest is Test {
         rewardVault.stake(100 * ONE);
 
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), 500 * ONE);
+        rewardtoken.transfer(address(rewardVault), 500 * ONE);
         rewardVault.notifyRewardAmount(bytes(""), 500 * ONE);
         vm.stopPrank();
 
@@ -1291,14 +1291,14 @@ contract RewardVaultTest is Test {
         // 3. Bob claims rewards for Alice, sending them to himself
         vm.startPrank(bob);
         uint256 expectedRewards = rewardVault.earned(alice);
-        uint256 initialBobBgtBalance = bgt.balanceOf(bob);
+        uint256 initialBobRewardTokenBalance = rewardtoken.balanceOf(bob);
 
         uint256 claimed = rewardVault.getReward(alice, bob);
 
         // 4. Assertions
         assertGt(claimed, 0, "Should have claimed some rewards");
         assertApproxEqAbs(claimed, expectedRewards, 1e16, "Claimed amount should match earned");
-        assertEq(bgt.balanceOf(bob), initialBobBgtBalance + claimed, "Bob's BGT balance should increase");
+        assertEq(rewardtoken.balanceOf(bob), initialBobRewardTokenBalance + claimed, "Bob's REWARDTOKEN balance should increase");
         assertEq(rewardVault.rewards(alice), 0, "Alice's pending rewards should be zero");
         vm.stopPrank();
     }
@@ -1310,7 +1310,7 @@ contract RewardVaultTest is Test {
         rewardVault.stake(100 * ONE);
 
         vm.startPrank(deployer);
-        bgt.transfer(address(rewardVault), 500 * ONE);
+        rewardtoken.transfer(address(rewardVault), 500 * ONE);
         rewardVault.notifyRewardAmount(bytes(""), 500 * ONE);
         vm.stopPrank();
         

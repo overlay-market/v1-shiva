@@ -14,7 +14,7 @@ contract RewardVaultFactoryTest is Test {
     // Contracts
     RewardVaultFactory factory;
     address rewardVaultImplementation;
-    MockERC20 bgt;
+    MockERC20 rewardtoken;
     MockERC20 stakingToken;
 
     // Users
@@ -29,7 +29,7 @@ contract RewardVaultFactoryTest is Test {
 
         vm.startPrank(deployer);
         
-        bgt = new MockERC20("BGT", "BGT", 18);
+        rewardtoken = new MockERC20("REWARDTOKEN", "REWARDTOKEN", 18);
         stakingToken = new MockERC20("Staking Token", "STK", 18);
         rewardVaultImplementation = deployCode("RewardVault.sol:RewardVault");
         
@@ -37,7 +37,7 @@ contract RewardVaultFactoryTest is Test {
         
         bytes memory factoryData = abi.encodeWithSignature(
             "initialize(address,address,address)",
-            address(bgt),
+            address(rewardtoken),
             admin,
             address(rewardVaultImplementation)
         );
@@ -63,7 +63,7 @@ contract RewardVaultFactoryTest is Test {
         // Check if vault is initialized correctly
         RewardVault vault = RewardVault(vaultAddress);
         assertEq(address(vault.stakeToken()), address(stakingToken));
-        assertEq(address(vault.rewardToken()), address(bgt));
+        assertEq(address(vault.rewardToken()), address(rewardtoken));
         assertEq(vault.factory(), address(factory));
     }
 
