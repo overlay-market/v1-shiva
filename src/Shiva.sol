@@ -674,6 +674,8 @@ contract Shiva is
     function _onUnstake(address _owner, uint256 _amount) internal {
         // Get current balance on rewardVault
         uint256 currentBalance = rewardVault.balanceOf(_owner);
+
+        if (currentBalance == 0) return;
         // set _amount to min(currentBalance, _amount)
         _amount = currentBalance < _amount ? currentBalance : _amount;
         // Withdraw tokens from the RewardVault
@@ -773,5 +775,19 @@ contract Shiva is
     function cancelNonce(uint256 nonce) external {
         usedNonces[msg.sender][nonce] = true;
         emit NonceCancelled(msg.sender, nonce);
+    }
+
+    function setStakingToken(address _stakingToken) external onlyGovernor(msg.sender) {
+        address _oldStakingToken = stakingToken;
+        stakingToken = _stakingToken;
+
+        emit StakingTokenChanged(_oldStakingToken, stakingToken);
+    }
+
+    function setRewardsVault(address _rewardsVault) external onlyGovernor(msg.sender) {
+        address _oldRewardsVault = address(rewardVault);
+        rewardVault = IRewardsVault(_rewardsVault);
+
+        emit RewardsVaultChanged(_oldRewardsVault, _rewardsVault);
     }
 }
