@@ -6,7 +6,7 @@ import {
     IRewardsVault,
     IRewardsVaultFactory
 } from "./interfaces/rewardVault/IRewardVaults.sol";
-import {StakingToken} from "./PolStakingToken.sol";
+import {StakingToken} from "./mocks/StakingTokenMock.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 import {Utils} from "./utils/Utils.sol";
 
