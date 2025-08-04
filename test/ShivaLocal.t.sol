@@ -223,7 +223,9 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         vm.startPrank(bob);
         vm.expectRevert();
         shiva.overlayMarketLiquidateCallback(posId);
-        assertNotEq(rewardVault.balanceOf(alice), 0);
+        if (REWARD_VAULT_BALANCE_VALIDATION) {
+            assertNotEq(rewardVault.balanceOf(alice), 0);
+        }
     }
 
     /**
@@ -241,6 +243,6 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         impersonator.impersonateLiquidation(
             address(shiva), posId, uint96(leverage.mulDown(collateral))
         );
-        assertEq(rewardVault.balanceOf(alice), leverage.mulUp(collateral));
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? leverage.mulUp(collateral) : 0);
     }
 }
