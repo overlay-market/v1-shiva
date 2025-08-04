@@ -6,7 +6,7 @@ import {
     IRewardsVault,
     IRewardsVaultFactory
 } from "./interfaces/rewardVault/IRewardVaults.sol";
-import {StakingToken} from "./PolStakingToken.sol";
+import {StakingToken} from "./mocks/StakingTokenMock.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 import {Utils} from "./utils/Utils.sol";
 
@@ -778,10 +778,10 @@ contract Shiva is
     }
 
     function setStakingToken(address _stakingToken) external onlyGovernor(msg.sender) {
-        address _oldStakingToken = stakingToken;
-        stakingToken = _stakingToken;
+        address _oldStakingToken = address(stakingToken);
+        stakingToken = StakingToken(_stakingToken);
 
-        emit StakingTokenChanged(_oldStakingToken, stakingToken);
+        emit StakingTokenChanged(_oldStakingToken, address(stakingToken));
     }
 
     function setRewardsVault(address _rewardsVault) external onlyGovernor(msg.sender) {

@@ -5,4 +5,14 @@ contract StakingToken {
     function mint(address to, uint256 amount) external {}
 
     function burn(address from, uint256 amount) external {}
+    
+    function approve(address spender, uint256 amount) external {}
+
+    function allowance(address, address) external pure returns(uint) {
+        return type(uint256).max;
+    }
+
+    function balanceOf(address) external pure returns(uint) {
+        return 0;
+    }
 }
