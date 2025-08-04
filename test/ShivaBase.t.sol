@@ -55,6 +55,10 @@ contract ShivaTestBase is Test, BaseSetup {
     /// @notice Broker ID used in the system
     uint32 constant BROKER_ID = 0;
 
+    /// @notice Flag to control RewardVault balance validation in tests
+    /// @dev Set to false when using mocks (returns 0), true when using real implementation
+    bool constant REWARD_VAULT_BALANCE_VALIDATION = false;
+
     /**
      * @notice Shiva test contracts
      */

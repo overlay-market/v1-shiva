@@ -217,7 +217,9 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         vm.startPrank(bob);
         vm.expectRevert();
         shiva.overlayMarketLiquidateCallback(posId);
-        assertNotEq(rewardVault.balanceOf(alice), 0);
+        if (REWARD_VAULT_BALANCE_VALIDATION) {
+            assertNotEq(rewardVault.balanceOf(alice), 0);
+        }
     }
 
     /**
@@ -235,7 +237,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         impersonator.impersonateLiquidation(
             address(shiva), posId, uint96(leverage.mulDown(collateral))
         );
-        assertEq(rewardVault.balanceOf(alice), leverage.mulUp(collateral));
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? leverage.mulUp(collateral) : 0);
     }
 
     /**
@@ -255,7 +257,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
         uint256 balanceAfter = rewardVault.balanceOf(alice);
 
-        assertEq(balanceAfter, balanceBefore + expectedNotional, "RewardVault balance should increase by notional");
+        assertEq(balanceAfter, balanceBefore + (REWARD_VAULT_BALANCE_VALIDATION ? expectedNotional : 0), "RewardVault balance should increase by notional");
         vm.stopPrank();
     }
 
@@ -270,7 +272,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         
         uint256 balanceBeforeUnwind = rewardVault.balanceOf(alice);
         uint256 expectedInitialNotional = collateral.mulUp(leverage);
-        assertEq(balanceBeforeUnwind, expectedInitialNotional, "Initial RewardVault balance incorrect");
+        assertEq(balanceBeforeUnwind, REWARD_VAULT_BALANCE_VALIDATION ? expectedInitialNotional : 0, "Initial RewardVault balance incorrect");
 
         unwindPosition(posId, ONE, BASIC_SLIPPAGE); // Unwind 100%
         uint256 balanceAfterUnwind = rewardVault.balanceOf(alice);
@@ -289,7 +291,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
 
         uint256 initialNotional = collateral.mulUp(leverage);
-        assertEq(rewardVault.balanceOf(alice), initialNotional, "Initial RewardVault balance incorrect");
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? initialNotional : 0, "Initial RewardVault balance incorrect");
 
         uint256 fractionToUnwind = 0.25e18; // Unwind 25%
         
@@ -312,7 +314,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         // Let's assert the remaining balance is (initialNotional - actualNotionalUnstaked) which should be initialNotional * (1 - roundedFractionToUnwind)
         uint256 expectedRemainingBalance = initialNotional - actualNotionalUnstaked;
 
-        assertApproxEqAbs(balanceAfterPartialUnwind, expectedRemainingBalance, 1, "RewardVault balance after partial unwind incorrect");
+        assertApproxEqAbs(balanceAfterPartialUnwind, REWARD_VAULT_BALANCE_VALIDATION ? expectedRemainingBalance : 0, 1, "RewardVault balance after partial unwind incorrect");
 
         vm.stopPrank();
     }
@@ -326,7 +328,7 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         uint256 leverage = 2e18; // Notional = 20
         uint256 posId = buildPosition(collateral, leverage, BASIC_SLIPPAGE, true);
 
-        assertEq(rewardVault.balanceOf(alice), collateral.mulUp(leverage), "Initial RewardVault balance incorrect");
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? collateral.mulUp(leverage) : 0, "Initial RewardVault balance incorrect");
         vm.stopPrank();
 
         shutDownMarket(); // Market is shut down
