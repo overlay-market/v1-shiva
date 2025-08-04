@@ -41,7 +41,7 @@ contract ShivaTest is Test, ShivaTestBase {
         assertEq(
             shiva.stakingToken().allowance(address(shiva), address(rewardVault)), type(uint256).max
         );
-        assertEq(shiva.stakingToken().balanceOf(address(rewardVault)), ONE);
+        assertEq(shiva.stakingToken().balanceOf(address(rewardVault)), REWARD_VAULT_BALANCE_VALIDATION ? ONE : 0);
     }
 
     /**
@@ -201,7 +201,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
         uint256 notional = collateral.mulUp(leverage);
-        assertEq(rewardVault.balanceOf(alice), notional);
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? notional : 0);
     }
 
     error InsufficientSelfStake();
@@ -219,13 +219,15 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
         uint256 notional = collateral.mulUp(leverage);
-        assertEq(rewardVault.balanceOf(alice), notional);
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? notional : 0);
 
-        vm.expectRevert(InsufficientSelfStake.selector);
-        rewardVault.withdraw(notional);
+        if (REWARD_VAULT_BALANCE_VALIDATION) {
+            vm.expectRevert(InsufficientSelfStake.selector);
+            rewardVault.withdraw(notional);
 
-        vm.expectRevert(WithdrawAmountIsZero.selector);
-        rewardVault.exit(address(alice));
+            vm.expectRevert(WithdrawAmountIsZero.selector);
+            rewardVault.exit(address(alice));
+        }
     }
 
     /**
@@ -366,7 +368,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
         uint256 notional = collateral.mulUp(leverage);
-        assertEq(rewardVault.balanceOf(alice), notional);
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? notional : 0);
 
         // Alice unwinds her position through Shiva
         unwindPosition(posId, ONE, 1);
@@ -390,7 +392,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
         uint256 notional = collateral.mulUp(leverage);
-        assertEq(rewardVault.balanceOf(alice), notional);
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? notional : 0);
 
         // Alice unwinds her position through Shiva
         uint256 fraction = ONE / 2;
@@ -401,11 +403,11 @@ contract ShivaTest is Test, ShivaTestBase {
             ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 10_000 * (ONE - fraction) / ONE);
 
-        assertEq(rewardVault.balanceOf(alice), (ONE - fraction).mulUp(notional));
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? (ONE - fraction).mulUp(notional) : 0);
 
         unwindPosition(posId, fraction, 1);
         assertEq(
-            rewardVault.balanceOf(alice), (ONE - fraction).mulUp(ONE - fraction).mulUp(notional)
+            rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? (ONE - fraction).mulUp(ONE - fraction).mulUp(notional) : 0
         );
 
         unwindPosition(posId, ONE, 1);
@@ -443,7 +445,7 @@ contract ShivaTest is Test, ShivaTestBase {
         // shiva should stake notional amount of receipt tokens on behalf of the user on the reward vault
         uint256 notional = collateral.mulUp(leverage);
         console.log(notional, "notional");
-        assertEq(rewardVault.balanceOf(alice), notional);
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? notional : 0);
 
         // Alice unwinds her position through Shiva
         unwindPosition(posId, fraction, 1);
@@ -453,12 +455,14 @@ contract ShivaTest is Test, ShivaTestBase {
             ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
         assertEq(fractionRemaining, 10_000 * (ONE - roundedFraction) / ONE, "fraction remaining");
 
-        assertApproxEqAbs(
-            rewardVault.balanceOf(alice),
-            (ONE - roundedFraction).mulDown(notional),
-            1,
-            "reward balance, 1st unwind"
-        );
+        if (REWARD_VAULT_BALANCE_VALIDATION) {
+            assertApproxEqAbs(
+                rewardVault.balanceOf(alice),
+                (ONE - roundedFraction).mulDown(notional),
+                1,
+                "reward balance, 1st unwind"
+            );
+        }
 
         {
             (
@@ -481,28 +485,32 @@ contract ShivaTest is Test, ShivaTestBase {
                 oiShares_,
                 fractionRemaining_
             );
-            assertEq(
-                rewardVault.balanceOf(alice),
-                Position.notionalInitial(positionInfo, ONE),
-                "1st unwind: reward balance != remaining intial notional"
-            );
+            if (REWARD_VAULT_BALANCE_VALIDATION) {
+                assertEq(
+                    rewardVault.balanceOf(alice),
+                    Position.notionalInitial(positionInfo, ONE),
+                    "1st unwind: reward balance != remaining intial notional"
+                );
+            }
         }
 
         unwindPosition(posId, fraction, 1);
         // estimated notional remaining on position
-        assertApproxEqRel(
-            rewardVault.balanceOf(alice),
-            (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional),
-            1e16,
-            "reward balance, 2nd unwind"
-        );
-        // staked balance should be lower than or equal the estimated notional remaining on position (+1 for rounding error)
-        assertLeDecimal(
-            rewardVault.balanceOf(alice),
-            (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional) + 1,
-            1e18,
-            "reward balance, 2nd unwind LE"
-        );
+        if (REWARD_VAULT_BALANCE_VALIDATION) {
+            assertApproxEqRel(
+                rewardVault.balanceOf(alice),
+                (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional),
+                1e16,
+                "reward balance, 2nd unwind"
+            );
+            // staked balance should be lower than or equal the estimated notional remaining on position (+1 for rounding error)
+            assertLeDecimal(
+                rewardVault.balanceOf(alice),
+                (ONE - roundedFraction).mulDown(ONE - roundedFraction).mulDown(notional) + 1,
+                1e18,
+                "reward balance, 2nd unwind LE"
+            );
+        }
 
         {
             (
@@ -525,11 +533,13 @@ contract ShivaTest is Test, ShivaTestBase {
                 oiShares_,
                 fractionRemaining_
             );
-            assertEq(
-                rewardVault.balanceOf(alice),
-                Position.notionalInitial(positionInfo, ONE),
-                "2nd unwind: reward balance != remaining intial notional"
-            );
+            if (REWARD_VAULT_BALANCE_VALIDATION) {
+                assertEq(
+                    rewardVault.balanceOf(alice),
+                    Position.notionalInitial(positionInfo, ONE),
+                    "2nd unwind: reward balance != remaining intial notional"
+                );
+            }
         }
 
         unwindPosition(posId, ONE, 1);
@@ -719,7 +729,7 @@ contract ShivaTest is Test, ShivaTestBase {
         // Alice builds a position through Shiva
         vm.startPrank(alice);
         uint256 posId = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
-        assertEq(rewardVault.balanceOf(alice), ONE);
+        assertEq(rewardVault.balanceOf(alice), REWARD_VAULT_BALANCE_VALIDATION ? ONE : 0);
 
         unwindPosition(posId, 0.123e18, BASIC_SLIPPAGE);
         vm.stopPrank();
@@ -824,7 +834,7 @@ contract ShivaTest is Test, ShivaTestBase {
 
         // Calculate expected notional
         uint256 expectedNotional = collateral.mulUp(leverage);
-        assertEq(initialStaked, expectedNotional, "Initial stake should match notional");
+        assertEq(initialStaked, REWARD_VAULT_BALANCE_VALIDATION ? expectedNotional : 0, "Initial stake should match notional");
 
         // Unwind a specific fraction that might cause rounding issues
         uint256 fractionToUnwind = 0.7e18; // 70%
@@ -841,15 +851,17 @@ contract ShivaTest is Test, ShivaTestBase {
         uint256 actualUnstaked = vaultBalanceBefore - rewardVault.balanceOf(alice);
 
         // Verify unstaked amount is not less than expected
-        assertGe(
-            actualUnstaked,
-            expectedUnstake,
-            "Unstaked amount should not be less than expected due to rounding"
-        );
+        if (REWARD_VAULT_BALANCE_VALIDATION) {
+            assertGe(
+                actualUnstaked,
+                expectedUnstake,
+                "Unstaked amount should not be less than expected due to rounding"
+            );
 
-        // Optional: Print the difference to see the magnitude of the rounding error
-        if (actualUnstaked < expectedUnstake) {
-            console.log("Rounding Error:", expectedUnstake - actualUnstaked);
+            // Optional: Print the difference to see the magnitude of the rounding error
+            if (actualUnstaked < expectedUnstake) {
+                console.log("Rounding Error:", expectedUnstake - actualUnstaked);
+            }
         }
     }
 
@@ -887,7 +899,7 @@ contract ShivaTest is Test, ShivaTestBase {
         assertEq(remainingStaked, 0, "Should have unstaked all tokens after complete unwind");
 
         // Verify total unstaked matches initial stake
-        assertEq(totalUnstaked, initialStaked, "Total unstaked should match initial stake");
+        assertEq(totalUnstaked, REWARD_VAULT_BALANCE_VALIDATION ? initialStaked : 0, "Total unstaked should match initial stake");
     }
 
     /**
