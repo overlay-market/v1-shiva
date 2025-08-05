@@ -5,35 +5,33 @@ import {Script} from "forge-std/Script.sol";
 import {Shiva} from "../src/Shiva.sol";
 import {Constants} from "./Constants.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {RewardsVaultFactoryMock} from "src/mocks/RewardsVaultFactoryMock.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+
+// $ source .env && forge script scripts/Deploy.s.sol:Deploy --rpc-url $RPC --verify -vvvv
 abstract contract DeployScript is Script {
     function setUp() public {}
 
-    // function run() public {
-    //     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-    //     vm.startBroadcast(deployerPrivateKey);
-
-    //     // Deploy `Shiva` as a transparent proxy using the Upgrades Plugin
-    //     address transparentProxy = Upgrades.deployTransparentProxy(
-    //         "Shiva.sol",
-    //         msg.sender,
-    //         abi.encodeCall(Shiva.initialize, Constants.getOVLTokenAddress(), Constants.getOVLStateAddress(), Constants.getVaultFactoryAddress())
-    //     );
-    // }
-
     function _deploy() internal {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PK");
+        vm.startBroadcast(deployerPrivateKey);
+
+        /* deploy mock vault factory */
+        RewardsVaultFactoryMock rewardVaultFactory = new RewardsVaultFactoryMock();
+
+        ERC20 ovl = ERC20(Constants.getOVLTokenAddress());
+
+        require(ovl.decimals() == 18);
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address,address)";
+        string memory functionName = "initialize(address,address)";
         bytes memory data = abi.encodeWithSignature(
             functionName,
-            Constants.getOVLTokenAddress(),
-            Constants.getOVLStateAddress(),
-            Constants.getVaultFactoryAddress()
+            address(ovl),
+            address(rewardVaultFactory)
         );
 
-        vm.startBroadcast(deployerPrivateKey);
         Shiva impl = new Shiva();
         new ERC1967Proxy(address(impl), data);
 
