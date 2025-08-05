@@ -1,10 +1,10 @@
 pragma solidity ^0.8.10;
 
 /**
- * @title IBerachainRewardsVault
- * @notice Interface for the BerachainRewardsVault contract
+ * @title IRewardsVault
+ * @notice Interface for the RewardsVault contract
  */
-interface IBerachainRewardsVault {
+interface IRewardsVault {
     function delegateStake(address account, uint256 amount) external;
 
     function delegateWithdraw(address account, uint256 amount) external;
@@ -19,9 +19,9 @@ interface IBerachainRewardsVault {
 }
 
 /**
- * @title IBerachainRewardsVaultFactory
- * @notice Interface for the BerachainRewardsVaultFactory contract
+ * @title IRewardsVaultFactory
+ * @notice Interface for the RewardsVaultFactory contract
  */
-interface IBerachainRewardsVaultFactory {
+interface IRewardsVaultFactory {
     function createRewardVault(address stakingToken) external returns (address);
 }

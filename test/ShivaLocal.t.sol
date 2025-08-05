@@ -13,7 +13,7 @@ import {ShivaTest} from "./Shiva.t.sol";
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {Utils} from "src/utils/Utils.sol";
-import {IBerachainRewardsVaultFactory} from "src/interfaces/berachain/IRewardVaults.sol";
+import {IRewardsVaultFactory} from "src/interfaces/rewardVault/IRewardVaults.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
 
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
@@ -76,8 +76,8 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         ovlMarket = deployMarket(ovlFactory, address(feed));
 
         // Set Vault Factory
-        IBerachainRewardsVaultFactory vaultFactory =
-            IBerachainRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
+        IRewardsVaultFactory vaultFactory =
+            IRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
