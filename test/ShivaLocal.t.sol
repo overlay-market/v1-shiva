@@ -15,6 +15,7 @@ import {ShivaStructs} from "src/ShivaStructs.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {IRewardsVaultFactory} from "src/interfaces/rewardVault/IRewardVaults.sol";
 import {IFluxAggregator} from "src/interfaces/aggregator/IFluxAggregator.sol";
+import {RewardsVaultFactoryMock} from "src/mocks/RewardsVaultFactoryMock.sol";
 
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {IOverlayV1ChainlinkFeed} from
@@ -42,6 +43,8 @@ import {OverlayV1ChainlinkFeedFactory} from
  */
 contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
     using FixedPoint for uint256;
+
+    IOverlayV1Token public ovlTokenForRewardToken;
 
     /**
      * @dev Sets up the initial state for the ShivaBase test contract
@@ -75,9 +78,9 @@ contract ShivaLocalTest is Test, ShivaTestBase, ShivaTest {
         ovlState = deployPeriphery(ovlFactory);
         ovlMarket = deployMarket(ovlFactory, address(feed));
 
-        // Set Vault Factory
-        IRewardsVaultFactory vaultFactory =
-            IRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
+        // Set Vault Factory - Use RewardsVaultFactoryMock instead of real implementation
+        ovlTokenForRewardToken = deployToken();
+        IRewardsVaultFactory vaultFactory = new RewardsVaultFactoryMock();
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();

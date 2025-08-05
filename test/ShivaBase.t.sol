@@ -14,6 +14,7 @@ import {
     IRewardsVault,
     IRewardsVaultFactory
 } from "src/interfaces/rewardVault/IRewardVaults.sol";
+import {RewardsVaultFactoryMock} from "src/mocks/RewardsVaultFactoryMock.sol";
 
 import {
     IOverlayV1Token,
@@ -164,9 +165,8 @@ contract ShivaTestBase is Test, BaseSetup {
             )
         );
 
-        // Set Vault Factory
-        IRewardsVaultFactory vaultFactory =
-            IRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
+        // Set Vault Factory - Use RewardsVaultFactoryMock instead of real implementation
+        IRewardsVaultFactory vaultFactory = new RewardsVaultFactoryMock();
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();
