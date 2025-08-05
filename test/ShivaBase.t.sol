@@ -11,9 +11,10 @@ import {Utils} from "src/utils/Utils.sol";
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {
-    IBerachainRewardsVault,
-    IBerachainRewardsVaultFactory
-} from "src/interfaces/berachain/IRewardVaults.sol";
+    IRewardsVault,
+    IRewardsVaultFactory
+} from "src/interfaces/rewardVault/IRewardVaults.sol";
+import {RewardsVaultFactoryMock} from "src/mocks/RewardsVaultFactoryMock.sol";
 
 import {
     IOverlayV1Token,
@@ -54,6 +55,10 @@ contract ShivaTestBase is Test, BaseSetup {
     /// @notice Broker ID used in the system
     uint32 constant BROKER_ID = 0;
 
+    /// @notice Flag to control RewardVault balance validation in tests
+    /// @dev Set to false when using mocks (returns 0), true when using real implementation
+    bool constant REWARD_VAULT_BALANCE_VALIDATION = false;
+
     /**
      * @notice Shiva test contracts
      */
@@ -63,7 +68,7 @@ contract ShivaTestBase is Test, BaseSetup {
     IOverlayV1State ovlState;
     OverlayV1Factory ovlFactory;
     IOverlayV1Token ovlToken;
-    IBerachainRewardsVault rewardVault;
+    IRewardsVault rewardVault;
 
     MockSequencerOracle sequencerOracle;
     MockAggregator aggregator;
@@ -114,8 +119,8 @@ contract ShivaTestBase is Test, BaseSetup {
          *     vm.stopPrank();
          *
          *     // Set Vault Factory
-         *     IBerachainRewardsVaultFactory vaultFactory =
-         *         IBerachainRewardsVaultFactory(Constants.getVaultFactoryAddress());
+         *     IRewardsVaultFactory vaultFactory =
+         *         IRewardsVaultFactory(Constants.getVaultFactoryAddress());
          *
          *     // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
          *     Shiva shivaImplementation = new Shiva();
@@ -164,9 +169,8 @@ contract ShivaTestBase is Test, BaseSetup {
             )
         );
 
-        // Set Vault Factory
-        IBerachainRewardsVaultFactory vaultFactory =
-            IBerachainRewardsVaultFactory(Constants.getMainnetVaultFactoryAddress());
+        // Set Vault Factory - Use RewardsVaultFactoryMock instead of real implementation
+        IRewardsVaultFactory vaultFactory = new RewardsVaultFactoryMock();
 
         // Deploy Shiva contract using ERC1967Proxy pattern and initialize it with necessary parameters
         Shiva shivaImplementation = new Shiva();

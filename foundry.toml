@@ -13,6 +13,7 @@ ast = true
 arbitrum-sepolia = "${ARBITRUM_SEPOLIA_RPC}"
 bartio = "${BARTIO_RPC}"
 imola = "${IMOLA_RPC}"
+bsc-testnet = "${BSC_TESTNET_RPC}"
 
 [invariant]
 runs = 10

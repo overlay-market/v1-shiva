@@ -100,6 +100,20 @@ interface IShiva {
     event NonceCancelled(address indexed owner, uint256 nonce);
 
     /**
+     * @notice Emitted when the staking token is changed.
+     * @param oldStakingToken Address of the old staking token.
+     * @param newStakingToken Address of the new staking token.
+     */
+    event StakingTokenChanged(address indexed oldStakingToken, address indexed newStakingToken);
+
+    /**
+     * @notice Emitted when the rewards vault is changed.
+     * @param oldRewardsVault Address of the old rewards vault.
+     * @param newRewardsVault Address of the new rewards vault.
+     */
+    event RewardsVaultChanged(address indexed oldRewardsVault, address indexed newRewardsVault);
+
+    /**
      * @notice Error emitted when the caller is not the owner of the position.
      */
     error NotPositionOwner();

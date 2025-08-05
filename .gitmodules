@@ -14,3 +14,6 @@
 [submodule "lib/chimera"]
 	path = lib/chimera
 	url = https://github.com/Recon-Fuzz/chimera
+[submodule "lib/berachain-contracts"]
+	path = lib/berachain-contracts
+	url = https://github.com/berachain/contracts
