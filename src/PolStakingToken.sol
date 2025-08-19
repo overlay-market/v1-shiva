@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title StakingToken
- * @notice ERC20 token used for staking in BerachainRewardsVault contract
+ * @notice ERC20 token used for staking in RewardsVault contract
  */
 contract StakingToken is ERC20, Ownable {
     constructor() ERC20("OverlayStakingToken", "OvlSTK") Ownable() {}

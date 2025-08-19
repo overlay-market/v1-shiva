@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.10;
+pragma solidity <=0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Shiva} from "src/Shiva.sol";
+import {RewardsVaultFactoryMock} from "src/mocks/RewardsVaultFactoryMock.sol";
+import {Constants} from "./utils/Constants.sol";
 import {OverlayV1Token} from "v1-core/contracts/OverlayV1Token.sol";
 import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
 import {GOVERNOR_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
-import {Shiva} from "src/Shiva.sol";
-import {Constants} from "../scripts/Constants.sol";
-import {Constants as TestConstants} from "./utils/Constants.sol";
 
 /// @dev inherit from previous implementation contract to prevent storage collisions
 contract ShivaV1 is Shiva {
@@ -43,15 +43,18 @@ contract ShivaV2 is ShivaV1 {
 contract ImplementationV1Test is Test {
     ShivaV1 shivaV1;
     ERC1967Proxy proxy;
-    address vaultFactory = TestConstants.getMainnetVaultFactoryAddress();
+    RewardsVaultFactoryMock vaultFactory;
 
     function setUp() public {
         vm.createSelectFork(
-            vm.envString(TestConstants.getForkedMainnetNetworkRPC()),
-            TestConstants.getForkMainnetBlock()
+            vm.envString(Constants.getForkedMainnetNetworkRPC()),
+            Constants.getForkMainnetBlock()
         );
 
         OverlayV1Token ovlToken = new OverlayV1Token();
+
+        // Use RewardsVaultFactoryMock instead of real implementation
+        vaultFactory = new RewardsVaultFactoryMock();
 
         // deploy logic contract
         shivaV1 = new ShivaV1();
@@ -80,17 +83,20 @@ contract ImplementationV2Test is Test {
     ShivaV2 shivaV2;
     ERC1967Proxy proxy;
 
-    address vaultFactory = TestConstants.getMainnetVaultFactoryAddress();
+    RewardsVaultFactoryMock vaultFactory;
     address rewardVault;
 
     function setUp() public {
         vm.createSelectFork(
-            vm.envString(TestConstants.getForkedMainnetNetworkRPC()),
-            TestConstants.getForkMainnetBlock()
+            vm.envString(Constants.getForkedMainnetNetworkRPC()),
+            Constants.getForkMainnetBlock()
         );
 
         OverlayV1Token ovlToken = new OverlayV1Token();
-        ovlToken.grantRole(GOVERNOR_ROLE, TestConstants.getDeployerAddress());
+        ovlToken.grantRole(GOVERNOR_ROLE, Constants.getDeployerAddress());
+
+        // Use RewardsVaultFactoryMock instead of real implementation
+        vaultFactory = new RewardsVaultFactoryMock();
 
         // deploy logic contract
         shivaV1 = new ShivaV1();
@@ -123,7 +129,7 @@ contract ImplementationV2Test is Test {
         address(proxy).call(abi.encodeWithSignature("upgradeTo(address)", address(shivaV2)));
 
         vm.stopPrank();
-        vm.startPrank(TestConstants.getDeployerAddress());
+        vm.startPrank(Constants.getDeployerAddress());
 
         // update proxy to new implementation contract
         address(proxy).call(abi.encodeWithSignature("upgradeTo(address)", address(shivaV2)));
@@ -138,14 +144,22 @@ contract ImplementationV2Test is Test {
     function testMagicNumber() public {
         // proxy points to implV2, but magic value set via impl should still be valid, since storage from proxy contract is read
         (, bytes memory data) = address(proxy).call(abi.encodeWithSignature("magicNumber()"));
-        assertEq(abi.decode(data, (uint256)), 42);
+        uint256 magicNumber = abi.decode(data, (uint256));
+        assertEq(magicNumber, 42);
     }
 
     function testMagicString() public {
-        address(proxy).call(abi.encodeWithSignature("setMagicString(string)", "Test"));
-
-        // magic string should be "Test"
+        // proxy points to implV2, so we should be able to call new functions
+        address(proxy).call(abi.encodeWithSignature("setMagicString(string)", "Hello World"));
         (, bytes memory data) = address(proxy).call(abi.encodeWithSignature("magicString()"));
-        assertEq(abi.decode(data, (string)), "Test");
+        string memory magicString = abi.decode(data, (string));
+        assertEq(magicString, "Hello World");
+    }
+
+    function testVersion() public {
+        // proxy points to implV2, so version should be V2
+        (, bytes memory data) = address(proxy).call(abi.encodeWithSignature("version()"));
+        string memory version = abi.decode(data, (string));
+        assertEq(version, "V2");
     }
 }
