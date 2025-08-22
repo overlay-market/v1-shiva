@@ -205,7 +205,7 @@ contract Shiva is
     /**
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
-     * @param _vaultFactory The address of the Berachain Rewards Vault Factory contract
+     * @param _vaultFactory The address of the Rewards Vault Factory contract
      * @param _keeperFeeFeed The address of the keeper fee feed
      */
     function initialize(
