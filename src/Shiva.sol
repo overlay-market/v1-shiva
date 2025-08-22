@@ -83,6 +83,36 @@ contract Shiva is
         "BuildSingleOnBehalfOfParams(address ovlMarket,uint48 deadline,uint256 collateral,uint256 leverage,uint256 previousPositionId,uint256 unwindPriceLimit,uint256 buildPriceLimit,uint256 nonce,uint32 brokerId)"
     );
 
+    /// @notice The Overlay V1 Token contract
+    IOverlayV1Token public ovlToken;
+
+    /// @notice The StakingToken contract
+    StakingToken public stakingToken;
+
+    /// @notice The RewardsVault contract
+    IRewardsVault public rewardVault;
+
+    /// @notice List of authorized factories
+    IOverlayV1Factory[] public authorizedFactories;
+
+    /**
+     * @dev Mappings section
+     */
+
+    /// @notice Mapping from market and position ID to the address of the position owner
+    mapping(IOverlayV1Market => mapping(uint256 => address)) public positionOwners;
+
+    /// @notice Mapping to check if a market is allowed to spend OVL on behalf of this contract
+    mapping(IOverlayV1Market => bool) public marketAllowance;
+
+    /// @notice Mapping from performer address and nonce to boolean indicating if it's used
+    mapping(address => mapping(uint256 => bool)) public usedNonces;
+
+    /// @notice Mapping to check if an address is a valid market
+    mapping(address => bool) private validMarkets;
+
+    // ===== NEW VARIABLES FOR ADVANCED ORDERS & KEEPERS FEES =====
+
     /**
      * @notice Typehash for the StopLossOnBehalfOfParams struct
      * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
@@ -107,38 +137,9 @@ contract Shiva is
         "LimitOrderOnBehalfOf(address ovlMarket,uint32 brokerId,bool isLong,uint256 collateral,uint256 leverage,uint256 priceLimit,uint256 maxKeeperFee,uint48 deadline,uint256 nonce)"
     );
 
-
-    /// @notice The Overlay V1 Token contract
-    IOverlayV1Token public ovlToken;
-
-    /// @notice The StakingToken contract
-    StakingToken public stakingToken;
-
-    /// @notice The RewardsVault contract
-    IRewardsVault public rewardVault;
-
     /// @notice The oracle feed for the keeper fee
     IOverlayV1Feed public keeperFeeFeed;
 
-    /// @notice List of authorized factories
-    IOverlayV1Factory[] public authorizedFactories;
-
-    /**
-     * @dev Mappings section
-     */
-
-    /// @notice Mapping from market and position ID to the address of the position owner
-    mapping(IOverlayV1Market => mapping(uint256 => address)) public positionOwners;
-
-    /// @notice Mapping to check if a market is allowed to spend OVL on behalf of this contract
-    mapping(IOverlayV1Market => bool) public marketAllowance;
-
-    /// @notice Mapping from performer address and nonce to boolean indicating if it's used
-    mapping(address => mapping(uint256 => bool)) public usedNonces;
-
-    /// @notice Mapping to check if an address is a valid market
-    mapping(address => bool) private validMarkets;
-    
     /**
      * @dev Modifiers section
      */

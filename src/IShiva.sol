@@ -233,17 +233,6 @@ interface IShiva {
     ) external returns (uint256 positionId);
 
     /**
-     * @notice Builds a new limit order position on behalf of an owner.
-     * @param params Parameters to build the position.
-     * @param onBehalfOf Parameters to perform the action on behalf of an owner.
-     * @return positionId Unique ID of the built position.
-     */
-    function limitOrderBuild(
-        ShivaStructs.LimitOrder calldata params,
-        ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) external returns (uint256 positionId);
-
-    /**
      * @notice Builds a new position with a single transaction.
      * @param params Parameters to build the position.
      * @return positionId Unique ID of the built position.
@@ -280,6 +269,17 @@ interface IShiva {
     ) external;
 
     /**
+     * @notice Unwinds a position if the stop loss condition is met.
+     * @param params The parameters for the stop loss order based on the
+     * ShivaStructs.StopLoss struct.
+     * @param onBehalfOf The parameters for acting on behalf of a user.
+     */
+    function stopLoss(
+        ShivaStructs.StopLoss calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) external;
+
+    /**
      * @notice Unwinds a position to take profit on behalf of an owner.
      * @param params Parameters to unwind the position.
      * @param onBehalfOf Parameters to perform the action on behalf of an owner.
@@ -290,15 +290,15 @@ interface IShiva {
     ) external;
 
     /**
-     * @notice Unwinds a position if the stop loss condition is met.
-     * @param params The parameters for the stop loss order based on the
-     * ShivaStructs.StopLoss struct.
-     * @param onBehalfOf The parameters for acting on behalf of a user.
+     * @notice Builds a new limit order position on behalf of an owner.
+     * @param params Parameters to build the position.
+     * @param onBehalfOf Parameters to perform the action on behalf of an owner.
+     * @return positionId Unique ID of the built position.
      */
-    function stopLoss(
-        ShivaStructs.StopLoss calldata params,
+    function limitOrderBuild(
+        ShivaStructs.LimitOrder calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) external;
+    ) external returns (uint256 positionId);
 
     /**
      * @notice Withdraws funds from a position in case of market is shutdown.
