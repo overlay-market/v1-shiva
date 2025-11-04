@@ -2,6 +2,7 @@
 version = "0.8.10"
 src = "src"
 out = "out"
+script = "scripts"
 libs = ["lib"]
 evm_version="shanghai"
 build_info = true
