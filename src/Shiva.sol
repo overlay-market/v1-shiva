@@ -241,10 +241,11 @@ contract Shiva is
      * @param _lbsc The address of the Loan Based Stable Collateral pool
      */
     function setLbsc(address _lbsc) external onlyGovernor(msg.sender) {
+        address previousLbsc = address(lbsc);
         lbsc = ILoanBasedStableCollateral(_lbsc);
         ovlToken.approve(_lbsc, type(uint256).max);
 
-        // TODO add event
+        emit LbscSet(previousLbsc, _lbsc);
     }
 
     /**
@@ -543,7 +544,7 @@ contract Shiva is
         // Store the loanId for this position
         loanIds[_params.ovlMarket][positionId] = loanId;
 
-        // TODO emit event
+        emit ShivaBuildStable(address(_params.ovlMarket), positionId, loanId);
 
         return positionId;
     }

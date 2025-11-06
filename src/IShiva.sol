@@ -32,6 +32,18 @@ interface IShiva {
     );
 
     /**
+     * @notice Emitted when a position is built using stable collateral through Shiva.
+     * @param market Address of the market where the position was built.
+     * @param positionId Unique ID of the built position.
+     * @param loanId Loan identifier returned by the LBSC contract.
+     */
+    event ShivaBuildStable(
+        address indexed market,
+        uint256 indexed positionId,
+        uint256 loanId
+    );
+
+    /**
      * @notice Emitted when a position is unwound through Shiva.
      * @param owner Address of the position owner.
      * @param market Address of the market where the position was unwound.
@@ -85,6 +97,13 @@ interface IShiva {
      * @param factory Address of the removed factory.
      */
     event FactoryRemoved(address indexed factory);
+
+    /**
+     * @notice Emitted when the LBSC contract address is updated.
+     * @param previousLbsc Address of the previous LBSC contract.
+     * @param newLbsc Address of the new LBSC contract.
+     */
+    event LbscSet(address indexed previousLbsc, address indexed newLbsc);
 
     /**
      * @notice Emitted when a market is dynamically validated by Shiva.
