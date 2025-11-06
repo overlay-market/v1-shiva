@@ -1,0 +1,20 @@
+{
+  "lib/chimera": {
+    "rev": "d5cf52bc5bbf75f988f8aada23fd12d0bcf7798a"
+  },
+  "lib/forge-std": {
+    "rev": "bb4ceea94d6f10eeb5b41dc2391c6c8bf8e734ef"
+  },
+  "lib/openzeppelin-contracts": {
+    "rev": "dc44c9f1a4c3b10af99492eed84f83ed244203f6"
+  },
+  "lib/openzeppelin-contracts-upgradeable": {
+    "rev": "6b9807b0639e1dd75e07fa062e9432eb3f35dd8c"
+  },
+  "lib/v1-periphery": {
+    "branch": {
+      "name": "feat/PoL",
+      "rev": "dd4a36c9d003db107f3935a58f0f94f63b788e4c"
+    }
+  }
+}
