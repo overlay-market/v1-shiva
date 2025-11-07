@@ -461,7 +461,7 @@ contract Shiva is
         // If the position was opened with LBSC - settle the loan
         uint256 loanId = loanIds[market][positionId];
         if (loanId > 0) {
-            lbsc.settle(loanId);
+            lbsc.settle(loanId, 0);
         }
     }
 
@@ -517,7 +517,7 @@ contract Shiva is
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
         // Borrow OVL from LBSC - get the loanId
-        (uint256 ovlAmount, uint256 loanId) = lbsc.borrow(_params.stableCollateral);
+        (uint256 ovlAmount, uint256 loanId) = lbsc.borrow(_params.stableCollateral, _owner);
         require(ovlAmount >= _params.minOvl, "Shiva: borrowed amount < min");
         require(loanId > 0, "Shiva: invalid loanId");
 
@@ -555,6 +555,7 @@ contract Shiva is
      * @param _owner The address of the owner
      */
     function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
+        uint256 initialOvlBalance = ovlToken.balanceOf(address(this));
         _onUnwindPosition(
             _params.ovlMarket,
             _params.positionId,
@@ -566,8 +567,9 @@ contract Shiva is
         // If the position was opened with LBSC - settle the loan
         uint256 loanId = loanIds[_params.ovlMarket][_params.positionId];
         if (loanId > 0) {
+            uint256 ovlBalanceAfterUnwind = ovlToken.balanceOf(address(this));
             require(_params.fraction == 1e18, "Shiva: unwind fraction must be 1 for lbsc");
-            lbsc.settle(loanId);
+            lbsc.settle(loanId, ovlBalanceAfterUnwind - initialOvlBalance);
         }
 
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
