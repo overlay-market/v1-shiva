@@ -2,6 +2,7 @@
 pragma solidity 0.8.10;
 
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
+import {IOverlayV1Token} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 
 /**
@@ -146,6 +147,11 @@ interface IShiva {
     /**
      * @dev Functions that Shiva should implement.
      */
+
+    /**
+     * @notice Returns the address of the Overlay V1 token contract.
+     */
+    function ovlToken() external view returns (IOverlayV1Token);
 
     /**
      * @notice Builds a new position.
