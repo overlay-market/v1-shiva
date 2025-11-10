@@ -629,7 +629,7 @@ contract Shiva is
     function _computeBuildSingleTypedDataHash(
         ShivaStructs.BuildSingle calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) private view returns (bytes32) {
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,

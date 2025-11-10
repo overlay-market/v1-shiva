@@ -239,14 +239,14 @@ contract ShivaTestBase is Test, BaseSetup {
      * @return ovlToken_ The deployed OverlayV1Token contract.
      */
     function deployToken() public returns (IOverlayV1Token ovlToken_) {
-        OverlayV1Token ovlToken = new OverlayV1Token();
+        OverlayV1Token _ovlToken = new OverlayV1Token();
 
-        ovlToken.grantRole(GOVERNOR_ROLE, deployer);
-        ovlToken.grantRole(GUARDIAN_ROLE, deployer);
-        ovlToken.grantRole(PAUSER_ROLE, deployer);
-        ovlToken.grantRole(0x00, deployer); // DEFAULT_ADMIN_ROLE
+        _ovlToken.grantRole(GOVERNOR_ROLE, deployer);
+        _ovlToken.grantRole(GUARDIAN_ROLE, deployer);
+        _ovlToken.grantRole(PAUSER_ROLE, deployer);
+        _ovlToken.grantRole(0x00, deployer); // DEFAULT_ADMIN_ROLE
 
-        ovlToken_ = IOverlayV1Token(address(ovlToken));
+        ovlToken_ = IOverlayV1Token(address(_ovlToken));
     }
 
     /**

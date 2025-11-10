@@ -7,11 +7,11 @@ contract RewardsVaultMock is IRewardsVault {
 
     function delegateWithdraw(address account, uint256 amount) external {}
 
-    function getTotalDelegateStaked(address account) external view returns (uint256) {
+    function getTotalDelegateStaked(address ) external pure returns (uint256) {
         return 0;
     }
 
-    function balanceOf(address account) external view returns (uint256) {
+    function balanceOf(address ) external pure returns (uint256) {
         return 0;
     }
 
@@ -21,7 +21,7 @@ contract RewardsVaultMock is IRewardsVault {
 }
 
 contract RewardsVaultFactoryMock is IRewardsVaultFactory{
-    function createRewardVault(address stakingToken) external returns (address) {
+    function createRewardVault(address ) external returns (address) {
         return address(new RewardsVaultMock());
     }
 }
