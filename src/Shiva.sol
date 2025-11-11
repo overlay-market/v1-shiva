@@ -241,6 +241,8 @@ contract Shiva is
      * @param _lbsc The address of the Loan Based Stable Collateral pool
      */
     function setLbsc(address _lbsc) external onlyGovernor(msg.sender) {
+        require(_lbsc != address(0), "Shiva: lbsc is zero");
+
         address previousLbsc = address(lbsc);
         lbsc = ILoanBasedStableCollateral(_lbsc);
         ovlToken.approve(_lbsc, type(uint256).max);
