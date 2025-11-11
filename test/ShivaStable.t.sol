@@ -51,6 +51,53 @@ contract ShivaStableTest is Test, ShivaTestBase {
         assertEq(collateral, stableCollateral, "loan collateral mismatch");
         assertGt(debt, 0, "loan debt should be > 0");
         assertFalse(settled, "loan should be active");
+
+        assertOVLTokenBalanceIsZero(address(shiva));
+    }
+
+    function test_build_stable_notEnoughStableBalance() public {
+        vm.startPrank(alice);
+        stableToken.transfer(bob, stableToken.balanceOf(alice));
+
+        ShivaStructs.BuildStable memory params =
+            getBuildStableParams(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+
+        assertEq(stableToken.balanceOf(alice), 0, "alice should have no stables");
+
+        vm.startPrank(alice);
+        vm.expectRevert("ERC20: transfer amount exceeds balance");
+        shiva.buildStable(params);
+        vm.stopPrank();
+    }
+
+    function test_build_stable_notEnoughStableAllowance() public {
+        vm.prank(alice);
+        stableToken.approve(address(lbsc), 0);
+
+        ShivaStructs.BuildStable memory params =
+            getBuildStableParams(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+
+        vm.startPrank(alice);
+        vm.expectRevert("ERC20: insufficient allowance");
+        shiva.buildStable(params);
+        vm.stopPrank();
+    }
+
+    function test_build_stable_leverageBelowMinimum() public {
+        ShivaStructs.BuildStable memory params = ShivaStructs.BuildStable({
+            ovlMarket: ovlMarket,
+            brokerId: BROKER_ID,
+            isLong: true,
+            stableCollateral: 1_000e18,
+            leverage: ONE - 1,
+            priceLimit: type(uint256).max,
+            minOvl: 0
+        });
+
+        vm.startPrank(alice);
+        vm.expectRevert(bytes("Shiva:lev<min"));
+        shiva.buildStable(params);
+        vm.stopPrank();
     }
 
     function test_build_stable_afterUnpause() public {
