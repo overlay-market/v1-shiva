@@ -6,6 +6,8 @@ import {Test} from "forge-std/Test.sol";
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
 import {LoanBasedStableCollateral} from "src/LoanBasedStableCollateral.sol";
+import {IShiva} from "src/IShiva.sol";
+import {Utils} from "src/utils/Utils.sol";
 
 import {ShivaTestBase} from "./ShivaBase.t.sol";
 import {MockAggregator} from "./mocks/MockAggregator.sol";
@@ -113,6 +115,85 @@ contract ShivaStableTest is Test, ShivaTestBase {
         assertUserIsPositionOwnerInShiva(alice, positionId);
         uint256 loanId = shiva.loanIds(ovlMarket, positionId);
         assertGt(loanId, 0, "LBSC loan should be tracked");
+    }
+
+    function test_unwind_stable_fullPositionSettlesLoan() public {
+        uint256 initialStableBalance = stableToken.balanceOf(alice);
+        uint256 stableCollateral = 5_000e18;
+
+        vm.startPrank(alice);
+        uint256 positionId = buildStablePosition(stableCollateral, 2e18, BASIC_SLIPPAGE, true, 0);
+        uint256 stableBalanceAfterBuild = stableToken.balanceOf(alice);
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        assertGt(loanId, 0, "LBSC loan should be tracked");
+
+        (
+            address borrower,
+            uint256 collateral,
+            uint256 debt,
+            ,
+            bool settledBefore
+        ) = lbsc.loans(loanId);
+        assertEq(borrower, alice, "loan borrower mismatch");
+        assertEq(collateral, stableCollateral, "loan collateral mismatch");
+        assertGt(debt, 0, "loan debt should be > 0");
+        assertFalse(settledBefore, "loan should be active");
+
+        unwindPosition(positionId, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        (, , , , bool settledAfter) = lbsc.loans(loanId);
+        assertTrue(settledAfter, "loan should be settled");
+        assertEq(lbsc.totalOutstandingDebt(), 0, "outstanding debt should clear");
+        assertEq(lbsc.totalActiveCollateral(), 0, "active collateral should clear");
+        uint256 stableBalanceAfterUnwind = stableToken.balanceOf(alice);
+        assertGt(stableBalanceAfterUnwind, stableBalanceAfterBuild, "collateral should return");
+        assertLe(stableBalanceAfterUnwind, initialStableBalance, "collateral should not increase");
+        assertFractionRemainingIsZero(address(shiva), positionId);
+        assertOVLTokenBalanceIsZero(address(shiva));
+    }
+
+    function test_unwind_stable_partialFractionReverts() public {
+        vm.startPrank(alice);
+        uint256 positionId = buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        assertGt(loanId, 0, "LBSC loan should be tracked");
+
+        uint256 priceLimit = Utils.getUnwindPrice(
+            ovlState, ovlMarket, positionId, address(shiva), 5e17, BASIC_SLIPPAGE
+        );
+        vm.expectRevert("Shiva: unwind fraction must be 1 for lbsc");
+        shiva.unwind(ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, 5e17, priceLimit));
+        vm.stopPrank();
+    }
+
+    function test_unwind_stable_notOwner() public {
+        vm.startPrank(alice);
+        uint256 positionId = buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        vm.expectRevert(IShiva.NotPositionOwner.selector);
+        shiva.unwind(ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, 0));
+        vm.stopPrank();
+    }
+
+    function test_unwind_stable_pausedShiva() public {
+        vm.startPrank(alice);
+        uint256 positionId = buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        vm.stopPrank();
+
+        pauseShiva();
+
+        vm.startPrank(alice);
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        assertGt(loanId, 0, "LBSC loan should be tracked");
+        uint256 priceLimit = Utils.getUnwindPrice(
+            ovlState, ovlMarket, positionId, address(shiva), ONE, BASIC_SLIPPAGE
+        );
+        vm.expectRevert("Pausable: paused");
+        shiva.unwind(ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, priceLimit));
+        vm.stopPrank();
     }
 
     function test_setLbsc_onlyGovernor() public {
