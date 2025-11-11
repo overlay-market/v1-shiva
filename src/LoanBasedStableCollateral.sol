@@ -154,7 +154,7 @@ contract LoanBasedStableCollateral is
         uint256 availableOvl = ovlToken.balanceOf(address(this));
         require(availableOvl >= ovlAmount, "LBSC: insufficient OVL liquidity");
 
-        stableToken.transferFrom(borrower, address(this), stableAmount);
+        stableToken.safeTransferFrom(borrower, address(this), stableAmount);
         totalActiveCollateral += stableAmount;
         totalOutstandingDebt += ovlAmount;
 
@@ -200,18 +200,18 @@ contract LoanBasedStableCollateral is
 
         if (loss == 0) {
             collateralReturned = collateral;
-            stableToken.transfer(loan.borrower, collateralReturned);
+            stableToken.safeTransfer(loan.borrower, collateralReturned);
         } else {
             collateralSeized = MathUpgradeable.mulDiv(collateral, loss, debt);
             collateralReturned = collateral - collateralSeized;
 
             if (collateralReturned > 0) {
-                stableToken.transfer(loan.borrower, collateralReturned);
+                stableToken.safeTransfer(loan.borrower, collateralReturned);
             }
 
             if (collateralSeized > 0) {
                 if (lossRecipient != address(0)) {
-                    stableToken.transfer(lossRecipient, collateralSeized);
+                    stableToken.safeTransfer(lossRecipient, collateralSeized);
                 }
             }
         }
@@ -257,7 +257,7 @@ contract LoanBasedStableCollateral is
         require(to != address(0), "LBSC: zero address");
         uint256 available = availableStableSurplus();
         require(amount <= available, "LBSC: insufficient surplus");
-        stableToken.transfer(to, amount);
+        stableToken.safeTransfer(to, amount);
         emit StableSurplusWithdrawn(to, amount);
     }
 
