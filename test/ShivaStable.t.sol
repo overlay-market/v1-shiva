@@ -23,6 +23,36 @@ contract ShivaStableTest is Test, ShivaTestBase {
         vm.stopPrank();
     }
 
+    function testFuzz_build_stable(
+        bool isLong,
+        uint256 stableCollateral,
+        uint256 leverage
+    ) public {
+        uint256 maxStableCollateral = 50_000e18;
+        stableCollateral = bound(stableCollateral, 1e18, maxStableCollateral);
+        leverage = bound(leverage, ONE, 5e18);
+
+        ShivaStructs.BuildStable memory params =
+            getBuildStableParams(stableCollateral, leverage, BASIC_SLIPPAGE, isLong, 0);
+
+        vm.startPrank(alice);
+        uint256 positionId = shiva.buildStable(params);
+        vm.stopPrank();
+
+        assertFractionRemainingIsZero(alice, positionId);
+        assertFractionRemainingIsGreaterThanZero(address(shiva), positionId);
+        assertUserIsPositionOwnerInShiva(alice, positionId);
+
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        assertGt(loanId, 0, "LBSC loan should be tracked");
+
+        (address borrower, uint256 collateral, uint256 debt, , bool settled) = lbsc.loans(loanId);
+        assertEq(borrower, alice, "loan borrower mismatch");
+        assertEq(collateral, stableCollateral, "loan collateral mismatch");
+        assertGt(debt, 0, "loan debt should be > 0");
+        assertFalse(settled, "loan should be active");
+    }
+
     function test_build_stable_afterUnpause() public {
         pauseShiva();
         unpauseShiva();
