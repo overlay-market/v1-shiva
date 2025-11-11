@@ -127,6 +127,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         uint256 stableBalanceAfterBuild = stableToken.balanceOf(alice);
         uint256 loanId = shiva.loanIds(ovlMarket, positionId);
         assertGt(loanId, 0, "LBSC loan should be tracked");
+        _assertLbscCollateralAccounting(1);
 
         (
             address borrower,
@@ -152,6 +153,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         assertLe(stableBalanceAfterUnwind, initialStableBalance, "collateral should not increase");
         assertFractionRemainingIsZero(address(shiva), positionId);
         assertOVLTokenBalanceIsZero(address(shiva));
+        _assertNoOpenLbscLoans();
     }
 
     function test_unwind_stable_partialFractionReverts() public {
@@ -197,6 +199,40 @@ contract ShivaStableTest is Test, ShivaTestBase {
         vm.stopPrank();
     }
 
+    function test_lbsc_openLoansMatchStableBalance() public {
+        vm.startPrank(alice);
+        buildStablePosition(2_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        buildStablePosition(3_000e18, 3e18, BASIC_SLIPPAGE, false, 0);
+        vm.stopPrank();
+
+        _assertLbscCollateralAccounting(2);
+    }
+
+    function test_lbsc_noGhostLoansAfterSettle() public {
+        vm.startPrank(alice);
+        uint256 alicePosition = buildStablePosition(2_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        uint256 bobPosition = buildStablePosition(1_500e18, 2e18, BASIC_SLIPPAGE, false, 0);
+        vm.stopPrank();
+
+        _assertLbscCollateralAccounting(2);
+
+        vm.startPrank(alice);
+        unwindPosition(alicePosition, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        unwindPosition(bobPosition, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        _assertNoOpenLbscLoans();
+    }
+
     function testFuzz_build_stable_unwind_profit(
         bool isLong,
         uint256 stableCollateral,
@@ -215,6 +251,8 @@ contract ShivaStableTest is Test, ShivaTestBase {
             buildStablePosition(stableCollateral, leverage, BASIC_SLIPPAGE, isLong, 0);
         vm.stopPrank();
 
+        _assertLbscCollateralAccounting(1);
+
         _setFavorablePrice(isLong, priceImpactBps);
 
         vm.startPrank(alice);
@@ -232,6 +270,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         assertEq(aliceStableAfter, aliceStableBefore, "collateral should return on profit");
         assertGt(aliceOvlAfter, aliceOvlBefore, "profit should return extra OVL");
         assertOVLTokenBalanceIsZero(address(shiva));
+        _assertNoOpenLbscLoans();
     }
 
     function testFuzz_build_stable_unwind_loss(
@@ -252,6 +291,8 @@ contract ShivaStableTest is Test, ShivaTestBase {
             buildStablePosition(stableCollateral, leverage, BASIC_SLIPPAGE, isLong, 0);
         vm.stopPrank();
 
+        _assertLbscCollateralAccounting(1);
+
         _setUnfavorablePrice(isLong, priceImpactBps);
 
         vm.startPrank(alice);
@@ -269,6 +310,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         assertLt(aliceStableAfter, aliceStableBefore, "loss should seize collateral");
         assertLe(aliceOvlAfter, aliceOvlBefore, "loss should not mint extra OVL");
         assertOVLTokenBalanceIsZero(address(shiva));
+        _assertNoOpenLbscLoans();
     }
 
     function _setFavorablePrice(bool isLong, uint256 priceImpactBps) internal {
@@ -298,6 +340,45 @@ contract ShivaStableTest is Test, ShivaTestBase {
         aggregator.submit(nextRound + 1, newPrice);
         vm.stopPrank();
         vm.warp(block.timestamp + 3600);
+    }
+
+    function _assertLbscCollateralAccounting(uint256 expectedOpenLoans) internal view {
+        (uint256 sumCollateral,, uint256 openLoans) = _getLbscOpenLoanStats();
+        assertEq(openLoans, expectedOpenLoans, "unexpected open loan count");
+        assertEq(sumCollateral, lbsc.totalActiveCollateral(), "active collateral mismatch");
+        uint256 stableBalance = stableToken.balanceOf(address(lbsc));
+        uint256 surplus = lbsc.availableStableSurplus();
+        assertGe(stableBalance, surplus, "surplus exceeds balance");
+        assertEq(sumCollateral, stableBalance - surplus, "stable balance mismatch");
+    }
+
+    function _assertNoOpenLbscLoans() internal view {
+        (uint256 sumCollateral,, uint256 openLoans) = _getLbscOpenLoanStats();
+        assertEq(openLoans, 0, "open loans remain");
+        assertEq(sumCollateral, 0, "collateral locked unexpectedly");
+        assertEq(lbsc.totalActiveCollateral(), 0, "LBSC collateral should be zero");
+        uint256 stableBalance = stableToken.balanceOf(address(lbsc));
+        uint256 surplus = lbsc.availableStableSurplus();
+        assertGe(stableBalance, surplus, "surplus exceeds balance");
+        assertEq(stableBalance - surplus, 0, "stable balance mismatch after settle");
+    }
+
+    function _getLbscOpenLoanStats()
+        internal
+        view
+        returns (uint256 sumCollateral, uint256 sumDebt, uint256 openLoans)
+    {
+        uint256 nextLoanId = lbsc.nextLoanId();
+        for (uint256 loanId = 1; loanId < nextLoanId; loanId++) {
+            (address borrower, uint256 collateral, uint256 debt,, bool settled) = lbsc.loans(loanId);
+            if (!settled) {
+                require(borrower != address(0), "loan borrower zero");
+                require(collateral > 0, "stableLocked must be > 0");
+                sumCollateral += collateral;
+                sumDebt += debt;
+                openLoans++;
+            }
+        }
     }
 
     function test_setLbsc_onlyGovernor() public {
