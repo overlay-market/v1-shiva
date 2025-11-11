@@ -60,6 +60,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
     function test_build_stable_notEnoughStableBalance() public {
         vm.startPrank(alice);
         stableToken.transfer(bob, stableToken.balanceOf(alice));
+        vm.stopPrank();
 
         ShivaStructs.BuildStable memory params =
             getBuildStableParams(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
@@ -194,6 +195,109 @@ contract ShivaStableTest is Test, ShivaTestBase {
         vm.expectRevert("Pausable: paused");
         shiva.unwind(ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, priceLimit));
         vm.stopPrank();
+    }
+
+    function testFuzz_build_stable_unwind_profit(
+        bool isLong,
+        uint256 stableCollateral,
+        uint256 leverage,
+        uint256 priceImpactBps
+    ) public {
+        stableCollateral = bound(stableCollateral, 1_000e18, 50_000e18);
+        leverage = bound(leverage, ONE, 5e18);
+        priceImpactBps = bound(priceImpactBps, 20_000, 50_000); // 2x - 5x move
+
+        uint256 aliceStableBefore = stableToken.balanceOf(alice);
+        uint256 aliceOvlBefore = ovlToken.balanceOf(alice);
+
+        vm.startPrank(alice);
+        uint256 positionId =
+            buildStablePosition(stableCollateral, leverage, BASIC_SLIPPAGE, isLong, 0);
+        vm.stopPrank();
+
+        _setFavorablePrice(isLong, priceImpactBps);
+
+        vm.startPrank(alice);
+        unwindPosition(positionId, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        uint256 aliceStableAfter = stableToken.balanceOf(alice);
+        uint256 aliceOvlAfter = ovlToken.balanceOf(alice);
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        (, , , , bool settled) = lbsc.loans(loanId);
+
+        assertTrue(settled, "loan should settle");
+        assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear");
+        assertEq(lbsc.totalActiveCollateral(), 0, "collateral should clear");
+        assertEq(aliceStableAfter, aliceStableBefore, "collateral should return on profit");
+        assertGt(aliceOvlAfter, aliceOvlBefore, "profit should return extra OVL");
+        assertOVLTokenBalanceIsZero(address(shiva));
+    }
+
+    function testFuzz_build_stable_unwind_loss(
+        bool isLong,
+        uint256 stableCollateral,
+        uint256 leverage,
+        uint256 priceImpactBps
+    ) public {
+        stableCollateral = bound(stableCollateral, 1_000e18, 50_000e18);
+        leverage = bound(leverage, ONE, 2e18);
+        priceImpactBps = bound(priceImpactBps, 11_500, 13_500); // 1.15x - 1.35x move
+
+        uint256 aliceStableBefore = stableToken.balanceOf(alice);
+        uint256 aliceOvlBefore = ovlToken.balanceOf(alice);
+
+        vm.startPrank(alice);
+        uint256 positionId =
+            buildStablePosition(stableCollateral, leverage, BASIC_SLIPPAGE, isLong, 0);
+        vm.stopPrank();
+
+        _setUnfavorablePrice(isLong, priceImpactBps);
+
+        vm.startPrank(alice);
+        unwindPosition(positionId, ONE, BASIC_SLIPPAGE);
+        vm.stopPrank();
+
+        uint256 aliceStableAfter = stableToken.balanceOf(alice);
+        uint256 aliceOvlAfter = ovlToken.balanceOf(alice);
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        (, , , , bool settled) = lbsc.loans(loanId);
+
+        assertTrue(settled, "loan should settle");
+        assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear");
+        assertEq(lbsc.totalActiveCollateral(), 0, "collateral should clear");
+        assertLt(aliceStableAfter, aliceStableBefore, "loss should seize collateral");
+        assertLe(aliceOvlAfter, aliceOvlBefore, "loss should not mint extra OVL");
+        assertOVLTokenBalanceIsZero(address(shiva));
+    }
+
+    function _setFavorablePrice(bool isLong, uint256 priceImpactBps) internal {
+        int256 basePrice = aggregator.latestAnswer();
+        require(basePrice > 0, "invalid base price");
+        int256 impact = int256(priceImpactBps);
+        int256 newPrice =
+            isLong ? (basePrice * impact) / int256(10_000) : (basePrice * int256(10_000)) / impact;
+        _setMarketPrice(newPrice);
+    }
+
+    function _setUnfavorablePrice(bool isLong, uint256 priceImpactBps) internal {
+        int256 basePrice = aggregator.latestAnswer();
+        require(basePrice > 0, "invalid base price");
+        int256 impact = int256(priceImpactBps);
+        int256 newPrice =
+            isLong ? (basePrice * int256(10_000)) / impact : (basePrice * impact) / int256(10_000);
+        _setMarketPrice(newPrice);
+    }
+
+    function _setMarketPrice(int256 newPrice) internal {
+        require(newPrice > 0, "price must be positive");
+        uint256 nextRound = aggregator.latestRound() + 1;
+        vm.startPrank(deployer);
+        aggregator.submit(nextRound, newPrice);
+        vm.warp(block.timestamp + 3600);
+        aggregator.submit(nextRound + 1, newPrice);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 3600);
     }
 
     function test_setLbsc_onlyGovernor() public {
