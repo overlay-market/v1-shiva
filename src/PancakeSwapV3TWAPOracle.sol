@@ -6,11 +6,8 @@ import {IUniswapV3Pool} from
     "v1-periphery/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {TickMath} from "v1-periphery/lib/v3-core/contracts/libraries/TickMath.sol";
 import {FullMath} from "v1-periphery/lib/v3-core/contracts/libraries/FullMath.sol";
-import {IERC20MetadataUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @notice Minimal interface for PancakeSwap V3 Pool slot0
@@ -40,12 +37,7 @@ interface IPancakeV3PoolSlot0 {
  * @dev For OVL/USDT pool: returns USDT price per 1 OVL (e.g., 0.06 means 1 OVL = 0.06 USDT)
  * @dev Price is normalized to 1e18 (WAD precision)
  */
-contract PancakeSwapV3TWAPOracle is
-    IPancakeSwapV3TWAPOracle,
-    Initializable,
-    UUPSUpgradeable,
-    OwnableUpgradeable
-{
+contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
     /// @notice Precision for price calculations (WAD)
     uint256 private constant WAD = 1e18;
 
@@ -67,19 +59,12 @@ contract PancakeSwapV3TWAPOracle is
     /// @notice Scaling factor for token1 (Stable)
     uint256 private token1Decimals;
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
     /**
-     * @notice Initializes the TWAP oracle
+     * @notice Creates a new TWAP oracle
      * @param _pool Address of the PancakeSwap V3 pool
      * @param _twapPeriod TWAP period in seconds (e.g., 1800 for 30 minutes)
      */
-    function initialize(address _pool, uint32 _twapPeriod) external initializer {
-        __Ownable_init();
-
+    constructor(address _pool, uint32 _twapPeriod) {
         require(_pool != address(0), "PancakeSwapV3TWAP: pool is zero");
         require(_twapPeriod > 0, "PancakeSwapV3TWAP: period is zero");
         require(_twapPeriod <= MAX_TWAP_PERIOD, "PancakeSwapV3TWAP: period too long");
@@ -90,8 +75,8 @@ contract PancakeSwapV3TWAPOracle is
         // Get token decimals for proper price scaling
         address token0 = pool.token0();
         address token1 = pool.token1();
-        token0Decimals = 10 ** uint256(IERC20MetadataUpgradeable(token0).decimals());
-        token1Decimals = 10 ** uint256(IERC20MetadataUpgradeable(token1).decimals());
+        token0Decimals = 10 ** uint256(IERC20Metadata(token0).decimals());
+        token1Decimals = 10 ** uint256(IERC20Metadata(token1).decimals());
 
         emit TwapPeriodUpdated(0, _twapPeriod);
         emit PoolUpdated(address(0), _pool);
@@ -170,8 +155,8 @@ contract PancakeSwapV3TWAPOracle is
         // Update token decimals
         address token0 = pool.token0();
         address token1 = pool.token1();
-        token0Decimals = 10 ** uint256(IERC20MetadataUpgradeable(token0).decimals());
-        token1Decimals = 10 ** uint256(IERC20MetadataUpgradeable(token1).decimals());
+        token0Decimals = 10 ** uint256(IERC20Metadata(token0).decimals());
+        token1Decimals = 10 ** uint256(IERC20Metadata(token1).decimals());
 
         emit PoolUpdated(previousPool, newPool);
     }
@@ -262,9 +247,4 @@ contract PancakeSwapV3TWAPOracle is
 
         require(price > 0, "PancakeSwapV3TWAP: price is zero");
     }
-
-    /**
-     * @dev Authorizes contract upgrades
-     */
-    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

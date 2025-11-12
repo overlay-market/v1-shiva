@@ -2,9 +2,7 @@
 pragma solidity 0.8.10;
 
 import {Test, console} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {PancakeSwapV3TWAPOracle} from "src/PancakeSwapV3TWAPOracle.sol";
-import {IPancakeSwapV3TWAPOracle} from "src/IPancakeSwapV3TWAPOracle.sol";
 import {IUniswapV3Pool} from "v1-periphery/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 /**
@@ -31,28 +29,19 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         console.log("=== PancakeSwap V3 TWAP Oracle Fork Test ===");
         console.log("Pool:", PANCAKE_POOL);
 
-        // Deploy oracle implementation
-        PancakeSwapV3TWAPOracle implementation = new PancakeSwapV3TWAPOracle();
-
-        // Deploy proxy and initialize
-        bytes memory initData = abi.encodeWithSelector(
-            PancakeSwapV3TWAPOracle.initialize.selector,
-            PANCAKE_POOL,
-            TWAP_PERIOD
-        );
-        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-        oracle = PancakeSwapV3TWAPOracle(address(proxy));
+        // Deploy oracle directly (no proxy needed)
+        oracle = new PancakeSwapV3TWAPOracle(PANCAKE_POOL, TWAP_PERIOD);
 
         console.log("Oracle deployed at:", address(oracle));
     }
 
-    // ============ Initialization Tests ============
+    // ============ Construction Tests ============
 
-    function test_initialize() public view {
+    function test_constructor() public view {
         assertEq(address(oracle.pool()), PANCAKE_POOL);
         assertEq(oracle.twapPeriod(), TWAP_PERIOD);
         assertEq(oracle.owner(), owner);
-        console.log("[PASS] Oracle initialized correctly");
+        console.log("[PASS] Oracle constructed correctly");
     }
 
     function test_getMinCardinality() public view {
