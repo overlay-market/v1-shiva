@@ -6,6 +6,7 @@ import {Utils} from "../../src/utils/Utils.sol";
 
 abstract contract TargetFunctions is BaseTargetFunctions, Properties {
     uint256[] public positionIds;
+    uint256[] public stablePositionIds;
 
     function handler_build_and_unwind_position(
         uint256 collateral,
@@ -66,11 +67,49 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
         vm.stopPrank();
     }
 
+    function buildStable(
+        uint256 stableCollateral,
+        uint256 leverage,
+        uint16 slippage,
+        uint8 isLong
+    ) external {
+        stableCollateral = between(stableCollateral, 1e18, 1e21);
+        leverage = between(leverage, ONE, 1e20);
+        slippage = uint16(between(uint256(slippage), 0, 10000));
+        bool longPosition = isLong != 0;
+
+        deal(address(stableToken), alice, stableCollateral * 2);
+
+        vm.startPrank(alice);
+        uint256 positionId =
+            buildStablePosition(stableCollateral, leverage, slippage, longPosition, 0);
+        stablePositionIds.push(positionId);
+
+        uint256 randomValue = slippage;
+        if (stablePositionIds.length > 0 && randomValue % 2 == 0) {
+            uint256 randomPosIndex = between(randomValue, 0, stablePositionIds.length - 1);
+            uint256 posIdToUnwind = stablePositionIds[randomPosIndex];
+            unwindPosition(posIdToUnwind, ONE, slippage);
+
+            // remove the unwound position
+            stablePositionIds[randomPosIndex] =
+                stablePositionIds[stablePositionIds.length - 1];
+            stablePositionIds.pop();
+        }
+
+        vm.stopPrank();
+    }
+
     function _calculateTotalNotionalRemaining() internal view override returns (uint256) {
         uint256 totalNotional;
 
         for (uint256 i = 0; i < positionIds.length; i++) {
             totalNotional += Utils.getNotionalRemaining(ovlMarket, positionIds[i], address(shiva));
+        }
+
+        for (uint256 i = 0; i < stablePositionIds.length; i++) {
+            totalNotional +=
+                Utils.getNotionalRemaining(ovlMarket, stablePositionIds[i], address(shiva));
         }
 
         return totalNotional;
