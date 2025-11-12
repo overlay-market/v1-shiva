@@ -313,6 +313,87 @@ contract ShivaStableTest is Test, ShivaTestBase {
         _assertNoOpenLbscLoans();
     }
 
+    function test_liquidate_stable_longPositionSettlesLoan() public {
+        _assertStableLiquidation(true);
+    }
+
+    function test_liquidate_stable_shortPositionSettlesLoan() public {
+        _assertStableLiquidation(false);
+    }
+
+    function _assertStableLiquidation(bool isLong) internal {
+        uint256 stableCollateral = 10_000e18;
+        uint256 leverage = 5e18;
+        uint256 priceImpactBps = 60_000; // ~6x move to ensure liquidation
+
+        uint256 aliceStableBefore = stableToken.balanceOf(alice);
+
+        vm.startPrank(alice);
+        uint256 positionId =
+            buildStablePosition(stableCollateral, leverage, BASIC_SLIPPAGE, isLong, 0);
+        vm.stopPrank();
+
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        assertGt(loanId, 0, "lbsc loan should be tracked");
+
+        uint256 aliceStableAfterBuild = stableToken.balanceOf(alice);
+        assertEq(
+            aliceStableAfterBuild,
+            aliceStableBefore - stableCollateral,
+            "collateral should transfer to lbsc"
+        );
+
+        _assertLbscCollateralAccounting(1);
+
+        _setUnfavorablePrice(isLong, priceImpactBps);
+        assertTrue(
+            ovlState.liquidatable(ovlMarket, address(shiva), positionId),
+            "position should be liquidatable"
+        );
+
+        vm.prank(bob);
+        ovlMarket.liquidate(address(shiva), positionId);
+
+        (, , , , bool settled) = lbsc.loans(loanId);
+        assertTrue(settled, "loan should settle on liquidation");
+
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            bool liquidated,
+            ,
+            uint16 fractionRemaining
+        ) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), positionId)));
+        assertTrue(liquidated, "market position should flag liquidated");
+        assertEq(fractionRemaining, 0, "liquidation should zero fraction remaining");
+
+        uint256 aliceStableAfterLiquidation = stableToken.balanceOf(alice);
+        assertEq(
+            aliceStableAfterLiquidation,
+            aliceStableAfterBuild,
+            "borrower collateral should remain seized"
+        );
+
+        assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear after liquidation");
+        assertEq(lbsc.totalActiveCollateral(), 0, "collateral should clear after liquidation");
+        assertEq(
+            stableToken.balanceOf(address(lbsc)),
+            stableCollateral,
+            "lbsc should hold seized collateral"
+        );
+        assertEq(
+            lbsc.availableStableSurplus(),
+            stableCollateral,
+            "seized collateral becomes surplus"
+        );
+
+        assertOVLTokenBalanceIsZero(address(shiva));
+        _assertNoOpenLbscLoans();
+    }
+
     function _setFavorablePrice(bool isLong, uint256 priceImpactBps) internal {
         int256 basePrice = aggregator.latestAnswer();
         require(basePrice > 0, "invalid base price");

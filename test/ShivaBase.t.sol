@@ -22,6 +22,7 @@ import {
     GOVERNOR_ROLE,
     PAUSER_ROLE,
     GUARDIAN_ROLE,
+    LIQUIDATE_CALLBACK_ROLE,
     MINTER_ROLE
 } from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
@@ -190,6 +191,8 @@ contract ShivaTestBase is Test, BaseSetup {
         // Set up shiva contract and reward vault
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
         rewardVault = shiva.rewardVault();
+
+        ovlToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
 
         // Deploy LBSC related contracts
         stableToken = new ERC20Mock();
