@@ -114,4 +114,20 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
 
         return totalNotional;
     }
+
+    function _trackedPositionCount() internal view override returns (uint256) {
+        return positionIds.length;
+    }
+
+    function _trackedStablePositionCount() internal view override returns (uint256) {
+        return stablePositionIds.length;
+    }
+
+    function _hasStablePositionTracking() internal pure override returns (bool) {
+        return true;
+    }
+
+    function _trackedStablePositionId(uint256 index) internal view override returns (uint256) {
+        return stablePositionIds[index];
+    }
 }

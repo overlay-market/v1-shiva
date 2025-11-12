@@ -29,11 +29,23 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
     // uncomment this to run invariant test
     // to run only this test:  forge test --match-contract ShivaCryticToFoundry
 
-    // function invariant_shiva_dont_have_ov() public {
-    //     assertTrue(property_shiva_dont_have_ovl());
-    // }
+    function invariant_shiva_dont_have_ov() public view {
+        assertTrue(property_shiva_dont_have_ovl());
+    }
 
-    // function invariant_staking_balance_matches_notional() public {
+    function invariant_lbsc_collateral_accounting() public view {
+        assertTrue(property_lbsc_collateral_accounting());
+    }
+
+    function invariant_stable_builds_have_valid_loans() public view {
+        assertTrue(property_stable_builds_have_valid_loans());
+    }
+
+    function invariant_no_residual_funds_after_settle() public view {
+        assertTrue(property_no_residual_funds_after_settle());
+    }
+
+    // function invariant_staking_balance_matches_notional() public view {
     //     assertTrue(property_staking_balance_matches_notional());
     // }
 }
