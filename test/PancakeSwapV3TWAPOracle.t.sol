@@ -103,6 +103,52 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         console.log("[PASS] Correctly reverts on insufficient cardinality");
     }
 
+    function test_getSpotPrice() public view {
+        console.log("=== Testing getSpotPrice ===");
+
+        // Spot price should always be available (doesn't need cardinality)
+        uint256 spotPrice = oracle.getSpotPrice();
+        console.log("Spot price (WAD):", spotPrice);
+        console.log("Spot price (formatted):", spotPrice / 1e18);
+
+        assertGt(spotPrice, 0, "Spot price should be positive");
+        console.log("[SUCCESS] Spot price fetched from pool!");
+    }
+
+    function test_spotVsTwapComparison() public view {
+        console.log("=== Comparing Spot vs TWAP ===");
+
+        // Get spot price
+        uint256 spotPrice = oracle.getSpotPrice();
+        console.log("Spot price:", spotPrice / 1e18);
+
+        // Try to get TWAP if cardinality allows
+        bool hasCardinality = oracle.checkCardinality(TWAP_PERIOD);
+
+        if (!hasCardinality) {
+            console.log("[SKIP] Pool doesn't have enough observations for TWAP comparison");
+            return;
+        }
+
+        uint256 twapPrice = oracle.getPrice(TWAP_PERIOD);
+        console.log("TWAP price:", twapPrice / 1e18);
+
+        // Both should be positive
+        assertGt(spotPrice, 0, "Spot price should be positive");
+        assertGt(twapPrice, 0, "TWAP price should be positive");
+
+        // Log which is higher
+        if (spotPrice > twapPrice) {
+            console.log("Spot price is HIGHER than TWAP (protocol would use spot)");
+        } else if (twapPrice > spotPrice) {
+            console.log("TWAP price is HIGHER than spot (protocol would use TWAP)");
+        } else {
+            console.log("Prices are equal");
+        }
+
+        console.log("[PASS] Spot vs TWAP comparison complete");
+    }
+
     // ============ Admin Function Tests ============
 
     function test_setPool() public {

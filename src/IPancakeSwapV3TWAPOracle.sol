@@ -44,4 +44,12 @@ interface IPancakeSwapV3TWAPOracle {
      * @return minCardinality The minimum number of observations needed
      */
     function getMinCardinality() external view returns (uint16 minCardinality);
+
+    /**
+     * @notice Returns the current spot price from the pool (non-TWAP)
+     * @dev Uses current tick from slot0, no time-weighting
+     * @dev Price is normalized to 1e18 (WAD precision)
+     * @return price The spot price scaled to 1e18
+     */
+    function getSpotPrice() external view returns (uint256 price);
 }

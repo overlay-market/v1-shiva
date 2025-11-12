@@ -125,6 +125,15 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
         return 2;
     }
 
+    /// @inheritdoc IPancakeSwapV3TWAPOracle
+    function getSpotPrice() external view override returns (uint256 price) {
+        // Get current tick from slot0
+        (, int24 currentTick, , , , , ) = IPancakeV3PoolSlot0(address(pool)).slot0();
+
+        // Convert current tick to price
+        price = _getQuoteAtTick(currentTick);
+    }
+
     /**
      * @notice Updates the pool address
      * @param newPool New pool address

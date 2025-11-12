@@ -356,15 +356,23 @@ contract LoanBasedStableCollateral is
     /**
      * @dev Returns the latest oracle price scaled to 1e18.
      * @dev Uses hybrid approach: TWAP as primary, Chainlink as fallback
+     * @dev Returns max(TWAP, spot) for manipulation resistance (worst price for borrower)
      */
     function _getPrice() internal view returns (uint256) {
         // Try TWAP oracle first if configured
         if (address(twapOracle) != address(0)) {
-            try twapOracle.getPrice(twapPeriod) returns (uint256 twapPrice) {
-                // TWAP succeeded, return the price
-                return twapPrice;
+            try twapOracle.checkCardinality(twapPeriod) returns (bool hasCardinality) {
+                if (hasCardinality) {
+                    // Get both TWAP and spot prices
+                    uint256 twapPrice = twapOracle.getPrice(twapPeriod);
+                    uint256 spotPrice = twapOracle.getSpotPrice();
+
+                    // Return worst price for user (maximum) to prevent manipulation
+                    // Higher price = less OVL borrowed = worse for user, safer for protocol
+                    return MathUpgradeable.max(twapPrice, spotPrice);
+                }
             } catch {
-                // TWAP failed (insufficient cardinality or other error)
+                // TWAP oracle check failed
                 // Fall through to Chainlink
             }
         }
