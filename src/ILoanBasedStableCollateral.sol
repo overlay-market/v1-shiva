@@ -36,6 +36,7 @@ interface ILoanBasedStableCollateral {
 
     event ShivaUpdated(address indexed previousShiva, address indexed newShiva);
     event PriceFeedUpdated(address indexed previousFeed, address indexed newFeed);
+    event TwapOracleUpdated(address indexed previousOracle, address indexed newOracle);
     event MaxPriceAgeUpdated(uint256 previousMaxAge, uint256 newMaxAge);
     event LossRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event StableSurplusWithdrawn(address indexed to, uint256 amount);

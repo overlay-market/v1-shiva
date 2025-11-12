@@ -3,6 +3,7 @@ pragma solidity 0.8.10;
 
 import {ILoanBasedStableCollateral} from "./ILoanBasedStableCollateral.sol";
 import {IShiva} from "./IShiva.sol";
+import {IPancakeSwapV3TWAPOracle} from "./IPancakeSwapV3TWAPOracle.sol";
 
 import {AggregatorV3Interface} from
     "v1-core/lib/chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -60,6 +61,9 @@ contract LoanBasedStableCollateral is
 
     /// @notice Oracle providing the OVL price in stable terms
     AggregatorV3Interface public priceFeed;
+
+    /// @notice PancakeSwap V3 TWAP oracle (primary price source)
+    IPancakeSwapV3TWAPOracle public twapOracle;
 
     /// @notice Address of the Shiva contract
     address public shiva;
@@ -292,6 +296,16 @@ contract LoanBasedStableCollateral is
     }
 
     /**
+     * @notice Updates the TWAP oracle contract.
+     * @param newOracle Address of the new TWAP oracle (can be zero to disable).
+     */
+    function setTwapOracle(address newOracle) external onlyOwner {
+        address previous = address(twapOracle);
+        twapOracle = IPancakeSwapV3TWAPOracle(newOracle);
+        emit TwapOracleUpdated(previous, newOracle);
+    }
+
+    /**
      * @notice Updates the maximum allowed price age.
      * @param newMaxAge New maximum staleness in seconds.
      */
@@ -323,8 +337,21 @@ contract LoanBasedStableCollateral is
 
     /**
      * @dev Returns the latest oracle price scaled to 1e18.
+     * @dev Uses hybrid approach: TWAP as primary, Chainlink as fallback
      */
     function _getPrice() internal view returns (uint256) {
+        // Try TWAP oracle first if configured
+        if (address(twapOracle) != address(0)) {
+            try twapOracle.getPrice() returns (uint256 twapPrice) {
+                // TWAP succeeded, return the price
+                return twapPrice;
+            } catch {
+                // TWAP failed (insufficient cardinality or other error)
+                // Fall through to Chainlink
+            }
+        }
+
+        // Fallback to Chainlink oracle
         (
             uint80 roundId,
             int256 answer,
