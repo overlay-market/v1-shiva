@@ -100,6 +100,65 @@ abstract contract TargetFunctions is BaseTargetFunctions, Properties {
         vm.stopPrank();
     }
 
+    function handler_liquidate_position(uint256 rnd, uint8 preferStable) external {
+        uint256 normalCount = positionIds.length;
+        uint256 stableCount = stablePositionIds.length;
+        if (normalCount == 0 && stableCount == 0) return;
+
+        bool useStable = preferStable % 2 == 0;
+        if (stableCount == 0) useStable = false;
+        if (normalCount == 0) useStable = true;
+
+        uint256 index = useStable ? between(rnd, 0, stableCount - 1) : between(rnd, 0, normalCount - 1);
+        uint256 posId = useStable ? stablePositionIds[index] : positionIds[index];
+
+        if (!_ensureLiquidatable(posId)) return;
+
+        vm.prank(bob);
+        ovlMarket.liquidate(address(shiva), posId);
+
+        _removeTrackedPosition(useStable, index);
+    }
+
+    function _ensureLiquidatable(uint256 posId) internal returns (bool) {
+        if (ovlState.liquidatable(ovlMarket, address(shiva), posId)) {
+            return true;
+        }
+
+        (,,,, bool isLong,,,) = ovlMarket.positions(keccak256(abi.encodePacked(address(shiva), posId)));
+        _forcePriceMove(isLong);
+
+        return ovlState.liquidatable(ovlMarket, address(shiva), posId);
+    }
+
+    function _forcePriceMove(bool isLong) internal {
+        int256 newPrice = isLong ? int256(1e8) : aggregator.latestAnswer() * 50;
+        if (newPrice <= 0) newPrice = int256(1e8);
+        if (newPrice > int256(1000000e8)) {
+            newPrice = int256(1000000e8);
+        }
+
+        uint256 nextRound = aggregator.latestRound() + 1;
+        vm.startPrank(deployer);
+        aggregator.submit(nextRound, newPrice);
+        vm.warp(block.timestamp + 1 hours);
+        aggregator.submit(nextRound + 1, newPrice);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 1 hours);
+    }
+
+    function _removeTrackedPosition(bool isStable, uint256 index) internal {
+        if (isStable) {
+            uint256 lastIndex = stablePositionIds.length - 1;
+            stablePositionIds[index] = stablePositionIds[lastIndex];
+            stablePositionIds.pop();
+        } else {
+            uint256 lastIndex = positionIds.length - 1;
+            positionIds[index] = positionIds[lastIndex];
+            positionIds.pop();
+        }
+    }
+
     function _calculateTotalNotionalRemaining() internal view override returns (uint256) {
         uint256 totalNotional;
 
