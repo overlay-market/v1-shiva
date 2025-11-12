@@ -65,6 +65,9 @@ contract LoanBasedStableCollateral is
     /// @notice PancakeSwap V3 TWAP oracle (primary price source)
     IPancakeSwapV3TWAPOracle public twapOracle;
 
+    /// @notice TWAP period in seconds for oracle queries
+    uint32 public twapPeriod;
+
     /// @notice Address of the Shiva contract
     address public shiva;
 
@@ -139,6 +142,9 @@ contract LoanBasedStableCollateral is
 
         ovlToken = IShiva(shiva).ovlToken();
         require(IERC20MetadataUpgradeable(address(ovlToken)).decimals() == 18, "LBSC: OVL token decimals != 18");
+
+        // Set default TWAP period to 30 minutes
+        twapPeriod = 1800;
     }
 
     /// @inheritdoc ILoanBasedStableCollateral
@@ -306,6 +312,18 @@ contract LoanBasedStableCollateral is
     }
 
     /**
+     * @notice Updates the TWAP period used for oracle queries.
+     * @param newPeriod New TWAP period in seconds.
+     */
+    function setTwapPeriod(uint32 newPeriod) external onlyOwner {
+        require(newPeriod > 0, "LBSC: period is zero");
+        require(newPeriod <= 7 days, "LBSC: period too long");
+        uint32 previousPeriod = twapPeriod;
+        twapPeriod = newPeriod;
+        emit TwapPeriodUpdated(previousPeriod, newPeriod);
+    }
+
+    /**
      * @notice Updates the maximum allowed price age.
      * @param newMaxAge New maximum staleness in seconds.
      */
@@ -342,7 +360,7 @@ contract LoanBasedStableCollateral is
     function _getPrice() internal view returns (uint256) {
         // Try TWAP oracle first if configured
         if (address(twapOracle) != address(0)) {
-            try twapOracle.getPrice() returns (uint256 twapPrice) {
+            try twapOracle.getPrice(twapPeriod) returns (uint256 twapPrice) {
                 // TWAP succeeded, return the price
                 return twapPrice;
             } catch {

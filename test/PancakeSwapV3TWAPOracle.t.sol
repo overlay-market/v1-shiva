@@ -29,8 +29,8 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         console.log("=== PancakeSwap V3 TWAP Oracle Fork Test ===");
         console.log("Pool:", PANCAKE_POOL);
 
-        // Deploy oracle directly (no proxy needed)
-        oracle = new PancakeSwapV3TWAPOracle(PANCAKE_POOL, TWAP_PERIOD);
+        // Deploy oracle directly (no proxy needed, twapPeriod is now a parameter)
+        oracle = new PancakeSwapV3TWAPOracle(PANCAKE_POOL);
 
         console.log("Oracle deployed at:", address(oracle));
     }
@@ -39,7 +39,6 @@ contract PancakeSwapV3TWAPOracleTest is Test {
 
     function test_constructor() public view {
         assertEq(address(oracle.pool()), PANCAKE_POOL);
-        assertEq(oracle.twapPeriod(), TWAP_PERIOD);
         assertEq(oracle.owner(), owner);
         console.log("[PASS] Oracle constructed correctly");
     }
@@ -53,7 +52,7 @@ contract PancakeSwapV3TWAPOracleTest is Test {
     // ============ Cardinality Tests ============
 
     function test_checkCardinality() public view {
-        bool hasCardinality = oracle.checkCardinality();
+        bool hasCardinality = oracle.checkCardinality(TWAP_PERIOD);
         console.log("Pool cardinality sufficient:", hasCardinality);
 
         // This test adapts based on real pool state
@@ -71,7 +70,7 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         console.log("=== Testing getPrice ===");
 
         // Check cardinality first
-        bool hasCardinality = oracle.checkCardinality();
+        bool hasCardinality = oracle.checkCardinality(TWAP_PERIOD);
         console.log("Has cardinality:", hasCardinality);
 
         if (!hasCardinality) {
@@ -80,7 +79,7 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         }
 
         // Get TWAP price from real pool
-        uint256 price = oracle.getPrice();
+        uint256 price = oracle.getPrice(TWAP_PERIOD);
         console.log("TWAP price (WAD):", price);
         console.log("TWAP price (formatted):", price / 1e18);
 
@@ -91,7 +90,7 @@ contract PancakeSwapV3TWAPOracleTest is Test {
     function test_getPrice_revertsOnInsufficientCardinality() public {
         // Deploy a new oracle on a pool that might not have cardinality
         // For this test, we'll check if current pool has cardinality and skip if it does
-        bool hasCardinality = oracle.checkCardinality();
+        bool hasCardinality = oracle.checkCardinality(TWAP_PERIOD);
 
         if (hasCardinality) {
             console.log("[SKIP] Cannot test insufficient cardinality - pool has sufficient observations");
@@ -100,36 +99,11 @@ contract PancakeSwapV3TWAPOracleTest is Test {
 
         // If pool doesn't have cardinality, getPrice should revert
         vm.expectRevert("PancakeSwapV3TWAP: insufficient cardinality");
-        oracle.getPrice();
+        oracle.getPrice(TWAP_PERIOD);
         console.log("[PASS] Correctly reverts on insufficient cardinality");
     }
 
     // ============ Admin Function Tests ============
-
-    function test_setTwapPeriod() public {
-        uint32 newPeriod = 3600; // 1 hour
-
-        vm.expectEmit(false, false, false, true);
-        emit TwapPeriodUpdated(TWAP_PERIOD, newPeriod);
-
-        oracle.setTwapPeriod(newPeriod);
-
-        assertEq(oracle.twapPeriod(), newPeriod);
-        console.log("[PASS] TWAP period updated to:", newPeriod);
-    }
-
-    function test_setTwapPeriod_revertsOnZero() public {
-        vm.expectRevert("PancakeSwapV3TWAP: period is zero");
-        oracle.setTwapPeriod(0);
-        console.log("[PASS] Correctly reverts on zero period");
-    }
-
-    function test_setTwapPeriod_revertsIfNotOwner() public {
-        vm.prank(user);
-        vm.expectRevert("Ownable: caller is not the owner");
-        oracle.setTwapPeriod(3600);
-        console.log("[PASS] Correctly restricts to owner");
-    }
 
     function test_setPool() public {
         address newPool = PANCAKE_POOL; // Using same pool for simplicity
@@ -187,6 +161,5 @@ contract PancakeSwapV3TWAPOracleTest is Test {
 
     // ============ Events ============
 
-    event TwapPeriodUpdated(uint32 previousPeriod, uint32 newPeriod);
     event PoolUpdated(address indexed previousPool, address indexed newPool);
 }

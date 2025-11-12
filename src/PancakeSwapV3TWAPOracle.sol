@@ -50,9 +50,6 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
     /// @notice PancakeSwap V3 pool contract
     IUniswapV3Pool public pool;
 
-    /// @notice TWAP period in seconds
-    uint32 public twapPeriod;
-
     /// @notice Scaling factor for token0 (OVL)
     uint256 private token0Decimals;
 
@@ -62,15 +59,11 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
     /**
      * @notice Creates a new TWAP oracle
      * @param _pool Address of the PancakeSwap V3 pool
-     * @param _twapPeriod TWAP period in seconds (e.g., 1800 for 30 minutes)
      */
-    constructor(address _pool, uint32 _twapPeriod) {
+    constructor(address _pool) {
         require(_pool != address(0), "PancakeSwapV3TWAP: pool is zero");
-        require(_twapPeriod > 0, "PancakeSwapV3TWAP: period is zero");
-        require(_twapPeriod <= MAX_TWAP_PERIOD, "PancakeSwapV3TWAP: period too long");
 
         pool = IUniswapV3Pool(_pool);
-        twapPeriod = _twapPeriod;
 
         // Get token decimals for proper price scaling
         address token0 = pool.token0();
@@ -78,23 +71,24 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
         token0Decimals = 10 ** uint256(IERC20Metadata(token0).decimals());
         token1Decimals = 10 ** uint256(IERC20Metadata(token1).decimals());
 
-        emit TwapPeriodUpdated(0, _twapPeriod);
         emit PoolUpdated(address(0), _pool);
     }
 
     /// @inheritdoc IPancakeSwapV3TWAPOracle
-    function getPrice() external view override returns (uint256 price) {
-        require(checkCardinality(), "PancakeSwapV3TWAP: insufficient cardinality");
+    function getPrice(uint32 twapPeriod) external view override returns (uint256 price) {
+        require(twapPeriod > 0, "PancakeSwapV3TWAP: period is zero");
+        require(twapPeriod <= MAX_TWAP_PERIOD, "PancakeSwapV3TWAP: period too long");
+        require(checkCardinality(twapPeriod), "PancakeSwapV3TWAP: insufficient cardinality");
 
         // Get TWAP tick
-        int24 twapTick = _getTwapTick();
+        int24 twapTick = _getTwapTick(twapPeriod);
 
         // Convert tick to price
         price = _getQuoteAtTick(twapTick);
     }
 
     /// @inheritdoc IPancakeSwapV3TWAPOracle
-    function checkCardinality() public view override returns (bool) {
+    function checkCardinality(uint32 twapPeriod) public view override returns (bool) {
         // Use PancakeSwap-specific interface for slot0 to handle uint32 feeProtocol
         (
             , // sqrtPriceX96
@@ -132,18 +126,6 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
     }
 
     /**
-     * @notice Updates the TWAP period
-     * @param newPeriod New TWAP period in seconds
-     */
-    function setTwapPeriod(uint32 newPeriod) external onlyOwner {
-        require(newPeriod > 0, "PancakeSwapV3TWAP: period is zero");
-        require(newPeriod <= MAX_TWAP_PERIOD, "PancakeSwapV3TWAP: period too long");
-        uint32 previousPeriod = twapPeriod;
-        twapPeriod = newPeriod;
-        emit TwapPeriodUpdated(previousPeriod, newPeriod);
-    }
-
-    /**
      * @notice Updates the pool address
      * @param newPool New pool address
      */
@@ -163,9 +145,10 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
 
     /**
      * @dev Calculates the time-weighted average tick from the pool
+     * @param twapPeriod The TWAP period in seconds
      * @return twapTick The arithmetic mean tick over the TWAP period
      */
-    function _getTwapTick() internal view returns (int24 twapTick) {
+    function _getTwapTick(uint32 twapPeriod) internal view returns (int24 twapTick) {
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = twapPeriod; // e.g., 1800 seconds ago
         secondsAgos[1] = 0; // now
