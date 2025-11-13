@@ -19,6 +19,9 @@ contract PancakeSwapV3TWAPOracleTest is Test {
     uint32 constant TWAP_PERIOD = 1800; // 30 minutes
 
     function setUp() public {
+        // Create and select BSC fork
+        vm.createSelectFork(vm.envString("BSC_RPC"));
+
         pool = IUniswapV3Pool(PANCAKE_POOL);
 
         console.log("=== PancakeSwap V3 TWAP Oracle Fork Test ===");
