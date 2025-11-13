@@ -14,16 +14,11 @@ contract PancakeSwapV3TWAPOracleTest is Test {
     PancakeSwapV3TWAPOracle public oracle;
     IUniswapV3Pool public pool;
 
-    address public owner;
-    address public user;
-
     // Real PancakeSwap V3 OVL/USDT pool on BSC
     address constant PANCAKE_POOL = 0x927aE3c2cd88717a1525a55021AF9612C3F04583;
     uint32 constant TWAP_PERIOD = 1800; // 30 minutes
 
     function setUp() public {
-        owner = address(this);
-        user = makeAddr("user");
         pool = IUniswapV3Pool(PANCAKE_POOL);
 
         console.log("=== PancakeSwap V3 TWAP Oracle Fork Test ===");
@@ -39,7 +34,6 @@ contract PancakeSwapV3TWAPOracleTest is Test {
 
     function test_constructor() public view {
         assertEq(address(oracle.pool()), PANCAKE_POOL);
-        assertEq(oracle.owner(), owner);
         console.log("[PASS] Oracle constructed correctly");
     }
 
@@ -149,33 +143,6 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         console.log("[PASS] Spot vs TWAP comparison complete");
     }
 
-    // ============ Admin Function Tests ============
-
-    function test_setPool() public {
-        address newPool = PANCAKE_POOL; // Using same pool for simplicity
-
-        vm.expectEmit(true, true, false, true);
-        emit PoolUpdated(PANCAKE_POOL, newPool);
-
-        oracle.setPool(newPool);
-
-        assertEq(address(oracle.pool()), newPool);
-        console.log("[PASS] Pool updated successfully");
-    }
-
-    function test_setPool_revertsOnZeroAddress() public {
-        vm.expectRevert("PancakeSwapV3TWAP: pool is zero");
-        oracle.setPool(address(0));
-        console.log("[PASS] Correctly reverts on zero address");
-    }
-
-    function test_setPool_revertsIfNotOwner() public {
-        vm.prank(user);
-        vm.expectRevert("Ownable: caller is not the owner");
-        oracle.setPool(PANCAKE_POOL);
-        console.log("[PASS] Correctly restricts to owner");
-    }
-
     // ============ Real Pool Information Tests ============
 
     function test_poolInfo() public view {
@@ -205,7 +172,4 @@ contract PancakeSwapV3TWAPOracleTest is Test {
         console.log("[INFO] Pool info retrieved successfully");
     }
 
-    // ============ Events ============
-
-    event PoolUpdated(address indexed previousPool, address indexed newPool);
 }

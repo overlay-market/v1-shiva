@@ -7,7 +7,6 @@ import {IUniswapV3Pool} from
 import {TickMath} from "v1-periphery/lib/v3-core/contracts/libraries/TickMath.sol";
 import {FullMath} from "v1-periphery/lib/v3-core/contracts/libraries/FullMath.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @notice Minimal interface for PancakeSwap V3 Pool slot0
@@ -37,7 +36,7 @@ interface IPancakeV3PoolSlot0 {
  * @dev For OVL/USDT pool: returns USDT price per 1 OVL (e.g., 0.06 means 1 OVL = 0.06 USDT)
  * @dev Price is normalized to 1e18 (WAD precision)
  */
-contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
+contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle {
     /// @notice Precision for price calculations (WAD)
     uint256 private constant WAD = 1e18;
 
@@ -48,13 +47,13 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
     uint32 private constant MAX_TWAP_PERIOD = 7 days;
 
     /// @notice PancakeSwap V3 pool contract
-    IUniswapV3Pool public pool;
+    IUniswapV3Pool public immutable pool;
 
     /// @notice Scaling factor for token0 (OVL)
-    uint256 private token0Decimals;
+    uint256 private immutable token0Decimals;
 
     /// @notice Scaling factor for token1 (Stable)
-    uint256 private token1Decimals;
+    uint256 private immutable token1Decimals;
 
     /**
      * @notice Creates a new TWAP oracle
@@ -70,8 +69,6 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
         address token1 = pool.token1();
         token0Decimals = 10 ** uint256(IERC20Metadata(token0).decimals());
         token1Decimals = 10 ** uint256(IERC20Metadata(token1).decimals());
-
-        emit PoolUpdated(address(0), _pool);
     }
 
     /// @inheritdoc IPancakeSwapV3TWAPOracle
@@ -132,24 +129,6 @@ contract PancakeSwapV3TWAPOracle is IPancakeSwapV3TWAPOracle, Ownable {
 
         // Convert current tick to price
         price = _getQuoteAtTick(currentTick);
-    }
-
-    /**
-     * @notice Updates the pool address
-     * @param newPool New pool address
-     */
-    function setPool(address newPool) external onlyOwner {
-        require(newPool != address(0), "PancakeSwapV3TWAP: pool is zero");
-        address previousPool = address(pool);
-        pool = IUniswapV3Pool(newPool);
-
-        // Update token decimals
-        address token0 = pool.token0();
-        address token1 = pool.token1();
-        token0Decimals = 10 ** uint256(IERC20Metadata(token0).decimals());
-        token1Decimals = 10 ** uint256(IERC20Metadata(token1).decimals());
-
-        emit PoolUpdated(previousPool, newPool);
     }
 
     /**

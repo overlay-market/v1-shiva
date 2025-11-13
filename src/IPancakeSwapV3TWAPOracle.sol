@@ -10,13 +10,6 @@ import {IUniswapV3Pool} from "v1-periphery/lib/v3-core/contracts/interfaces/IUni
  */
 interface IPancakeSwapV3TWAPOracle {
     /**
-     * @notice Emitted when the pool address is updated
-     * @param previousPool Previous pool address
-     * @param newPool New pool address
-     */
-    event PoolUpdated(address indexed previousPool, address indexed newPool);
-
-    /**
      * @notice Returns the TWAP price of token0 in terms of token1 over the specified period
      * @dev Returns how many token1 per 1 token0 (e.g., USDT per 1 OVL)
      * @dev Price is normalized to 1e18 (WAD precision)

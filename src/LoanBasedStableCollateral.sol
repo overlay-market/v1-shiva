@@ -145,6 +145,7 @@ contract LoanBasedStableCollateral is
 
         // Set default TWAP period to 30 minutes
         twapPeriod = 1800;
+        emit TwapPeriodUpdated(0, twapPeriod);
     }
 
     /// @inheritdoc ILoanBasedStableCollateral
@@ -361,18 +362,15 @@ contract LoanBasedStableCollateral is
     function _getPrice() internal view returns (uint256) {
         // Try TWAP oracle first if configured
         if (address(twapOracle) != address(0)) {
-            try twapOracle.checkCardinality(twapPeriod) returns (bool hasCardinality) {
-                if (hasCardinality) {
-                    // Get both TWAP and spot prices
-                    uint256 twapPrice = twapOracle.getPrice(twapPeriod);
-                    uint256 spotPrice = twapOracle.getSpotPrice();
+            try twapOracle.getPrice(twapPeriod) returns (uint256 twapPrice) {
+                // TWAP succeeded, get spot price and return worst case
+                uint256 spotPrice = twapOracle.getSpotPrice();
 
-                    // Return worst price for user (maximum) to prevent manipulation
-                    // Higher price = less OVL borrowed = worse for user, safer for protocol
-                    return MathUpgradeable.max(twapPrice, spotPrice);
-                }
+                // Return worst price for user (maximum) to prevent manipulation
+                // Higher price = less OVL borrowed = worse for user, safer for protocol
+                return MathUpgradeable.max(twapPrice, spotPrice);
             } catch {
-                // TWAP oracle check failed
+                // TWAP failed (insufficient cardinality or other error)
                 // Fall through to Chainlink
             }
         }
