@@ -5,6 +5,8 @@ import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
 import {FixedCast} from "v1-core/contracts/libraries/FixedCast.sol";
+import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
+import {Oracle} from "v1-core/contracts/libraries/Oracle.sol";
 
 /**
  * @title Utils
@@ -130,7 +132,40 @@ library Utils {
         IOverlayV1Market ovlMarket,
         uint256 positionId,
         address owner
-    ) external view returns (bool isLong) {
+    ) internal view returns (bool isLong) {
         (,,,, isLong,,,) = ovlMarket.positions(keccak256(abi.encodePacked(owner, positionId)));
+    }
+
+    /**
+     * @notice Checks if the stop loss trigger condition is met for a position.
+     * @param market The market interface.
+     * @param positionId The ID of the position.
+     * @param shivaAddress The address of the Shiva contract holding the position.
+     * @param triggerPrice The trigger price for the stop loss.
+     * @return True if the trigger condition is met, false otherwise.
+     */
+    function checkStopLossTrigger(
+        IOverlayV1Market market,
+        uint256 positionId,
+        address shivaAddress,
+        uint256 triggerPrice
+    ) external view returns (bool) {
+        bool isLong = getPositionSide(market, positionId, shivaAddress);
+
+        IOverlayV1Feed feed = IOverlayV1Feed(market.feed());
+        Oracle.Data memory data = feed.latest();
+
+        // For stop-loss, we are unwinding a position.
+        // For a long position, we sell, so we look at the bid price.
+        // For a short position, we buy, so we look at the ask price.
+        uint256 currentPrice = isLong ? market.bid(data, 0) : market.ask(data, 0);
+
+        if (isLong) {
+            // Trigger when the current price is less than or equal to the trigger price.
+            return currentPrice <= triggerPrice;
+        } else {
+            // Trigger when the current price is greater than or equal to the trigger price.
+            return currentPrice >= triggerPrice;
+        }
     }
 }

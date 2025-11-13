@@ -75,4 +75,64 @@ library ShivaStructs {
         uint256 nonce;
         bytes signature;
     }
+
+    /**
+     * @notice Represents the parameters to perform a stop loss order
+     * @param ovlMarket The market interface
+     * @param brokerId The ID of the broker; 0 in most cases
+     * @param payKeeperFee Indicates whether the keeper should be paid a fee
+     * @param positionId The ID of the position to unwind
+     * @param fraction The fraction of the position to unwind
+     * @param priceLimit The price limit for the unwind
+     * @param triggerPrice The price at which the stop loss is triggered
+     * @param maxKeeperFee The maximum fee to pay the keeper
+     */
+    struct StopLoss {
+        IOverlayV1Market ovlMarket;
+        uint32 brokerId;
+        bool payKeeperFee;
+        uint256 positionId;
+        uint256 fraction;
+        uint256 priceLimit;
+        uint256 triggerPrice;
+        uint256 maxKeeperFee;
+    }
+
+    /**
+     * @notice Represents the parameters for a take profit order.
+     * @param ovlMarket The market interface.
+     * @param brokerId The ID of the broker; 0 in most cases.
+     * @param positionId The ID of the position to unwind.
+     * @param fraction The fraction of the position to unwind.
+     * @param priceLimit The price limit for the unwind.
+     * @param maxKeeperFee The maximum fee to pay the keeper.
+     */
+    struct TakeProfit {
+        IOverlayV1Market ovlMarket;
+        uint32 brokerId;
+        uint256 positionId;
+        uint256 fraction;
+        uint256 priceLimit;
+        uint256 maxKeeperFee;
+    }
+
+    /**
+     * @notice Represents the parameters for a limit order.
+     * @param ovlMarket The market interface.
+     * @param brokerId The ID of the broker; 0 in most cases.
+     * @param isLong Indicates if the position is long.
+     * @param collateral The amount of collateral.
+     * @param leverage The leverage applied.
+     * @param priceLimit The price limit for the position.
+     * @param maxKeeperFee The maximum fee to pay the keeper.
+     */
+    struct LimitOrder {
+        IOverlayV1Market ovlMarket;
+        uint32 brokerId;
+        bool isLong;
+        uint256 collateral;
+        uint256 leverage;
+        uint256 priceLimit;
+        uint256 maxKeeperFee;
+    }
 }

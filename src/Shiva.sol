@@ -20,6 +20,7 @@ import {
     PAUSER_ROLE
 } from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1State} from "v1-periphery/contracts/interfaces/IOverlayV1State.sol";
+import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
 import {Risk} from "v1-core/contracts/libraries/Risk.sol";
 import {Position} from "v1-core/contracts/libraries/Position.sol";
 import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
@@ -110,6 +111,35 @@ contract Shiva is
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
 
+    // ===== NEW VARIABLES FOR ADVANCED ORDERS & KEEPERS FEES =====
+
+    /**
+     * @notice Typehash for the StopLossOnBehalfOfParams struct
+     * @dev Used for EIP-712 encoding of the stop loss on behalf of parameters
+     */
+    bytes32 public constant STOP_LOSS_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "StopLossOnBehalfOf(address ovlMarket,uint32 brokerId,bool payKeeperFee,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 triggerPrice,uint256 maxKeeperFee,uint48 deadline,uint256 nonce)"
+    );
+
+    /**
+     * @notice Typehash for the TakeProfitOnBehalfOfParams struct
+     * @dev Used for EIP-712 encoding of the take profit on behalf of parameters
+     */
+    bytes32 public constant TAKE_PROFIT_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "TakeProfitOnBehalfOf(address ovlMarket,uint32 brokerId,uint256 positionId,uint256 fraction,uint256 priceLimit,uint256 maxKeeperFee,uint48 deadline,uint256 nonce)"
+    );
+
+    /**
+     * @notice Typehash for the LimitOrderOnBehalfOfParams struct
+     * @dev Used for EIP-712 encoding of the limit order on behalf of parameters
+     */
+    bytes32 public constant LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH = keccak256(
+        "LimitOrderOnBehalfOf(address ovlMarket,uint32 brokerId,bool isLong,uint256 collateral,uint256 leverage,uint256 priceLimit,uint256 maxKeeperFee,uint48 deadline,uint256 nonce)"
+    );
+
+    /// @notice The oracle feed for the keeper fee
+    IOverlayV1Feed public keeperFeeFeed;
+
     /**
      * @dev Modifiers section
      */
@@ -176,15 +206,18 @@ contract Shiva is
      * @notice Initializes the Shiva contract
      * @param _ovlToken The address of the Overlay V1 Token contract
      * @param _vaultFactory The address of the Rewards Vault Factory contract
+     * @param _keeperFeeFeed The address of the keeper fee feed
      */
     function initialize(
         address _ovlToken,
-        address _vaultFactory
+        address _vaultFactory,
+        IOverlayV1Feed _keeperFeeFeed
     ) external initializer {
         __EIP712_init("Shiva", "0.1.0");
         __Pausable_init();
 
         ovlToken = IOverlayV1Token(_ovlToken);
+        keeperFeeFeed = _keeperFeeFeed;
 
         // Create new staking token
         stakingToken = new StakingToken();
@@ -270,6 +303,14 @@ contract Shiva is
         onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
     {
         _unwindLogic(params, msg.sender);
+        emit ShivaUnwind(
+            msg.sender,
+            address(params.ovlMarket),
+            msg.sender,
+            params.positionId,
+            params.fraction,
+            params.brokerId
+        );
     }
 
     /**
@@ -341,6 +382,68 @@ contract Shiva is
     }
 
     /**
+     * @notice Builds a limit order position on behalf of a user (with signature verification)
+     * @param params The parameters for building the position based on the
+     * ShivaStructs.LimitOrder struct
+     * @param onBehalfOf The parameters for building on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @return The ID of the newly created position
+     */
+    function limitOrderBuild(
+        ShivaStructs.LimitOrder calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    )
+        external
+        whenNotPaused
+        validMarket(params.ovlMarket)
+        validDeadline(onBehalfOf.deadline)
+        returns (uint256)
+    {
+        {
+            bytes32 structHash = keccak256(
+                abi.encode(
+                    LIMIT_ORDER_ON_BEHALF_OF_TYPEHASH,
+                    params.ovlMarket,
+                    params.brokerId,
+                    params.isLong,
+                    params.collateral,
+                    params.leverage,
+                    params.priceLimit,
+                    params.maxKeeperFee,
+                    onBehalfOf.deadline,
+                    onBehalfOf.nonce
+                )
+            );
+            _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+        }
+
+        ShivaStructs.Build memory buildParams = ShivaStructs.Build({
+            ovlMarket: params.ovlMarket,
+            collateral: params.collateral,
+            leverage: params.leverage,
+            isLong: params.isLong,
+            priceLimit: params.priceLimit,
+            brokerId: params.brokerId
+        });
+
+        uint256 positionId = _buildLogic(buildParams, onBehalfOf.owner);
+        uint256 keeperFee = _payKeeperFee(onBehalfOf.owner, params.maxKeeperFee);
+
+        emit LimitOrderExecuted(
+            onBehalfOf.owner,
+            address(params.ovlMarket),
+            msg.sender,
+            positionId,
+            params.collateral,
+            params.leverage,
+            params.brokerId,
+            params.isLong,
+            keeperFee
+        );
+        return positionId;
+    }
+
+    /**
      * @notice Unwinds a position on behalf of a user (with signature verification)
      * @param params The parameters for unwinding the position based on the
      * ShivaStructs.Unwind struct
@@ -377,6 +480,63 @@ contract Shiva is
     }
 
     /**
+     * @notice Unwinds a position to take profit on behalf of a user (with signature verification)
+     * @param params The parameters for unwinding the position based on the
+     * ShivaStructs.TakeProfit struct
+     * @param onBehalfOf The parameters for unwinding on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
+     * is the owner of the position
+     */
+    function takeProfit(
+        ShivaStructs.TakeProfit calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    )
+        external
+        whenNotPaused
+        validDeadline(onBehalfOf.deadline)
+        onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
+    {
+        // build typed data hash
+        bytes32 structHash = keccak256(
+            abi.encode(
+                TAKE_PROFIT_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                params.brokerId,
+                params.positionId,
+                params.fraction,
+                params.priceLimit,
+                params.maxKeeperFee,
+                onBehalfOf.deadline,
+                onBehalfOf.nonce
+            )
+        );
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+
+        ShivaStructs.Unwind memory unwindParams = ShivaStructs.Unwind({
+            ovlMarket: params.ovlMarket,
+            positionId: params.positionId,
+            fraction: params.fraction,
+            priceLimit: params.priceLimit,
+            brokerId: params.brokerId
+        });
+    
+        _unwindLogic(unwindParams, onBehalfOf.owner);
+
+        uint256 keeperFee = _payKeeperFee(onBehalfOf.owner, params.maxKeeperFee);
+
+        emit TakeProfitExecuted(
+            onBehalfOf.owner,
+            address(params.ovlMarket),
+            msg.sender,
+            params.positionId,
+            params.fraction,
+            params.brokerId,
+            keeperFee
+        );
+    }
+
+    /**
      * @notice Builds and keeps a single position on behalf of a user (with signature verification)
      * @param params The parameters for building the single position based on the
      * ShivaStructs.BuildSingle struct
@@ -401,6 +561,77 @@ contract Shiva is
         _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
 
         return _buildSingleLogic(params, onBehalfOf.owner);
+    }
+
+    /**
+     * @notice Unwinds a position if the stop loss condition is met
+     * @param params The parameters for the stop loss order based on the
+     * ShivaStructs.StopLoss struct
+     * @param onBehalfOf The parameters for acting on behalf of a user based on the
+     * ShivaStructs.OnBehalfOf struct
+     * @dev Only callable when the contract is not paused, the deadline is valid, and the caller
+     * is the owner of the position
+     */
+    function stopLoss(
+        ShivaStructs.StopLoss calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    )
+        external
+        whenNotPaused
+        validDeadline(onBehalfOf.deadline)
+        onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
+    {
+        // build typed data hash
+        bytes32 structHash = _computeStopLossTypedDataHash(params, onBehalfOf);
+        _checkIsValidSignature(structHash, onBehalfOf.signature, onBehalfOf.owner, onBehalfOf.nonce);
+
+        _executeStopLoss(params, onBehalfOf);
+    }
+
+    /**
+     * @notice Internal logic for executing a stop loss order
+     * @param _params The parameters for the stop loss order
+     * @param _onBehalfOf The parameters for acting on behalf of a user
+     */
+    function _executeStopLoss(
+        ShivaStructs.StopLoss calldata _params,
+        ShivaStructs.OnBehalfOf calldata _onBehalfOf
+    ) internal {
+        // 1. Check if the trigger condition is met
+        if (
+            !Utils.checkStopLossTrigger(
+                _params.ovlMarket, _params.positionId, address(this), _params.triggerPrice
+            )
+        ) {
+            revert TriggerNotMet();
+        }
+
+        ShivaStructs.Unwind memory unwindParams = ShivaStructs.Unwind({
+            ovlMarket: _params.ovlMarket,
+            positionId: _params.positionId,
+            fraction: _params.fraction,
+            priceLimit: _params.priceLimit,
+            brokerId: _params.brokerId
+        });
+
+        uint256 keeperFee;
+        if (_params.payKeeperFee) {
+            _unwindLogic(unwindParams, _onBehalfOf.owner);
+            keeperFee = _payKeeperFee(_onBehalfOf.owner, _params.maxKeeperFee);
+        } else {
+            _unwindLogic(unwindParams, _onBehalfOf.owner);
+        }
+
+        emit StopLossExecuted(
+            _onBehalfOf.owner,
+            address(_params.ovlMarket),
+            msg.sender,
+            _params.positionId,
+            _params.fraction,
+            _params.triggerPrice,
+            _params.brokerId,
+            keeperFee
+        );
     }
 
     /**
@@ -436,7 +667,7 @@ contract Shiva is
      * @return The ID of the newly created position
      */
     function _buildLogic(
-        ShivaStructs.Build calldata _params,
+        ShivaStructs.Build memory _params,
         address _owner
     ) internal returns (uint256) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
@@ -464,7 +695,7 @@ contract Shiva is
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
      */
-    function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
+    function _unwindLogic(ShivaStructs.Unwind memory _params, address _owner) internal {
         _onUnwindPosition(
             _params.ovlMarket,
             _params.positionId,
@@ -488,6 +719,10 @@ contract Shiva is
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
+        // Get side before unwinding
+        bool isLong =
+            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
+
         // Track balance before unwinding
         uint256 balanceBefore = ovlToken.balanceOf(address(this));
 
@@ -503,9 +738,6 @@ contract Shiva is
         uint256 unwindAmount = ovlToken.balanceOf(address(this)) - balanceBefore;
         uint256 totalCollateral = _params.collateral + unwindAmount;
         uint256 tradingFee = _getTradingFee(_params.ovlMarket, totalCollateral, _params.leverage);
-
-        bool isLong =
-            Utils.getPositionSide(_params.ovlMarket, _params.previousPositionId, address(this));
 
         // transfer OVL from user to this contract
         ovlToken.transferFrom(_owner, address(this), _params.collateral + tradingFee);
@@ -530,7 +762,7 @@ contract Shiva is
     function _computeBuildSingleTypedDataHash(
         ShivaStructs.BuildSingle calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) private view returns (bytes32) {
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
@@ -543,6 +775,30 @@ contract Shiva is
                 params.buildPriceLimit,
                 onBehalfOf.nonce,
                 params.brokerId
+            )
+        );
+    }
+
+    /**
+    * @dev Computes the struct hash for stop loss signature verification.
+    */
+    function _computeStopLossTypedDataHash(
+        ShivaStructs.StopLoss calldata params,
+        ShivaStructs.OnBehalfOf calldata onBehalfOf
+    ) private pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                STOP_LOSS_ON_BEHALF_OF_TYPEHASH,
+                params.ovlMarket,
+                params.brokerId,
+                params.payKeeperFee,
+                params.positionId,
+                params.fraction,
+                params.priceLimit,
+                params.triggerPrice,
+                params.maxKeeperFee,
+                onBehalfOf.deadline,
+                onBehalfOf.nonce
             )
         );
     }
@@ -569,6 +825,33 @@ contract Shiva is
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
 
         emit ShivaEmergencyWithdraw(_owner, address(_market), msg.sender, _positionId);
+    }
+
+    /**
+     * @notice Internal logic for paying the keeper fee.
+     * @param _owner The address of the owner who will pay the fee.
+     * @param _maxKeeperFee The maximum fee the owner is willing to pay.
+     * @return The keeper fee paid.
+     */
+    function _payKeeperFee(
+        address _owner,
+        uint256 _maxKeeperFee
+    ) internal returns (uint256) {
+        uint256 keeperFee = keeperFeeFeed.latest().priceOverMicroWindow;
+
+        if (keeperFee > _maxKeeperFee) {
+            revert KeeperFeeExceedsMax(keeperFee, _maxKeeperFee);
+        }
+
+        uint256 ownerBalance = ovlToken.balanceOf(_owner);
+        if (ownerBalance < keeperFee) {
+            revert InsufficientBalanceForKeeperFee(ownerBalance, keeperFee);
+        }
+
+        // Fee is paid directly from the owner's balance (for build and unwind orders)
+        ovlToken.transferFrom(_owner, msg.sender, keeperFee);
+
+        return keeperFee;
     }
 
     /**
@@ -765,6 +1048,14 @@ contract Shiva is
      * @dev Only callable by the governor
      */
     function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
+
+    /**
+     * @notice Sets the keeper fee feed address.
+     * @param _feed The address of the IOverlayV1Feed compliant oracle.
+     */
+    function setKeeperFeeFeed(IOverlayV1Feed _feed) external onlyGovernor(msg.sender) {
+        keeperFeeFeed = _feed;
+    }
 
     /**
      * @notice Cancels a specific nonce for the caller

@@ -7,6 +7,7 @@ import {Shiva} from "src/Shiva.sol";
 import {RewardsVaultFactoryMock} from "src/mocks/RewardsVaultFactoryMock.sol";
 import {Constants} from "./utils/Constants.sol";
 import {OverlayV1Token} from "v1-core/contracts/OverlayV1Token.sol";
+import {IOverlayV1Feed} from "v1-core/contracts/interfaces/feeds/IOverlayV1Feed.sol";
 import {GOVERNOR_ROLE} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 
 /// @dev inherit from previous implementation contract to prevent storage collisions
@@ -59,13 +60,13 @@ contract ImplementationV1Test is Test {
         shivaV1 = new ShivaV1();
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
+        string memory functionName = "initialize(address,address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory), address(0));
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(address(ovlToken), address(vaultFactory));
+        shivaV1.initialize(address(ovlToken), address(vaultFactory), IOverlayV1Feed(address(0)));
     }
 
     function testInitialized() public {
@@ -101,8 +102,8 @@ contract ImplementationV2Test is Test {
         shivaV1 = new ShivaV1();
 
         /*Proxy initialize data*/
-        string memory functionName = "initialize(address,address)";
-        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), address(vaultFactory));
+        string memory functionName = "initialize(address,address,address)";
+        bytes memory data = abi.encodeWithSignature(functionName, address(ovlToken), vaultFactory, address(0));
 
         proxy = new ERC1967Proxy(address(shivaV1), data);
 
@@ -114,13 +115,13 @@ contract ImplementationV2Test is Test {
         address(proxy).call(abi.encodeWithSignature("setMagicNumber(uint256)", 42));
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV1.initialize(address(ovlToken), address(vaultFactory));
+        shivaV1.initialize(address(ovlToken), address(vaultFactory), IOverlayV1Feed(address(0)));
 
         // deploy new logic contract
         shivaV2 = new ShivaV2();
 
         vm.expectRevert(); // logic contract shouldn't be initialized directly
-        shivaV2.initialize(address(ovlToken), address(vaultFactory));
+        shivaV2.initialize(address(ovlToken), address(vaultFactory), IOverlayV1Feed(address(0)));
 
         vm.startPrank(address(0x123));
 
