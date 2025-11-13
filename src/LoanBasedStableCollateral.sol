@@ -12,13 +12,15 @@ import {
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import {SafeERC20Upgradeable} from
     "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from
     "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {IOverlayV1Token} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
+import {
+    IOverlayV1Token,
+    GOVERNOR_ROLE
+} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 
 /**
  * @title LoanBasedStableCollateral
@@ -28,7 +30,6 @@ contract LoanBasedStableCollateral is
     ILoanBasedStableCollateral,
     Initializable,
     UUPSUpgradeable,
-    OwnableUpgradeable,
     ReentrancyGuardUpgradeable
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -90,6 +91,11 @@ contract LoanBasedStableCollateral is
         _;
     }
 
+    modifier onlyGovernor(address _msgSender) {
+        require(ovlToken.hasRole(GOVERNOR_ROLE, _msgSender), "LBSC: !governor");
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -110,7 +116,6 @@ contract LoanBasedStableCollateral is
         address _lossRecipient,
         uint256 _maxPriceAge
     ) external initializer {
-        __Ownable_init();
         __ReentrancyGuard_init();
 
         require(_stableToken != address(0), "LBSC: stable token is zero");
@@ -253,7 +258,7 @@ contract LoanBasedStableCollateral is
      * @param amount Amount of stable tokens to withdraw.
      * @param to Recipient of the withdrawn funds.
      */
-    function withdrawStableSurplus(uint256 amount, address to) external onlyOwner {
+    function withdrawStableSurplus(uint256 amount, address to) external onlyGovernor(msg.sender) {
         require(to != address(0), "LBSC: zero address");
         uint256 available = availableStableSurplus();
         require(amount <= available, "LBSC: insufficient surplus");
@@ -266,7 +271,7 @@ contract LoanBasedStableCollateral is
      * @param amount Amount of OVL to withdraw.
      * @param to Recipient of the OVL.
      */
-    function withdrawOvl(uint256 amount, address to) external onlyOwner {
+    function withdrawOvl(uint256 amount, address to) external onlyGovernor(msg.sender) {
         require(to != address(0), "LBSC: zero address");
         ovlToken.transfer(to, amount);
         emit OvlWithdrawn(to, amount);
@@ -276,7 +281,7 @@ contract LoanBasedStableCollateral is
      * @notice Updates the Shiva contract.
      * @param newShiva Address of the new Shiva contract.
      */
-    function setShiva(address newShiva) external onlyOwner {
+    function setShiva(address newShiva) external onlyGovernor(msg.sender) {
         _updateShiva(newShiva);
     }
 
@@ -284,7 +289,7 @@ contract LoanBasedStableCollateral is
      * @notice Updates the price feed contract.
      * @param newFeed Address of the new oracle feed.
      */
-    function setPriceFeed(address newFeed) external onlyOwner {
+    function setPriceFeed(address newFeed) external onlyGovernor(msg.sender) {
         require(newFeed != address(0), "LBSC: oracle is zero");
         address previous = address(priceFeed);
         priceFeed = AggregatorV3Interface(newFeed);
@@ -295,7 +300,7 @@ contract LoanBasedStableCollateral is
      * @notice Updates the maximum allowed price age.
      * @param newMaxAge New maximum staleness in seconds.
      */
-    function setMaxPriceAge(uint256 newMaxAge) external onlyOwner {
+    function setMaxPriceAge(uint256 newMaxAge) external onlyGovernor(msg.sender) {
         require(newMaxAge > 0, "LBSC: invalid max price age");
         emit MaxPriceAgeUpdated(maxPriceAge, newMaxAge);
         maxPriceAge = newMaxAge;
@@ -305,7 +310,7 @@ contract LoanBasedStableCollateral is
      * @notice Updates the address receiving seized collateral.
      * @param newRecipient Address of the new recipient (can be zero).
      */
-    function setLossRecipient(address newRecipient) external onlyOwner {
+    function setLossRecipient(address newRecipient) external onlyGovernor(msg.sender) {
         emit LossRecipientUpdated(lossRecipient, newRecipient);
         lossRecipient = newRecipient;
     }
@@ -368,5 +373,5 @@ contract LoanBasedStableCollateral is
     /**
      * @dev Authorizes contract upgrades.
      */
-    function _authorizeUpgrade(address) internal override onlyOwner {}
+    function _authorizeUpgrade(address) internal override onlyGovernor(msg.sender) {}
 }
