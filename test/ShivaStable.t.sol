@@ -2,6 +2,7 @@
 pragma solidity <=0.8.25;
 
 import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
@@ -546,6 +547,31 @@ contract ShivaStableTest is Test, ShivaTestBase {
         vm.startPrank(deployer);
         vm.expectRevert(bytes("Shiva: lbsc is zero"));
         shiva.setLbsc(address(0));
+        vm.stopPrank();
+    }
+
+    function test_setLbsc_activeLoans_reverts() public {
+        vm.startPrank(alice);
+        buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        vm.stopPrank();
+        assertGt(lbsc.totalActiveCollateral(), 0, "active collateral expected");
+
+        LoanBasedStableCollateral lbscImplementation = new LoanBasedStableCollateral();
+        MockAggregator newPriceFeed = deployAggregator();
+        bytes memory dataLbsc = abi.encodeWithSignature(
+            "initialize(address,address,address,address,uint256)",
+            address(stableToken),
+            address(shiva),
+            address(newPriceFeed),
+            address(0),
+            2 days
+        );
+        LoanBasedStableCollateral newLbsc =
+            LoanBasedStableCollateral(address(new ERC1967Proxy(address(lbscImplementation), dataLbsc)));
+
+        vm.startPrank(deployer);
+        vm.expectRevert(bytes("Shiva: cannot change LBSC while there are active loans"));
+        shiva.setLbsc(address(newLbsc));
         vm.stopPrank();
     }
 }

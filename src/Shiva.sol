@@ -247,6 +247,7 @@ contract Shiva is
         address previousLbsc = address(lbsc);
 
         if (previousLbsc != address(0)) {
+            require(lbsc.totalActiveCollateral() == 0, "Shiva: cannot change LBSC while there are active loans");
             ovlToken.approve(previousLbsc, 0);
         }
 

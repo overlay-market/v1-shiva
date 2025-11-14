@@ -48,4 +48,6 @@ interface ILoanBasedStableCollateral {
         returns (uint256 ovlAmount, uint256 loanId);
 
     function settle(uint256 loanId, uint256 ovlAmount) external;
+
+    function totalActiveCollateral() external returns (uint256);
 }
