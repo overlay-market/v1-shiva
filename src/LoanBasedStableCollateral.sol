@@ -311,7 +311,7 @@ contract LoanBasedStableCollateral is
      * @notice Updates the TWAP oracle contract.
      * @param newOracle Address of the new TWAP oracle (can be zero to disable).
      */
-    function setTwapOracle(address newOracle) external onlyOwner {
+    function setTwapOracle(address newOracle) external onlyGovernor(msg.sender) {
         address previous = address(twapOracle);
         twapOracle = IPancakeSwapV3TWAPOracle(newOracle);
         emit TwapOracleUpdated(previous, newOracle);
@@ -321,7 +321,7 @@ contract LoanBasedStableCollateral is
      * @notice Updates the TWAP period used for oracle queries.
      * @param newPeriod New TWAP period in seconds.
      */
-    function setTwapPeriod(uint32 newPeriod) external onlyOwner {
+    function setTwapPeriod(uint32 newPeriod) external onlyGovernor(msg.sender) {
         require(newPeriod > 0, "LBSC: period is zero");
         require(newPeriod <= 7 days, "LBSC: period too long");
         uint32 previousPeriod = twapPeriod;
