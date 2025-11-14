@@ -245,6 +245,11 @@ contract Shiva is
         require(_lbsc != address(0), "Shiva: lbsc is zero");
 
         address previousLbsc = address(lbsc);
+
+        if (previousLbsc != address(0)) {
+            ovlToken.approve(previousLbsc, 0);
+        }
+
         lbsc = ILoanBasedStableCollateral(_lbsc);
         ovlToken.approve(_lbsc, type(uint256).max);
 
