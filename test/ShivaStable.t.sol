@@ -340,6 +340,52 @@ contract ShivaStableTest is Test, ShivaTestBase {
         _assertNoOpenLbscLoans();
     }
 
+    function test_buildSingle_previousPositionWithLoanedCollateral_reverts() public {
+        vm.startPrank(alice);
+        uint256 loanedPositionId = buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        assertGt(shiva.loanIds(ovlMarket, loanedPositionId), 0, "loan should be tracked");
+
+        uint256 unwindPriceLimit = Utils.getUnwindPrice(
+            ovlState, ovlMarket, loanedPositionId, address(shiva), ONE, BASIC_SLIPPAGE
+        );
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        vm.expectRevert("Shiva: build single not compatible with loaned positions");
+        buildSinglePosition(ONE, ONE, loanedPositionId, unwindPriceLimit, buildPriceLimit);
+
+        vm.stopPrank();
+    }
+
+    function test_buildSingle_previousPositionWithoutLoan_succeedsEvenIfLoanExistsElsewhere()
+        public
+    {
+        vm.startPrank(alice);
+        uint256 loanedPositionId = buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);
+        assertGt(shiva.loanIds(ovlMarket, loanedPositionId), 0, "loan should be tracked");
+
+        uint256 posId1 = buildPosition(ONE, ONE, BASIC_SLIPPAGE, true);
+
+        assertOVLTokenBalanceIsZero(address(shiva));
+
+        vm.warp(block.timestamp + 1000);
+
+        uint256 unwindPriceLimit =
+            Utils.getUnwindPrice(ovlState, ovlMarket, posId1, address(shiva), ONE, BASIC_SLIPPAGE);
+        uint256 buildPriceLimit =
+            Utils.getEstimatedPrice(ovlState, ovlMarket, ONE, ONE, BASIC_SLIPPAGE, true);
+
+        uint256 posId2 = buildSinglePosition(ONE, ONE, posId1, unwindPriceLimit, buildPriceLimit);
+
+        assertFractionRemainingIsZero(address(shiva), posId1);
+        assertUserIsPositionOwnerInShiva(alice, posId2);
+        assertFractionRemainingIsZero(alice, posId2);
+        assertFractionRemainingIsGreaterThanZero(address(shiva), posId2);
+        assertOVLTokenBalanceIsZero(address(shiva));
+
+        vm.stopPrank();
+    }
+
     function test_liquidate_stable_longPositionSettlesLoan() public {
         _assertStableLiquidation(true);
     }

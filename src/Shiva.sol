@@ -595,6 +595,9 @@ contract Shiva is
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
 
+        uint256 loanId = loanIds[_params.ovlMarket][_params.previousPositionId];
+        require(loanId == 0, "Shiva: build single not compatible with loaned positions");
+
         // Track balance before unwinding
         uint256 balanceBefore = ovlToken.balanceOf(address(this));
 
