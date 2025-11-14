@@ -156,6 +156,33 @@ contract ShivaStableTest is Test, ShivaTestBase {
         _assertNoOpenLbscLoans();
     }
 
+    function test_emergencyWithdraw_stablePositionSettlesLoan() public {
+        uint256 stableCollateral = 5_000e18;
+        uint256 aliceStableBefore = stableToken.balanceOf(alice);
+
+        vm.startPrank(alice);
+        uint256 positionId = buildStablePosition(stableCollateral, 2e18, BASIC_SLIPPAGE, true, 0);
+        uint256 aliceStableAfterBuild = stableToken.balanceOf(alice);
+        vm.stopPrank();
+
+        shutDownMarket();
+
+        vm.startPrank(alice);
+        shiva.emergencyWithdraw(ovlMarket, positionId, alice);
+        vm.stopPrank();
+
+        uint256 loanId = shiva.loanIds(ovlMarket, positionId);
+        (, , , , bool settled) = lbsc.loans(loanId);
+
+        assertTrue(settled, "loan should settle");
+        assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear");
+        assertEq(lbsc.totalActiveCollateral(), 0, "collateral should clear");
+        uint256 aliceStableAfterEmergency = stableToken.balanceOf(alice);
+        assertGt(aliceStableAfterEmergency, aliceStableAfterBuild, "collateral should increase");
+        assertLe(aliceStableAfterEmergency, aliceStableBefore, "collateral should not exceed initial");
+        assertOVLTokenBalanceIsZero(address(shiva));
+    }
+
     function test_unwind_stable_partialFractionReverts() public {
         vm.startPrank(alice);
         uint256 positionId = buildStablePosition(1_000e18, 2e18, BASIC_SLIPPAGE, true, 0);

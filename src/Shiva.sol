@@ -666,12 +666,21 @@ contract Shiva is
         uint256 _positionId,
         address _owner
     ) internal {
+        uint256 loanId = loanIds[_market][_positionId];
+        uint256 balanceBefore = loanId > 0 ? ovlToken.balanceOf(address(this)) : 0;
         uint256 intialNotionalFraction =
             Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         _market.emergencyWithdraw(_positionId);
 
         _onUnstake(positionOwners[_market][_positionId], intialNotionalFraction);
+
+        if (loanId > 0) {
+            uint256 balanceAfter = ovlToken.balanceOf(address(this));
+            uint256 repayableAmount =
+                balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0;
+            lbsc.settle(loanId, repayableAmount);
+        }
 
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
 
