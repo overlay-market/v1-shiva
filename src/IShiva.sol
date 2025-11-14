@@ -172,6 +172,15 @@ interface IShiva {
     ) external returns (uint256 positionId);
 
     /**
+     * @notice Builds a new position using stable collateral.
+     * @param params Parameters to build the position.
+     * @return positionId Unique ID of the built position.
+     */
+    function buildStable(ShivaStructs.BuildStable calldata params)
+        external
+        returns (uint256 positionId);
+
+    /**
      * @notice Builds a new position with a single transaction.
      * @param params Parameters to build the position.
      * @return positionId Unique ID of the built position.
@@ -218,4 +227,10 @@ interface IShiva {
         uint256 positionId,
         address owner
     ) external;
+
+    /**
+     * @notice Sets the Loan Based Stable Collateral pool contract.
+     * @param _lbsc Address of the Loan Based Stable Collateral pool.
+     */
+    function setLbsc(address _lbsc) external;
 }
