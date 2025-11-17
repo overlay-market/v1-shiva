@@ -41,17 +41,17 @@ contract LoanBasedStableCollateral is
     /**
      * @notice Represents a debt position funded through LBSC.
      * @param borrower Address that supplied the stable collateral.
-     * @param collateral Amount of stable tokens held as collateral.
-     * @param debt Amount of OVL (collateral + trading fees) lent out.
      * @param createdAt Timestamp when the loan was created.
      * @param settled Whether the loan has been closed.
+     * @param collateral Amount of stable tokens held as collateral.
+     * @param debt Amount of OVL (collateral + trading fees) lent out.
      */
     struct LoanPosition {
         address borrower;
-        uint256 collateral;
-        uint256 debt;
         uint48 createdAt;
         bool settled;
+        uint256 collateral;
+        uint256 debt;
     }
 
     /// @notice Stable token used as collateral (USDT)
