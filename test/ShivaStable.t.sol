@@ -49,7 +49,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         uint256 loanId = shiva.loanIds(ovlMarket, positionId);
         assertGt(loanId, 0, "LBSC loan should be tracked");
 
-        (address borrower, uint256 collateral, uint256 debt, , bool settled) = lbsc.loans(loanId);
+        (address borrower, , bool settled, uint256 collateral, uint256 debt) = lbsc.loans(loanId);
         assertEq(borrower, alice, "loan borrower mismatch");
         assertEq(collateral, stableCollateral, "loan collateral mismatch");
         assertGt(debt, 0, "loan debt should be > 0");
@@ -132,10 +132,10 @@ contract ShivaStableTest is Test, ShivaTestBase {
 
         (
             address borrower,
-            uint256 collateral,
-            uint256 debt,
             ,
-            bool settledBefore
+            bool settledBefore,
+            uint256 collateral,
+            uint256 debt
         ) = lbsc.loans(loanId);
         assertEq(borrower, alice, "loan borrower mismatch");
         assertEq(collateral, stableCollateral, "loan collateral mismatch");
@@ -145,7 +145,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         unwindPosition(positionId, ONE, BASIC_SLIPPAGE);
         vm.stopPrank();
 
-        (, , , , bool settledAfter) = lbsc.loans(loanId);
+        (, ,bool settledAfter , , ) = lbsc.loans(loanId);
         assertTrue(settledAfter, "loan should be settled");
         assertEq(lbsc.totalOutstandingDebt(), 0, "outstanding debt should clear");
         assertEq(lbsc.totalActiveCollateral(), 0, "active collateral should clear");
@@ -173,7 +173,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         vm.stopPrank();
 
         uint256 loanId = shiva.loanIds(ovlMarket, positionId);
-        (, , , , bool settled) = lbsc.loans(loanId);
+        (, , bool settled, , ) = lbsc.loans(loanId);
 
         assertTrue(settled, "loan should settle");
         assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear");
@@ -290,7 +290,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         uint256 aliceStableAfter = stableToken.balanceOf(alice);
         uint256 aliceOvlAfter = ovlToken.balanceOf(alice);
         uint256 loanId = shiva.loanIds(ovlMarket, positionId);
-        (, , , , bool settled) = lbsc.loans(loanId);
+        (, , bool settled, , ) = lbsc.loans(loanId);
 
         assertTrue(settled, "loan should settle");
         assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear");
@@ -330,7 +330,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         uint256 aliceStableAfter = stableToken.balanceOf(alice);
         uint256 aliceOvlAfter = ovlToken.balanceOf(alice);
         uint256 loanId = shiva.loanIds(ovlMarket, positionId);
-        (, , , , bool settled) = lbsc.loans(loanId);
+        (, ,bool settled , , ) = lbsc.loans(loanId);
 
         assertTrue(settled, "loan should settle");
         assertEq(lbsc.totalOutstandingDebt(), 0, "debt should clear");
@@ -428,7 +428,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
         vm.prank(bob);
         ovlMarket.liquidate(address(shiva), positionId);
 
-        (, , , , bool settled) = lbsc.loans(loanId);
+        (, , bool settled, , ) = lbsc.loans(loanId);
         assertTrue(settled, "loan should settle on liquidation");
 
         (
@@ -525,7 +525,7 @@ contract ShivaStableTest is Test, ShivaTestBase {
     {
         uint256 nextLoanId = lbsc.nextLoanId();
         for (uint256 loanId = 1; loanId < nextLoanId; loanId++) {
-            (address borrower, uint256 collateral, uint256 debt,, bool settled) = lbsc.loans(loanId);
+            (address borrower,, bool settled, uint256 collateral, uint256 debt) = lbsc.loans(loanId);
             if (!settled) {
                 require(borrower != address(0), "loan borrower zero");
                 require(collateral > 0, "stableLocked must be > 0");

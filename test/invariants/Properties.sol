@@ -67,7 +67,7 @@ abstract contract Properties is BaseSetup, ShivaTestBase, Asserts {
                 break;
             }
 
-            (address borrower,, , , bool settled) = lbsc.loans(loanId);
+            (address borrower,,bool settled,,) = lbsc.loans(loanId);
             if (borrower == address(0) || borrower != alice || settled) {
                 result = false;
                 break;
@@ -134,7 +134,7 @@ abstract contract Properties is BaseSetup, ShivaTestBase, Asserts {
     {
         uint256 nextLoanId = lbsc.nextLoanId();
         for (uint256 loanId = 1; loanId < nextLoanId; loanId++) {
-            (address borrower, uint256 collateral, uint256 debt,, bool settled) = lbsc.loans(loanId);
+            (address borrower,, bool settled, uint256 collateral, uint256 debt) = lbsc.loans(loanId);
             if (!settled) {
                 if (borrower == address(0) || collateral == 0) {
                     invalidLoanFound = true;
