@@ -127,8 +127,9 @@ contract LoanBasedStableCollateral is
 
         require(_stableToken != address(0), "LBSC: stable token is zero");
         stableToken = IERC20Upgradeable(_stableToken);
-        stableTokenUnit = 10 ** uint256(IERC20MetadataUpgradeable(_stableToken).decimals());
-        require(stableTokenUnit > 0, "LBSC: invalid decimals");
+        uint256 stableTokenDecimals = IERC20MetadataUpgradeable(_stableToken).decimals();
+        require(stableTokenDecimals > 0, "LBSC: invalid decimals");
+        stableTokenUnit = 10 ** uint256(stableTokenDecimals);
 
         nextLoanId = 1;
 
