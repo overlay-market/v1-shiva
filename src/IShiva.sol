@@ -145,6 +145,11 @@ interface IShiva {
     error InvalidNonce();
 
     /**
+     * @notice Error emitted when swap failed.
+     */
+    error SwapFailed();
+
+    /**
      * @dev Functions that Shiva should implement.
      */
 

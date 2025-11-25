@@ -6,6 +6,7 @@ import {
     IRewardsVault,
     IRewardsVaultFactory
 } from "./interfaces/rewardVault/IRewardVaults.sol";
+import { IAggregationRouterV6 } from "./interfaces/oneInch/IAggregationRouterV6.sol";
 import {StakingToken} from "./mocks/StakingTokenMock.sol";
 import {ShivaStructs} from "./ShivaStructs.sol";
 import {Utils} from "./utils/Utils.sol";
@@ -32,6 +33,7 @@ import {EIP712Upgradeable} from
     "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
 import {PausableUpgradeable} from
     "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Shiva
@@ -321,6 +323,21 @@ contract Shiva is
     }
 
     /**
+     * @notice Unwinds a position for the user and swaps to stable
+     * @param params The parameters for unwinding the position based on the
+     * ShivaStructs.Unwind struct
+     * @dev Only callable when the contract is not paused and the caller is the owner of
+     * the position
+     */
+    function unwindStable(ShivaStructs.Unwind calldata params, bytes calldata swapData, uint256 minOut)
+        external
+        whenNotPaused
+        onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
+    {
+        _unwindStableLogic(params, msg.sender, swapData, minOut);
+    }
+
+    /**
      * @notice Builds and keeps a single position in the ovlMarket for a user
      * @dev If the user already has a position in the ovlMarket, it will be unwound before building
      * a new one and previous collateral and new collateral will be used to build the new position
@@ -582,6 +599,55 @@ contract Shiva is
         }
 
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
+    }
+
+    /**
+     * @notice Internal logic for unwinding a position and swapping the OVL to stables
+     * @param _params The parameters for unwinding the position
+     * @param _owner The address of the owner
+     */
+    function _unwindStableLogic(ShivaStructs.Unwind calldata _params, address _owner, bytes calldata swapData, uint256 minOut) internal {
+        uint256 initialOvlBalance = ovlToken.balanceOf(address(this));
+        _onUnwindPosition(
+            _params.ovlMarket,
+            _params.positionId,
+            _params.fraction,
+            _params.priceLimit,
+            _params.brokerId
+        );
+
+        // If the position was opened with LBSC - settle the loan
+        uint256 loanId = loanIds[_params.ovlMarket][_params.positionId];
+        if (loanId > 0) {
+            uint256 ovlBalanceAfterUnwind = ovlToken.balanceOf(address(this));
+            require(_params.fraction == 1e18, "Shiva: unwind fraction must be 1 for lbsc");
+            lbsc.settle(loanId, ovlBalanceAfterUnwind - initialOvlBalance);
+        }
+
+        uint256 ovlToSwap = ovlToken.balanceOf(address(this));
+        if (ovlToSwap == 0) return;
+
+        IAggregationRouterV6 oneInchAggregator = IAggregationRouterV6(0x111111125421cA6dc452d289314280a0f8842A65);
+
+        bytes calldata encodedArgs = swapData[4:]; 
+        (address executor, IAggregationRouterV6.SwapDescription memory incomingDesc, bytes memory decodedData) = abi.decode(encodedArgs, (address, IAggregationRouterV6.SwapDescription, bytes));
+
+        require(incomingDesc.srcToken == address(ovlToken), "Shiva: Swap: Wrong srcToken");
+        address stableToken = address(lbsc.stableToken());
+        require(incomingDesc.dstToken == stableToken, "Shiva: Swap: Wrong dstToken");
+        require(incomingDesc.dstReceiver == address(this), "Shiva: Swap: Wrong dstReceiver");
+        require(incomingDesc.minReturnAmount == minOut, "Shiva: Swap: Wrong minReturnAmount");
+
+        incomingDesc.amount = ovlToSwap;
+
+        IERC20(address(ovlToken)).approve(address(oneInchAggregator), ovlToSwap);
+        (uint256 returnAmount, uint256 spentAmount) = oneInchAggregator.swap(executor, incomingDesc, decodedData);
+
+        if (returnAmount < minOut || spentAmount != ovlToSwap) revert SwapFailed();
+
+        uint256 stableBalanceAfterSwap = IERC20(stableToken).balanceOf(address(this));
+        require(stableBalanceAfterSwap >= minOut, "Shiva: Swap: balance < minOut");
+        IERC20(stableToken).transfer(_owner, stableBalanceAfterSwap);
     }
 
     /**
