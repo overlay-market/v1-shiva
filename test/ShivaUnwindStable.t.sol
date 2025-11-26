@@ -86,9 +86,6 @@ contract ShivaUnwindStableUnitTest is Test, ShivaTestBase {
         bytes memory swapData =
             _buildSwapData(address(ovlToken), address(stableToken), address(shiva), minOut);
 
-        vm.prank(address(shiva));
-        ovlToken.approve(address(router), type(uint256).max);
-
         uint256 aliceStableBefore = stableToken.balanceOf(alice);
 
         vm.prank(alice);
@@ -124,9 +121,6 @@ contract ShivaUnwindStableUnitTest is Test, ShivaTestBase {
         bytes memory swapData =
             _buildSwapData(address(ovlToken), address(stableToken), address(shiva), minOut);
 
-        vm.prank(address(shiva));
-        ovlToken.approve(address(router), type(uint256).max);
-
         vm.expectRevert(IShiva.SwapFailed.selector);
         vm.prank(alice);
         shiva.unwindStable(
@@ -150,9 +144,6 @@ contract ShivaUnwindStableUnitTest is Test, ShivaTestBase {
 
         bytes memory swapData =
             _buildSwapData(address(ovlToken), address(stableToken), address(shiva), minOut);
-
-        vm.prank(address(shiva));
-        ovlToken.approve(address(router), type(uint256).max);
 
         vm.expectRevert(IShiva.SwapFailed.selector);
         vm.prank(alice);
@@ -509,9 +500,6 @@ contract ShivaUnwindStableBscForkTest is Test {
         _mockUnwindExternalCalls(owner, positionId);
 
         deal(address(ovl), address(shiva), ovlAmount);
-
-        vm.prank(address(shiva));
-        ovl.approve(ONE_INCH_ROUTER, type(uint256).max);
 
         (bytes memory swapData, uint256 minOut) = _fetchSwapData(ovlAmount);
 
