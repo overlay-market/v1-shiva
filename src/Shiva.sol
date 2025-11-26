@@ -648,6 +648,8 @@ contract Shiva is
         uint256 stableBalanceAfterSwap = IERC20(stableToken).balanceOf(address(this));
         require(stableBalanceAfterSwap >= minOut, "Shiva: Swap: balance < minOut");
         IERC20(stableToken).transfer(_owner, stableBalanceAfterSwap);
+
+        emit ShivaUnwindStable(address(_params.ovlMarket), _params.positionId, ovlToSwap, stableBalanceAfterSwap);
     }
 
     /**

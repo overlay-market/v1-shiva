@@ -63,6 +63,20 @@ interface IShiva {
     );
 
     /**
+     * @notice Emitted when a position is built using stable collateral through Shiva.
+     * @param market Address of the market where the position was built.
+     * @param positionId Unique ID of the built position.
+     * @param ovlSwapped amount of OVL as swap input
+     * @param stableOut amount of Stables as swap output transferred to the user
+     */
+    event ShivaUnwindStable(
+        address indexed market,
+        uint256 indexed positionId,
+        uint256 ovlSwapped,
+        uint256 stableOut
+    );
+
+    /**
      * @notice Emitted when an emergency withdrawal is performed through Shiva.
      * @param owner Address of the position owner who performed the withdrawal.
      * @param market Address of the market from which funds were withdrawn.
