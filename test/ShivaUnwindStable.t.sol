@@ -88,12 +88,13 @@ contract ShivaUnwindStableUnitTest is Test, ShivaTestBase {
 
         uint256 aliceStableBefore = stableToken.balanceOf(alice);
 
-        vm.prank(alice);
+        vm.startPrank(alice);
         shiva.unwindStable(
             ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, _priceLimit(positionId)),
             swapData,
             minOut
         );
+        vm.stopPrank();
 
         assertGt(stableToken.balanceOf(alice), aliceStableBefore, "stable should increase");
         assertEq(stableToken.balanceOf(address(shiva)), 0, "Shiva should forward stables");
@@ -121,13 +122,15 @@ contract ShivaUnwindStableUnitTest is Test, ShivaTestBase {
         bytes memory swapData =
             _buildSwapData(address(ovlToken), address(stableToken), address(shiva), minOut);
 
+        vm.startPrank(alice);
+        uint256 priceLimit = _priceLimit(positionId);
         vm.expectRevert(IShiva.SwapFailed.selector);
-        vm.prank(alice);
         shiva.unwindStable(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, _priceLimit(positionId)),
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, priceLimit),
             swapData,
             minOut
         );
+        vm.stopPrank();
     }
 
     function test_unwindStable_revertsWhenSpentAmountMismatch() public {
@@ -145,13 +148,15 @@ contract ShivaUnwindStableUnitTest is Test, ShivaTestBase {
         bytes memory swapData =
             _buildSwapData(address(ovlToken), address(stableToken), address(shiva), minOut);
 
+        vm.startPrank(alice);
+        uint256 priceLimit = _priceLimit(positionId);
         vm.expectRevert(IShiva.SwapFailed.selector);
-        vm.prank(alice);
         shiva.unwindStable(
-            ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, _priceLimit(positionId)),
+            ShivaStructs.Unwind(ovlMarket, BROKER_ID, positionId, ONE, priceLimit),
             swapData,
             minOut
         );
+        vm.stopPrank();
     }
 }
 
