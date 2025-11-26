@@ -222,6 +222,18 @@ interface IShiva {
     ) external;
 
     /**
+     * @notice Unwinds a position and swaps the proceeds to stable collateral.
+     * @param params Parameters to unwind the position.
+     * @param swapData Encoded swap data for the aggregator.
+     * @param minOut Minimum stable tokens expected from the swap.
+     */
+    function unwindStable(
+        ShivaStructs.Unwind calldata params,
+        bytes calldata swapData,
+        uint256 minOut
+    ) external;
+
+    /**
      * @notice Withdraws funds from a position in case of market is shutdown.
      * @param market Address of the market where the position was built.
      * @param positionId Unique ID of the position to withdraw funds from.
