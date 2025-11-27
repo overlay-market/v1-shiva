@@ -256,16 +256,25 @@ contract PancakeSwapV3TWAPOracleLocalPoolTest is Test, IUniswapV3MintCallback, I
 
         PancakeSwapV3TWAPOracle oracle = new PancakeSwapV3TWAPOracle(address(ctx.pool), address(ctx.ovl));
 
-        uint256 twapPrice = oracle.getPrice(TWAP_PERIOD);
-        uint256 spotPrice = oracle.getSpotPrice();
+        uint256 price = oracle.getPrice(TWAP_PERIOD);
+        int56 weightedTick = int56(startTick) * int56(uint56(firstWindow))
+            + int56(endTick) * int56(uint56(secondWindow));
+        int24 expectedTwapTick = int24(weightedTick / int56(uint56(TWAP_PERIOD)));
+        uint256 expectedTwap = FullMath.mulDiv(
+            getQuoteAtTick(expectedTwapTick, uint128(1e18), address(ctx.ovl), address(ctx.stable)),
+            1e18,
+            10 ** uint256(stableDecimals)
+        );
+        assertApproxEqRel(price, expectedTwap, 1e15, "twap price mismatch");
 
-        int24 expectedTwapTick = _twapTickFromPool(ctx.pool);
-        int24 expectedSpotTick = _spotTick(ctx.pool);
-        uint256 expectedTwap = _expectedPrice(expectedTwapTick, ctx.isOvlToken0, stableDecimals);
-        uint256 expectedSpot = _expectedPrice(expectedSpotTick, ctx.isOvlToken0, stableDecimals);
+        price = oracle.getSpotPrice();
+        uint256 expectedSpot = FullMath.mulDiv(
+            getQuoteAtTick(endTick, uint128(1e18), address(ctx.ovl), address(ctx.stable)),
+            1e18,
+            10 ** uint256(stableDecimals)
+        );
 
-        assertEq(twapPrice, expectedTwap, "twap price mismatch");
-        assertEq(spotPrice, expectedSpot, "spot price mismatch");
+        assertApproxEqRel(price, expectedSpot, 1e14, "spot price mismatch");
     }
 
     function _setupPool(
@@ -357,23 +366,33 @@ contract PancakeSwapV3TWAPOracleLocalPoolTest is Test, IUniswapV3MintCallback, I
         return tick;
     }
 
-    function _expectedPrice(int24 tick, bool isOvlToken0, uint8 stableDecimals) internal pure returns (uint256) {
+    /// @notice Given a tick and a token amount, calculates the amount of token received in exchange
+    /// @dev copy from https://github.com/Uniswap/v3-periphery/blob/0682387198a24c7cd63566a2c58398533860a5d1/contracts/libraries/OracleLibrary.sol
+    /// @param tick Tick value used to calculate the quote
+    /// @param baseAmount Amount of token to be converted
+    /// @param baseToken Address of an ERC20 token contract used as the baseAmount denomination
+    /// @param quoteToken Address of an ERC20 token contract used as the quoteAmount denomination
+    /// @return quoteAmount Amount of quoteToken received for baseAmount of baseToken
+    function getQuoteAtTick(
+        int24 tick,
+        uint128 baseAmount,
+        address baseToken,
+        address quoteToken
+    ) internal pure returns (uint256 quoteAmount) {
         uint160 sqrtRatioX96 = TickMath.getSqrtRatioAtTick(tick);
-        uint256 quoteAmount;
 
+        // Calculate quoteAmount with better precision if it doesn't overflow when multiplied by itself
         if (sqrtRatioX96 <= type(uint128).max) {
             uint256 ratioX192 = uint256(sqrtRatioX96) * sqrtRatioX96;
-            quoteAmount = isOvlToken0
-                ? FullMath.mulDiv(ratioX192, 1e18, 1 << 192)
-                : FullMath.mulDiv(1 << 192, 1e18, ratioX192);
+            quoteAmount = baseToken < quoteToken
+                ? FullMath.mulDiv(ratioX192, baseAmount, 1 << 192)
+                : FullMath.mulDiv(1 << 192, baseAmount, ratioX192);
         } else {
             uint256 ratioX128 = FullMath.mulDiv(sqrtRatioX96, sqrtRatioX96, 1 << 64);
-            quoteAmount = isOvlToken0
-                ? FullMath.mulDiv(ratioX128, 1e18, 1 << 128)
-                : FullMath.mulDiv(1 << 128, 1e18, ratioX128);
+            quoteAmount = baseToken < quoteToken
+                ? FullMath.mulDiv(ratioX128, baseAmount, 1 << 128)
+                : FullMath.mulDiv(1 << 128, baseAmount, ratioX128);
         }
-
-        return FullMath.mulDiv(quoteAmount, 1e18, 10 ** uint256(stableDecimals));
     }
 
     function _deployTokens(bool ovlShouldBeToken0, uint8 stableDecimals)
