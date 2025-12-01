@@ -630,20 +630,22 @@ contract Shiva is
         IAggregationRouterV6 oneInchAggregator = IAggregationRouterV6(0x111111125421cA6dc452d289314280a0f8842A65);
 
         bytes calldata encodedArgs = swapData[4:]; 
-        (address executor, IAggregationRouterV6.SwapDescription memory incomingDesc, bytes memory decodedData) = abi.decode(encodedArgs, (address, IAggregationRouterV6.SwapDescription, bytes));
-
-        require(incomingDesc.srcToken == address(ovlToken), "Shiva: Swap: Wrong srcToken");
         address stableToken = address(lbsc.stableToken());
-        require(incomingDesc.dstToken == stableToken, "Shiva: Swap: Wrong dstToken");
-        require(incomingDesc.dstReceiver == address(this), "Shiva: Swap: Wrong dstReceiver");
-        require(incomingDesc.minReturnAmount == minOut, "Shiva: Swap: Wrong minReturnAmount");
+        {
+            (address executor, IAggregationRouterV6.SwapDescription memory incomingDesc, bytes memory decodedData) = abi.decode(encodedArgs, (address, IAggregationRouterV6.SwapDescription, bytes));
 
-        incomingDesc.amount = ovlToSwap;
+            require(incomingDesc.srcToken == address(ovlToken), "Shiva: Swap: Wrong srcToken");
+            require(incomingDesc.dstToken == stableToken, "Shiva: Swap: Wrong dstToken");
+            require(incomingDesc.dstReceiver == address(this), "Shiva: Swap: Wrong dstReceiver");
+            require(incomingDesc.minReturnAmount == minOut, "Shiva: Swap: Wrong minReturnAmount");
 
-        IERC20(address(ovlToken)).approve(address(oneInchAggregator), ovlToSwap);
-        (uint256 returnAmount, uint256 spentAmount) = oneInchAggregator.swap(executor, incomingDesc, decodedData);
+            incomingDesc.amount = ovlToSwap;
 
-        if (returnAmount < minOut || spentAmount != ovlToSwap) revert SwapFailed();
+            IERC20(address(ovlToken)).approve(address(oneInchAggregator), ovlToSwap);
+            (uint256 returnAmount, uint256 spentAmount) = oneInchAggregator.swap(executor, incomingDesc, decodedData);
+
+            if (returnAmount < minOut || spentAmount != ovlToSwap) revert SwapFailed();
+        }
 
         uint256 stableBalanceAfterSwap = IERC20(stableToken).balanceOf(address(this));
         require(stableBalanceAfterSwap >= minOut, "Shiva: Swap: balance < minOut");
