@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
+import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
 interface ILoanBasedStableCollateral {
     /**
@@ -50,4 +51,6 @@ interface ILoanBasedStableCollateral {
     function settle(uint256 loanId, uint256 ovlAmount) external;
 
     function totalActiveCollateral() external returns (uint256);
+
+    function stableToken() external view returns (IERC20Upgradeable);
 }

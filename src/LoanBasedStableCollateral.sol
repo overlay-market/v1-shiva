@@ -171,7 +171,6 @@ contract LoanBasedStableCollateral is
         uint256 availableOvl = ovlToken.balanceOf(address(this));
         require(availableOvl >= ovlAmount, "LBSC: insufficient OVL liquidity");
 
-        stableToken.safeTransferFrom(borrower, address(this), stableAmount);
         totalActiveCollateral += stableAmount;
         totalOutstandingDebt += ovlAmount;
 
@@ -187,6 +186,7 @@ contract LoanBasedStableCollateral is
             settled: false
         });
 
+        stableToken.safeTransferFrom(borrower, address(this), stableAmount);
         // Approve Shiva to pull the freshly borrowed OVL amount only for this tx.
         ovlToken.approve(shiva, ovlAmount);
 
@@ -198,6 +198,7 @@ contract LoanBasedStableCollateral is
         LoanPosition storage loan = loans[loanId];
         require(loan.borrower != address(0), "LBSC: invalid loan");
         require(!loan.settled, "LBSC: already settled");
+        loan.settled = true;
 
         uint256 debt = loan.debt;
         uint256 collateral = loan.collateral;
@@ -232,8 +233,6 @@ contract LoanBasedStableCollateral is
                 }
             }
         }
-
-        loan.settled = true;
 
         emit LoanSettled(loanId, loan.borrower, repayAmount, collateralReturned, collateralSeized);
     }
