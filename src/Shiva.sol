@@ -124,6 +124,12 @@ contract Shiva is
     /// @notice Mapping from market and position ID to the loan id on lbsc
     mapping(IOverlayV1Market => mapping(uint256 => uint256)) public loanIds;
 
+    /// @notice Copy ReentrancyGuard implementation
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+
+    uint256 private _statusReentrancyGuard;
+
     /**
      * @dev Modifiers section
      */
@@ -179,6 +185,27 @@ contract Shiva is
             revert MarketNotValid();
         }
         _;
+    }
+
+    /**
+     * @dev Prevents a contract from calling itself, directly or indirectly.
+     * Calling a `nonReentrant` function from another `nonReentrant`
+     * function is not supported. It is possible to prevent this from happening
+     * by making the `nonReentrant` function external, and making it call a
+     * `private` function that does the actual work.
+     */
+    modifier nonReentrant() {
+        // On the first call to nonReentrant, _notEntered will be true
+        require(_statusReentrancyGuard != _ENTERED, "ReentrancyGuard: reentrant call");
+
+        // Any calls to nonReentrant after this point will fail
+        _statusReentrancyGuard = _ENTERED;
+
+        _;
+
+        // By storing the original value once again, a refund is triggered (see
+        // https://eips.ethereum.org/EIPS/eip-2200)
+        _statusReentrancyGuard = _NOT_ENTERED;
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -285,6 +312,7 @@ contract Shiva is
     function build(ShivaStructs.Build calldata params)
         external
         whenNotPaused
+        nonReentrant
         validMarket(params.ovlMarket)
         returns (uint256)
     {
@@ -301,6 +329,7 @@ contract Shiva is
     function buildStable(ShivaStructs.BuildStable calldata params)
         external
         whenNotPaused
+        nonReentrant
         validMarket(params.ovlMarket)
         returns (uint256)
     {
@@ -317,6 +346,7 @@ contract Shiva is
     function unwind(ShivaStructs.Unwind calldata params)
         external
         whenNotPaused
+        nonReentrant
         onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
     {
         _unwindLogic(params, msg.sender);
@@ -332,6 +362,7 @@ contract Shiva is
     function unwindStable(ShivaStructs.Unwind calldata params, bytes calldata swapData, uint256 minOut)
         external
         whenNotPaused
+        nonReentrant
         onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
     {
         _unwindStableLogic(params, msg.sender, swapData, minOut);
@@ -348,6 +379,7 @@ contract Shiva is
     function buildSingle(ShivaStructs.BuildSingle calldata params)
         external
         whenNotPaused
+        nonReentrant
         onlyPositionOwner(params.ovlMarket, params.previousPositionId, msg.sender)
         returns (uint256)
     {
@@ -364,7 +396,7 @@ contract Shiva is
         IOverlayV1Market market,
         uint256 positionId,
         address owner
-    ) external whenNotPaused onlyPositionOwner(market, positionId, owner) {
+    ) external whenNotPaused nonReentrant onlyPositionOwner(market, positionId, owner) {
         _emergencyWithdrawLogic(market, positionId, owner);
     }
 
@@ -382,6 +414,7 @@ contract Shiva is
     )
         external
         whenNotPaused
+        nonReentrant
         validMarket(params.ovlMarket)
         validDeadline(onBehalfOf.deadline)
         returns (uint256)
@@ -420,6 +453,7 @@ contract Shiva is
     )
         external
         whenNotPaused
+        nonReentrant
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
@@ -457,6 +491,7 @@ contract Shiva is
     )
         external
         whenNotPaused
+        nonReentrant
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.previousPositionId, onBehalfOf.owner)
         returns (uint256)
