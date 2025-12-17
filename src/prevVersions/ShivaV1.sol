@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
-import {IShiva} from "./IShiva.sol";
+import {IShiva} from "./IShivaV1.sol";
 import {
     IRewardsVault,
     IRewardsVaultFactory
-} from "./interfaces/rewardVault/IRewardVaults.sol";
-import { IAggregationRouterV6 } from "./interfaces/oneInch/IAggregationRouterV6.sol";
-import {StakingToken} from "./mocks/StakingTokenMock.sol";
-import {ShivaStructs} from "./ShivaStructs.sol";
-import {Utils} from "./utils/Utils.sol";
-import {ILoanBasedStableCollateral} from "./ILoanBasedStableCollateral.sol";
+} from "../interfaces/rewardVault/IRewardVaults.sol";
+import {StakingToken} from "../mocks/StakingTokenMock.sol";
+import {ShivaStructs} from "./ShivaStructsV1.sol";
+import {Utils} from "../utils/Utils.sol";
 
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
 import {IOverlayMarketLiquidateCallback} from
@@ -33,7 +31,6 @@ import {EIP712Upgradeable} from
     "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
 import {PausableUpgradeable} from
     "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title Shiva
@@ -46,9 +43,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @dev This contract is upgradable by using UUPS pattern
  * @dev Uses EIP712 for signature verification
  * @dev This contract is pausable
- * @custom:oz-upgrades-from Shiva_V1
  */
-contract Shiva is
+contract Shiva_V1 is
     IShiva,
     Initializable,
     UUPSUpgradeable,
@@ -114,22 +110,6 @@ contract Shiva is
     /// @notice Mapping to check if an address is a valid market
     mapping(address => bool) private validMarkets;
 
-
-    /**
-     * @dev V2 consts
-     */
-    /// @notice The Loan Based Stable Collateral pool contract
-    ILoanBasedStableCollateral public lbsc;
-
-    /// @notice Mapping from market and position ID to the loan id on lbsc
-    mapping(IOverlayV1Market => mapping(uint256 => uint256)) public loanIds;
-
-    /// @notice Copy ReentrancyGuard implementation
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-
-    uint256 private _statusReentrancyGuard;
-
     /**
      * @dev Modifiers section
      */
@@ -185,27 +165,6 @@ contract Shiva is
             revert MarketNotValid();
         }
         _;
-    }
-
-    /**
-     * @dev Prevents a contract from calling itself, directly or indirectly.
-     * Calling a `nonReentrant` function from another `nonReentrant`
-     * function is not supported. It is possible to prevent this from happening
-     * by making the `nonReentrant` function external, and making it call a
-     * `private` function that does the actual work.
-     */
-    modifier nonReentrant() {
-        // On the first call to nonReentrant, _notEntered will be true
-        require(_statusReentrancyGuard != _ENTERED, "ReentrancyGuard: reentrant call");
-
-        // Any calls to nonReentrant after this point will fail
-        _statusReentrancyGuard = _ENTERED;
-
-        _;
-
-        // By storing the original value once again, a refund is triggered (see
-        // https://eips.ethereum.org/EIPS/eip-2200)
-        _statusReentrancyGuard = _NOT_ENTERED;
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -267,26 +226,6 @@ contract Shiva is
     }
 
     /**
-     * @notice Sets the Loan Based Stable Collateral pool contract
-     * @param _lbsc The address of the Loan Based Stable Collateral pool
-     */
-    function setLbsc(address _lbsc) external onlyGovernor(msg.sender) {
-        require(_lbsc != address(0), "Shiva: lbsc is zero");
-
-        address previousLbsc = address(lbsc);
-
-        if (previousLbsc != address(0)) {
-            require(lbsc.totalActiveCollateral() == 0, "Shiva: cannot change LBSC while there are active loans");
-            ovlToken.approve(previousLbsc, 0);
-        }
-
-        lbsc = ILoanBasedStableCollateral(_lbsc);
-        ovlToken.approve(_lbsc, type(uint256).max);
-
-        emit LbscSet(previousLbsc, _lbsc);
-    }
-
-    /**
      * @notice Pauses the contract, preventing certain actions
      * @dev Only callable by an address with the pauser role
      */
@@ -312,28 +251,10 @@ contract Shiva is
     function build(ShivaStructs.Build calldata params)
         external
         whenNotPaused
-        nonReentrant
         validMarket(params.ovlMarket)
         returns (uint256)
     {
         return _buildLogic(params, msg.sender);
-    }
-
-    /**
-     * @notice Builds a position in the ovlMarket for a user using stable collateral
-     * @param params The parameters for building the position based on the
-     * ShivaStructs.BuildStable struct
-     * @return The ID of the newly created position
-     * @dev Only callable when the contract is not paused and the market is valid
-     */
-    function buildStable(ShivaStructs.BuildStable calldata params)
-        external
-        whenNotPaused
-        nonReentrant
-        validMarket(params.ovlMarket)
-        returns (uint256)
-    {
-        return _buildStableLogic(params, msg.sender);
     }
 
     /**
@@ -346,26 +267,9 @@ contract Shiva is
     function unwind(ShivaStructs.Unwind calldata params)
         external
         whenNotPaused
-        nonReentrant
         onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
     {
         _unwindLogic(params, msg.sender);
-    }
-
-    /**
-     * @notice Unwinds a position for the user and swaps to stable
-     * @param params The parameters for unwinding the position based on the
-     * ShivaStructs.Unwind struct
-     * @dev Only callable when the contract is not paused and the caller is the owner of
-     * the position
-     */
-    function unwindStable(ShivaStructs.Unwind calldata params, bytes calldata swapData, uint256 minOut)
-        external
-        whenNotPaused
-        nonReentrant
-        onlyPositionOwner(params.ovlMarket, params.positionId, msg.sender)
-    {
-        _unwindStableLogic(params, msg.sender, swapData, minOut);
     }
 
     /**
@@ -379,7 +283,6 @@ contract Shiva is
     function buildSingle(ShivaStructs.BuildSingle calldata params)
         external
         whenNotPaused
-        nonReentrant
         onlyPositionOwner(params.ovlMarket, params.previousPositionId, msg.sender)
         returns (uint256)
     {
@@ -396,7 +299,7 @@ contract Shiva is
         IOverlayV1Market market,
         uint256 positionId,
         address owner
-    ) external whenNotPaused nonReentrant onlyPositionOwner(market, positionId, owner) {
+    ) external whenNotPaused onlyPositionOwner(market, positionId, owner) {
         _emergencyWithdrawLogic(market, positionId, owner);
     }
 
@@ -414,7 +317,6 @@ contract Shiva is
     )
         external
         whenNotPaused
-        nonReentrant
         validMarket(params.ovlMarket)
         validDeadline(onBehalfOf.deadline)
         returns (uint256)
@@ -453,7 +355,6 @@ contract Shiva is
     )
         external
         whenNotPaused
-        nonReentrant
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.positionId, onBehalfOf.owner)
     {
@@ -491,7 +392,6 @@ contract Shiva is
     )
         external
         whenNotPaused
-        nonReentrant
         validDeadline(onBehalfOf.deadline)
         onlyPositionOwner(params.ovlMarket, params.previousPositionId, onBehalfOf.owner)
         returns (uint256)
@@ -518,12 +418,6 @@ contract Shiva is
         uint256 intialNotional = Utils.getNotionalRemaining(market, positionId, address(this));
         // Unstake the remaining of the position
         _onUnstake(positionOwners[market][positionId], intialNotional);
-        
-        // If the position was opened with LBSC - settle the loan
-        uint256 loanId = loanIds[market][positionId];
-        if (loanId > 0) {
-            lbsc.settle(loanId, 0);
-        }
     }
 
     /**
@@ -566,57 +460,11 @@ contract Shiva is
     }
 
     /**
-     * @notice Internal logic for building a position with stable collateral
-     * @param _params The parameters for building the position with stable collateral
-     * @param _owner The address of the owner
-     * @return The ID of the newly created position
-     */
-    function _buildStableLogic(
-        ShivaStructs.BuildStable calldata _params,
-        address _owner
-    ) internal returns (uint256) {
-        require(_params.leverage >= ONE, "Shiva:lev<min");
-
-        // Borrow OVL from LBSC - get the loanId
-        (uint256 ovlAmount, uint256 loanId) = lbsc.borrow(_params.stableCollateral, _owner);
-        require(ovlAmount >= _params.minOvl, "Shiva: borrowed amount < min");
-        require(loanId > 0, "Shiva: invalid loanId");
-
-        // Calculate the collateral and trading fee given the total amount of OVL
-        uint256 collateral = _getCollateralFromTotal(_params.ovlMarket, ovlAmount, _params.leverage);
-        uint256 tradingFee = _getTradingFee(_params.ovlMarket, collateral, _params.leverage);
-
-        // Transfer OVL from lbsc to this contract
-        ovlToken.transferFrom(address(lbsc), address(this), collateral + tradingFee);
-
-        // Approve the ovlMarket contract to spend OVL
-        _approveMarket(_params.ovlMarket);
-
-        uint256 positionId = _onBuildPosition(
-            _owner,
-            _params.ovlMarket,
-            collateral,
-            _params.leverage,
-            _params.isLong,
-            _params.priceLimit,
-            _params.brokerId
-        );
-
-        // Store the loanId for this position
-        loanIds[_params.ovlMarket][positionId] = loanId;
-
-        emit ShivaBuildStable(address(_params.ovlMarket), positionId, loanId);
-
-        return positionId;
-    }
-
-    /**
      * @notice Internal logic for unwinding a position
      * @param _params The parameters for unwinding the position
      * @param _owner The address of the owner
      */
     function _unwindLogic(ShivaStructs.Unwind calldata _params, address _owner) internal {
-        uint256 initialOvlBalance = ovlToken.balanceOf(address(this));
         _onUnwindPosition(
             _params.ovlMarket,
             _params.positionId,
@@ -624,69 +472,8 @@ contract Shiva is
             _params.priceLimit,
             _params.brokerId
         );
-
-        // If the position was opened with LBSC - settle the loan
-        uint256 loanId = loanIds[_params.ovlMarket][_params.positionId];
-        if (loanId > 0) {
-            uint256 ovlBalanceAfterUnwind = ovlToken.balanceOf(address(this));
-            require(_params.fraction == 1e18, "Shiva: unwind fraction must be 1 for lbsc");
-            lbsc.settle(loanId, ovlBalanceAfterUnwind - initialOvlBalance);
-        }
 
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
-    }
-
-    /**
-     * @notice Internal logic for unwinding a position and swapping the OVL to stables
-     * @param _params The parameters for unwinding the position
-     * @param _owner The address of the owner
-     */
-    function _unwindStableLogic(ShivaStructs.Unwind calldata _params, address _owner, bytes calldata swapData, uint256 minOut) internal {
-        uint256 initialOvlBalance = ovlToken.balanceOf(address(this));
-        _onUnwindPosition(
-            _params.ovlMarket,
-            _params.positionId,
-            _params.fraction,
-            _params.priceLimit,
-            _params.brokerId
-        );
-
-        // If the position was opened with LBSC - settle the loan
-        uint256 loanId = loanIds[_params.ovlMarket][_params.positionId];
-        if (loanId > 0) {
-            uint256 ovlBalanceAfterUnwind = ovlToken.balanceOf(address(this));
-            require(_params.fraction == 1e18, "Shiva: unwind fraction must be 1 for lbsc");
-            lbsc.settle(loanId, ovlBalanceAfterUnwind - initialOvlBalance);
-        }
-
-        uint256 ovlToSwap = ovlToken.balanceOf(address(this));
-        if (ovlToSwap == 0) return;
-
-        IAggregationRouterV6 oneInchAggregator = IAggregationRouterV6(0x111111125421cA6dc452d289314280a0f8842A65);
-
-        bytes calldata encodedArgs = swapData[4:]; 
-        address stableToken = address(lbsc.stableToken());
-        {
-            (address executor, IAggregationRouterV6.SwapDescription memory incomingDesc, bytes memory decodedData) = abi.decode(encodedArgs, (address, IAggregationRouterV6.SwapDescription, bytes));
-
-            require(incomingDesc.srcToken == address(ovlToken), "Shiva: Swap: Wrong srcToken");
-            require(incomingDesc.dstToken == stableToken, "Shiva: Swap: Wrong dstToken");
-            require(incomingDesc.dstReceiver == address(this), "Shiva: Swap: Wrong dstReceiver");
-            require(incomingDesc.minReturnAmount == minOut, "Shiva: Swap: Wrong minReturnAmount");
-
-            incomingDesc.amount = ovlToSwap;
-
-            IERC20(address(ovlToken)).approve(address(oneInchAggregator), ovlToSwap);
-            (uint256 returnAmount, uint256 spentAmount) = oneInchAggregator.swap(executor, incomingDesc, decodedData);
-
-            if (returnAmount < minOut || spentAmount != ovlToSwap) revert SwapFailed();
-        }
-
-        uint256 stableBalanceAfterSwap = IERC20(stableToken).balanceOf(address(this));
-        require(stableBalanceAfterSwap >= minOut, "Shiva: Swap: balance < minOut");
-        IERC20(stableToken).transfer(_owner, stableBalanceAfterSwap);
-
-        emit ShivaUnwindStable(address(_params.ovlMarket), _params.positionId, ovlToSwap, stableBalanceAfterSwap);
     }
 
     /**
@@ -700,9 +487,6 @@ contract Shiva is
         address _owner
     ) internal returns (uint256 positionId) {
         require(_params.leverage >= ONE, "Shiva:lev<min");
-
-        uint256 loanId = loanIds[_params.ovlMarket][_params.previousPositionId];
-        require(loanId == 0, "Shiva: build single not compatible with loaned positions");
 
         // Track balance before unwinding
         uint256 balanceBefore = ovlToken.balanceOf(address(this));
@@ -746,7 +530,7 @@ contract Shiva is
     function _computeBuildSingleTypedDataHash(
         ShivaStructs.BuildSingle calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
-    ) private pure returns (bytes32) {
+    ) private view returns (bytes32) {
         return keccak256(
             abi.encode(
                 BUILD_SINGLE_ON_BEHALF_OF_TYPEHASH,
@@ -775,21 +559,12 @@ contract Shiva is
         uint256 _positionId,
         address _owner
     ) internal {
-        uint256 loanId = loanIds[_market][_positionId];
-        uint256 balanceBefore = loanId > 0 ? ovlToken.balanceOf(address(this)) : 0;
         uint256 intialNotionalFraction =
             Utils.getNotionalRemaining(_market, _positionId, address(this));
 
         _market.emergencyWithdraw(_positionId);
 
         _onUnstake(positionOwners[_market][_positionId], intialNotionalFraction);
-
-        if (loanId > 0) {
-            uint256 balanceAfter = ovlToken.balanceOf(address(this));
-            uint256 repayableAmount =
-                balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0;
-            lbsc.settle(loanId, repayableAmount);
-        }
 
         ovlToken.transfer(_owner, ovlToken.balanceOf(address(this)));
 
@@ -923,21 +698,6 @@ contract Shiva is
     ) internal view returns (uint256) {
         uint256 notional = _collateral.mulUp(_leverage);
         return notional.mulUp(_ovlMarket.params(uint256(Risk.Parameters.TradingFeeRate)));
-    }
-
-    /**
-     * @notice Calculates the collateral of the position given the total (collateral + trading fee) amount
-     * @param _ovlMarket The market interface
-     * @param _total Available amount OVL
-     * @param _leverage The leverage applied
-     * @return The collateral
-     */
-    function _getCollateralFromTotal(
-        IOverlayV1Market _ovlMarket,
-        uint256 _total,
-        uint256 _leverage
-    ) internal view returns (uint256) {
-        return _total.divDown(ONE + _leverage.mulUp(_ovlMarket.params(uint256(Risk.Parameters.TradingFeeRate))));
     }
 
     /**

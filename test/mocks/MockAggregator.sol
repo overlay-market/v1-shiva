@@ -33,6 +33,7 @@ contract MockAggregator is IFluxAggregator {
             answer: INITIAL_PRICE,
             startedAt: uint64(block.timestamp),
             updatedAt: uint64(block.timestamp),
+            // forge-lint: disable-next-line(unsafe-typecast)
             answeredInRound: uint32(currentRound)
         });
 
@@ -44,6 +45,7 @@ contract MockAggregator is IFluxAggregator {
     function submit(uint256 _roundId, int256 _submission) external override {
         require(isOracle[msg.sender], "Not authorized oracle");
         require(_submission >= int256(MIN_ANSWER), "Answer below minimum");
+        // forge-lint: disable-next-line(unsafe-typecast)
         require(_submission <= int256(MAX_ANSWER), "Answer above maximum");
         require(_roundId > currentRound, "Round too old");
 
@@ -53,6 +55,7 @@ contract MockAggregator is IFluxAggregator {
             answer: _submission,
             startedAt: uint64(block.timestamp),
             updatedAt: uint64(block.timestamp),
+            // forge-lint: disable-next-line(unsafe-typecast)
             answeredInRound: uint32(_roundId)
         });
 

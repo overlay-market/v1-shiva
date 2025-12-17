@@ -26,16 +26,6 @@ library ShivaStructs {
         uint256 priceLimit;
     }
 
-    struct BuildStable {
-        IOverlayV1Market ovlMarket;
-        uint32 brokerId;
-        bool isLong;
-        uint256 stableCollateral;
-        uint256 leverage;
-        uint256 priceLimit;
-        uint256 minOvl;
-    }
-
     /**
      * @notice Represents the parameters to build a position through the Shiva contract
      * @param ovlMarket The market interface

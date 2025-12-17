@@ -18,9 +18,11 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
         targetContract(address(this));
 
         // handler functions to target during invariant tests
-        bytes4[] memory selectors = new bytes4[](2);
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = this.handler_build_and_unwind_position.selector;
         selectors[1] = this.handler_build_single_position.selector;
+        selectors[2] = this.buildStable.selector;
+        selectors[3] = this.handler_liquidate_position.selector;
 
         targetSelector(FuzzSelector({addr: address(this), selectors: selectors}));
     }
@@ -28,11 +30,23 @@ contract ShivaCryticToFoundry is Test, TargetFunctions, FoundryAsserts {
     // uncomment this to run invariant test
     // to run only this test:  forge test --match-contract ShivaCryticToFoundry
 
-    // function invariant_shiva_dont_have_ov() public {
-    //     assertTrue(property_shiva_dont_have_ovl());
-    // }
+    function invariant_shiva_dont_have_ov() public view {
+        assertTrue(property_shiva_dont_have_ovl());
+    }
 
-    // function invariant_staking_balance_matches_notional() public {
+    function invariant_lbsc_collateral_accounting() public view {
+        assertTrue(property_lbsc_collateral_accounting());
+    }
+
+    function invariant_stable_builds_have_valid_loans() public view {
+        assertTrue(property_stable_builds_have_valid_loans());
+    }
+
+    function invariant_no_residual_funds_after_settle() public view {
+        assertTrue(property_no_residual_funds_after_settle());
+    }
+
+    // function invariant_staking_balance_matches_notional() public view {
     //     assertTrue(property_staking_balance_matches_notional());
     // }
 }

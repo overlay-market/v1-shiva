@@ -2,8 +2,7 @@
 pragma solidity 0.8.10;
 
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
-import {IOverlayV1Token} from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
-import {ShivaStructs} from "./ShivaStructs.sol";
+import {ShivaStructs} from "./ShivaStructsV1.sol";
 
 /**
  * @title IShiva
@@ -33,18 +32,6 @@ interface IShiva {
     );
 
     /**
-     * @notice Emitted when a position is built using stable collateral through Shiva.
-     * @param market Address of the market where the position was built.
-     * @param positionId Unique ID of the built position.
-     * @param loanId Loan identifier returned by the LBSC contract.
-     */
-    event ShivaBuildStable(
-        address indexed market,
-        uint256 indexed positionId,
-        uint256 loanId
-    );
-
-    /**
      * @notice Emitted when a position is unwound through Shiva.
      * @param owner Address of the position owner.
      * @param market Address of the market where the position was unwound.
@@ -60,20 +47,6 @@ interface IShiva {
         uint256 positionId,
         uint256 fraction,
         uint32 brokerId
-    );
-
-    /**
-     * @notice Emitted when a position is built using stable collateral through Shiva.
-     * @param market Address of the market where the position was built.
-     * @param positionId Unique ID of the built position.
-     * @param ovlSwapped amount of OVL as swap input
-     * @param stableOut amount of Stables as swap output transferred to the user
-     */
-    event ShivaUnwindStable(
-        address indexed market,
-        uint256 indexed positionId,
-        uint256 ovlSwapped,
-        uint256 stableOut
     );
 
     /**
@@ -114,13 +87,6 @@ interface IShiva {
     event FactoryRemoved(address indexed factory);
 
     /**
-     * @notice Emitted when the LBSC contract address is updated.
-     * @param previousLbsc Address of the previous LBSC contract.
-     * @param newLbsc Address of the new LBSC contract.
-     */
-    event LbscSet(address indexed previousLbsc, address indexed newLbsc);
-
-    /**
      * @notice Emitted when a market is dynamically validated by Shiva.
      * @param market Address of the validated market.
      */
@@ -159,18 +125,8 @@ interface IShiva {
     error InvalidNonce();
 
     /**
-     * @notice Error emitted when swap failed.
-     */
-    error SwapFailed();
-
-    /**
      * @dev Functions that Shiva should implement.
      */
-
-    /**
-     * @notice Returns the address of the Overlay V1 token contract.
-     */
-    function ovlToken() external view returns (IOverlayV1Token);
 
     /**
      * @notice Builds a new position.
@@ -189,15 +145,6 @@ interface IShiva {
         ShivaStructs.Build calldata params,
         ShivaStructs.OnBehalfOf calldata onBehalfOf
     ) external returns (uint256 positionId);
-
-    /**
-     * @notice Builds a new position using stable collateral.
-     * @param params Parameters to build the position.
-     * @return positionId Unique ID of the built position.
-     */
-    function buildStable(ShivaStructs.BuildStable calldata params)
-        external
-        returns (uint256 positionId);
 
     /**
      * @notice Builds a new position with a single transaction.
@@ -236,18 +183,6 @@ interface IShiva {
     ) external;
 
     /**
-     * @notice Unwinds a position and swaps the proceeds to stable collateral.
-     * @param params Parameters to unwind the position.
-     * @param swapData Encoded swap data for the aggregator.
-     * @param minOut Minimum stable tokens expected from the swap.
-     */
-    function unwindStable(
-        ShivaStructs.Unwind calldata params,
-        bytes calldata swapData,
-        uint256 minOut
-    ) external;
-
-    /**
      * @notice Withdraws funds from a position in case of market is shutdown.
      * @param market Address of the market where the position was built.
      * @param positionId Unique ID of the position to withdraw funds from.
@@ -258,10 +193,4 @@ interface IShiva {
         uint256 positionId,
         address owner
     ) external;
-
-    /**
-     * @notice Sets the Loan Based Stable Collateral pool contract.
-     * @param _lbsc Address of the Loan Based Stable Collateral pool.
-     */
-    function setLbsc(address _lbsc) external;
 }

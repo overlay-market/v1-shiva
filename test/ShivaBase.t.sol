@@ -10,6 +10,7 @@ import {Constants} from "./utils/Constants.sol";
 import {Utils} from "src/utils/Utils.sol";
 import {Shiva} from "src/Shiva.sol";
 import {ShivaStructs} from "src/ShivaStructs.sol";
+import {LoanBasedStableCollateral} from "src/LoanBasedStableCollateral.sol";
 import {
     IRewardsVault,
     IRewardsVaultFactory
@@ -21,6 +22,7 @@ import {
     GOVERNOR_ROLE,
     PAUSER_ROLE,
     GUARDIAN_ROLE,
+    LIQUIDATE_CALLBACK_ROLE,
     MINTER_ROLE
 } from "v1-core/contracts/interfaces/IOverlayV1Token.sol";
 import {IOverlayV1Market} from "v1-core/contracts/interfaces/IOverlayV1Market.sol";
@@ -35,6 +37,10 @@ import {OverlayV1ChainlinkFeedFactory} from
     "v1-core/contracts/feeds/chainlink/OverlayV1ChainlinkFeedFactory.sol";
 import {IOverlayV1ChainlinkFeed} from
     "v1-core/contracts/interfaces/feeds/chainlink/IOverlayV1ChainlinkFeed.sol";
+import {FixedPoint} from "v1-core/contracts/libraries/FixedPoint.sol";
+import {Risk} from "v1-core/contracts/libraries/Risk.sol";
+
+import {ERC20Mock} from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 
 /**
  * @title ShivaTestBase
@@ -42,6 +48,7 @@ import {IOverlayV1ChainlinkFeed} from
  */
 contract ShivaTestBase is Test, BaseSetup {
     using ECDSA for bytes32;
+    using FixedPoint for uint256;
 
     /// @notice Represents one unit in the system (1e18)
     uint256 constant ONE = 1e18;
@@ -69,9 +76,12 @@ contract ShivaTestBase is Test, BaseSetup {
     OverlayV1Factory ovlFactory;
     IOverlayV1Token ovlToken;
     IRewardsVault rewardVault;
+    LoanBasedStableCollateral lbsc;
+    ERC20Mock stableToken;
 
     MockSequencerOracle sequencerOracle;
     MockAggregator aggregator;
+    MockAggregator lbscPriceFeed;
     OverlayV1ChainlinkFeedFactory feedFactory;
     IOverlayV1ChainlinkFeed feed;
 
@@ -182,6 +192,20 @@ contract ShivaTestBase is Test, BaseSetup {
         shiva = Shiva(address(new ERC1967Proxy(address(shivaImplementation), data)));
         rewardVault = shiva.rewardVault();
 
+        ovlToken.grantRole(LIQUIDATE_CALLBACK_ROLE, address(shiva));
+
+        // Deploy LBSC related contracts
+        stableToken = new ERC20Mock();
+        lbscPriceFeed = deployAggregator();
+        LoanBasedStableCollateral lbscImplementation = new LoanBasedStableCollateral();
+        string memory functionNameLbsc = "initialize(address,address,address,address,uint256)";
+        bytes memory dataLbsc =
+            abi.encodeWithSignature(functionNameLbsc, address(stableToken), address(shiva), address(lbscPriceFeed), address(0), 2 days);
+
+        lbsc = LoanBasedStableCollateral(address(new ERC1967Proxy(address(lbscImplementation), dataLbsc)));
+        shiva.setLbsc(address(lbsc));
+        deal(address(ovlToken), address(lbsc), 1_000_000e18);
+
         vm.stopPrank();
 
         // Change the token name
@@ -198,6 +222,7 @@ contract ShivaTestBase is Test, BaseSetup {
         // Call helper functions
         labelAddresses();
         setInitialBalancesAndApprovals();
+        setInitialStableBalancesAndApprovals();
         addAuthorizedFactory();
     }
 
@@ -221,6 +246,8 @@ contract ShivaTestBase is Test, BaseSetup {
         vm.label(address(ovlMarket), "Market");
         vm.label(address(shiva), "Shiva");
         vm.label(address(ovlToken), "OVL");
+        vm.label(address(lbsc), "LBSC");
+        vm.label(address(stableToken), "StableToken");
     }
 
     /**
@@ -234,19 +261,27 @@ contract ShivaTestBase is Test, BaseSetup {
         approveToken(bob);
     }
 
+    function setInitialStableBalancesAndApprovals() internal {
+        uint256 stableAmount = 100_000e18;
+        stableToken.mint(alice, stableAmount);
+        stableToken.mint(bob, stableAmount);
+        approveStableToken(alice);
+        approveStableToken(bob);
+    }
+
     /**
      * @dev Deploys a new OverlayV1Token contract and returns its interface.
      * @return ovlToken_ The deployed OverlayV1Token contract.
      */
     function deployToken() public returns (IOverlayV1Token ovlToken_) {
-        OverlayV1Token ovlToken = new OverlayV1Token();
+        OverlayV1Token _ovlToken = new OverlayV1Token();
 
-        ovlToken.grantRole(GOVERNOR_ROLE, deployer);
-        ovlToken.grantRole(GUARDIAN_ROLE, deployer);
-        ovlToken.grantRole(PAUSER_ROLE, deployer);
-        ovlToken.grantRole(0x00, deployer); // DEFAULT_ADMIN_ROLE
+        _ovlToken.grantRole(GOVERNOR_ROLE, deployer);
+        _ovlToken.grantRole(GUARDIAN_ROLE, deployer);
+        _ovlToken.grantRole(PAUSER_ROLE, deployer);
+        _ovlToken.grantRole(0x00, deployer); // DEFAULT_ADMIN_ROLE
 
-        ovlToken_ = IOverlayV1Token(address(ovlToken));
+        ovlToken_ = IOverlayV1Token(address(_ovlToken));
     }
 
     /**
@@ -376,6 +411,11 @@ contract ShivaTestBase is Test, BaseSetup {
         ovlToken.approve(address(shiva), type(uint256).max);
     }
 
+    function approveStableToken(address user) internal {
+        vm.prank(user);
+        stableToken.approve(address(lbsc), type(uint256).max);
+    }
+
     /**
      * @dev Shuts down the OverlayV1Market contract.
      * Ensures that the market is properly shut down by the guardian.
@@ -414,6 +454,43 @@ contract ShivaTestBase is Test, BaseSetup {
             Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, slippage, isLong);
         return shiva.build(
             ShivaStructs.Build(ovlMarket, BROKER_ID, isLong, collateral, leverage, priceLimit)
+        );
+    }
+
+    function buildStablePosition(
+        uint256 stableCollateral,
+        uint256 leverage,
+        uint16 slippage,
+        bool isLong,
+        uint256 minOvl
+    ) public returns (uint256) {
+        return shiva.buildStable(
+            getBuildStableParams(stableCollateral, leverage, slippage, isLong, minOvl)
+        );
+    }
+
+    function getBuildStableParams(
+        uint256 stableCollateral,
+        uint256 leverage,
+        uint16 slippage,
+        bool isLong,
+        uint256 minOvl
+    ) internal view returns (ShivaStructs.BuildStable memory params) {
+        uint256 tradingFeeRate = ovlMarket.params(uint256(Risk.Parameters.TradingFeeRate));
+        uint256 collateral = lbsc.previewBorrow(stableCollateral).divDown(
+            ONE + leverage.mulUp(tradingFeeRate)
+        );
+        uint256 priceLimit =
+            Utils.getEstimatedPrice(ovlState, ovlMarket, collateral, leverage, slippage, isLong);
+
+        params = ShivaStructs.BuildStable(
+            ovlMarket,
+            BROKER_ID,
+            isLong,
+            stableCollateral,
+            leverage,
+            priceLimit,
+            minOvl
         );
     }
 

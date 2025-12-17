@@ -34,7 +34,7 @@ library Constants {
     }
 
     function getForkedMainnetNetworkRPC() external pure returns (string memory) {
-        return "BERACHAIN_MAINNET_RPC";
+        return "RPC";
     }
 
     function getForkBlock() external pure returns (uint256) {
