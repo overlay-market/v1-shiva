@@ -149,8 +149,8 @@ contract LoanBasedStableCollateral is
         ovlToken = IShiva(shiva).ovlToken();
         require(IERC20MetadataUpgradeable(address(ovlToken)).decimals() == 18, "LBSC: OVL token decimals != 18");
 
-        // Set default TWAP period to 30 minutes
-        twapPeriod = 1800;
+        // Set default TWAP period to 5 minutes
+        twapPeriod = 300;
         emit TwapPeriodUpdated(0, twapPeriod);
     }
 
